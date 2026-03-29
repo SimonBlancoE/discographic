@@ -41,6 +41,7 @@ export const api = {
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   getMe: () => request('/auth/me'),
+  changePassword: (payload) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(payload) }),
   getAccount: () => request('/account'),
   updateAccount: (payload) => request('/account', { method: 'PUT', body: JSON.stringify(payload) }),
   resetCollection: () => request('/account/reset', { method: 'POST' }),
@@ -61,6 +62,7 @@ export const api = {
   listUsers: () => request('/admin/users'),
   createUser: (payload) => request('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
+  resetUserPassword: (id, payload) => request(`/admin/users/${id}/password`, { method: 'PUT', body: JSON.stringify(payload) }),
   importPreview: (file) => {
     const form = new FormData();
     form.append('file', file);

@@ -321,6 +321,15 @@ export function getUserAuthByUsername(username) {
   return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 }
 
+export function getUserAuthById(id) {
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+}
+
+export function updateUserPasswordHash(id, passwordHash) {
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
+  return getUserById(id);
+}
+
 export function getDiscogsAccount(userId) {
   return db.prepare(`
     SELECT user_id, discogs_username, discogs_token, created_at, updated_at

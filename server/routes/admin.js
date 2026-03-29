@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import express from 'express';
-import { createUser, deleteUser, getUserById, listUsers } from '../db.js';
+import { createUser, deleteUser, getUserById, listUsers, updateUserPasswordHash } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -56,6 +56,28 @@ router.delete('/users/:id', (req, res) => {
 
   deleteUser(targetId);
   return res.json({ ok: true });
+});
+
+router.put('/users/:id/password', async (req, res) => {
+  const targetId = Number(req.params.id);
+  const password = String(req.body.password || '');
+
+  if (targetId === req.session.userId) {
+    return res.status(400).json({ error: req.t('backend.admin.selfReset') });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: req.t('backend.admin.passwordLength') });
+  }
+
+  const target = getUserById(targetId);
+  if (!target) {
+    return res.status(404).json({ error: req.t('backend.admin.userNotFound') });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  updateUserPasswordHash(targetId, passwordHash);
+  return res.json({ ok: true, message: req.t('backend.admin.passwordReset', { username: target.username }) });
 });
 
 export default router;

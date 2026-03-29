@@ -27,7 +27,7 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 
 Discographic is a self-hosted web app for browsing and managing your Discogs collection in a way that actually feels useful day to day.
 
-Instead of just showing a raw list of releases, it gives you a proper dashboard, a searchable collection browser, a visual cover wall, exports, notes, ratings, and a local cache so the app stays fast once your library is synced.
+Instead of just showing a raw list of releases, it gives you a proper dashboard, a searchable collection browser, a visual cover wall, exports, notes, ratings, and a local cache so the app stays fast once your library is synced. It works well for a solo collector, and it also makes sense for a small group of friends sharing the same instance.
 
 ## Why use it?
 

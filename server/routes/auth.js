@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import express from 'express';
-import { createUser, getUserAuthByUsername, getUserCount, getUserById, migrateLegacyDataToUser } from '../db.js';
+import { createUser, getUserAuthById, getUserAuthByUsername, getUserCount, getUserById, migrateLegacyDataToUser, updateUserPasswordHash } from '../db.js';
 import { getCurrentUser, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -81,6 +81,29 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', requireAuth, (req, res) => {
   return res.json({ user: sanitizeUser(getCurrentUser(req)) });
+});
+
+router.post('/change-password', requireAuth, async (req, res) => {
+  const currentPassword = String(req.body.currentPassword || '');
+  const newPassword = String(req.body.newPassword || '');
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: req.t('backend.auth.passwordTooShort') });
+  }
+
+  const user = getUserAuthById(req.session.userId);
+  if (!user) {
+    return res.status(404).json({ error: req.t('backend.auth.required') });
+  }
+
+  const matches = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!matches) {
+    return res.status(400).json({ error: req.t('backend.auth.currentPasswordInvalid') });
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  updateUserPasswordHash(user.id, passwordHash);
+  return res.json({ ok: true, message: req.t('backend.auth.passwordChanged') });
 });
 
 export default router;

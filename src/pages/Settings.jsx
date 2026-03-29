@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
 import { useI18n } from '../lib/I18nContext';
@@ -13,6 +13,10 @@ function AdminPanel() {
   const [newPassword, setNewPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [adminError, setAdminError] = useState('');
+  const [resetUserId, setResetUserId] = useState(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [resetting, setResetting] = useState(false);
   const { user: currentUser } = useAuth();
 
   async function loadUsers() {
@@ -60,6 +64,42 @@ function AdminPanel() {
     }
   }
 
+  async function handleResetPassword(event, user) {
+    event.preventDefault();
+
+    if (resetPassword !== resetPasswordConfirm) {
+      setAdminError(t('settings.passwordMismatch'));
+      return;
+    }
+
+    setResetting(true);
+    setAdminError('');
+    try {
+      const result = await api.resetUserPassword(user.id, { password: resetPassword });
+      setResetUserId(null);
+      setResetPassword('');
+      setResetPasswordConfirm('');
+      toast.success(result.message || t('settings.userPasswordReset', { username: user.username }));
+    } catch (error) {
+      setAdminError(error.message);
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  function startReset(userId) {
+    setAdminError('');
+    setResetUserId(userId);
+    setResetPassword('');
+    setResetPasswordConfirm('');
+  }
+
+  function cancelReset() {
+    setResetUserId(null);
+    setResetPassword('');
+    setResetPasswordConfirm('');
+  }
+
   return (
     <section className="glass-panel space-y-5 p-6">
       <div>
@@ -72,35 +112,69 @@ function AdminPanel() {
           <thead className="bg-slate-900/80 text-slate-400">
             <tr>
               <th className="px-4 py-3">{t('login.username')}</th>
-              <th className="px-4 py-3">Rol</th>
-              <th className="px-4 py-3">Creado</th>
-              <th className="px-4 py-3 text-right">Acciones</th>
+              <th className="px-4 py-3">{t('settings.role')}</th>
+              <th className="px-4 py-3">{t('settings.created')}</th>
+              <th className="px-4 py-3 text-right">{t('settings.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} className="border-t border-white/5 text-slate-200">
-                <td className="px-4 py-3 font-medium">{user.username}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${user.role === 'admin' ? 'bg-brand-500/20 text-brand-200' : 'bg-white/5 text-slate-400'}`}>
-                    {user.role}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-slate-400">{formatDate(user.created_at)}</td>
-                <td className="px-4 py-3 text-right">
-                  {user.id !== currentUser?.id ? (
-                     <button
-                       type="button"
-                      onClick={() => handleDelete(user.id, user.username)}
-                       className="text-sm text-rose-300 transition hover:text-rose-100"
-                     >
-                        {t('settings.delete')}
-                     </button>
-                   ) : (
-                     <span className="text-sm text-slate-500">{t('settings.you')}</span>
-                   )}
-                </td>
-              </tr>
+              <Fragment key={user.id}>
+                <tr className="border-t border-white/5 text-slate-200">
+                  <td className="px-4 py-3 font-medium">{user.username}</td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${user.role === 'admin' ? 'bg-brand-500/20 text-brand-200' : 'bg-white/5 text-slate-400'}`}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">{formatDate(user.created_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {user.id !== currentUser?.id ? (
+                      <div className="flex justify-end gap-4">
+                        <button
+                          type="button"
+                          onClick={() => startReset(user.id)}
+                          className="text-sm text-brand-200 transition hover:text-brand-100"
+                        >
+                          {t('settings.resetPassword')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(user.id, user.username)}
+                          className="text-sm text-rose-300 transition hover:text-rose-100"
+                        >
+                          {t('settings.delete')}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-500">{t('settings.you')}</span>
+                    )}
+                  </td>
+                </tr>
+
+                {resetUserId === user.id ? (
+                  <tr className="border-t border-white/5 bg-white/5">
+                    <td colSpan="4" className="px-4 py-4">
+                      <form onSubmit={(event) => handleResetPassword(event, user)} className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto] md:items-end">
+                        <label className="space-y-1 text-sm text-slate-300">
+                          <span>{t('settings.newPassword')}</span>
+                          <input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+                        </label>
+                        <label className="space-y-1 text-sm text-slate-300">
+                          <span>{t('settings.confirmPassword')}</span>
+                          <input type="password" value={resetPasswordConfirm} onChange={(e) => setResetPasswordConfirm(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+                        </label>
+                        <button type="submit" disabled={resetting} className="primary-button disabled:opacity-60">
+                          {resetting ? t('settings.changingPassword') : t('settings.resetPassword')}
+                        </button>
+                        <button type="button" onClick={cancelReset} className="secondary-button">
+                          {t('settings.cancel')}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -121,6 +195,72 @@ function AdminPanel() {
       </form>
       {adminError && <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{adminError}</div>}
     </section>
+  );
+}
+
+function PasswordPanel() {
+  const toast = useToast();
+  const { t } = useI18n();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError('');
+
+    if (newPassword !== confirmPassword) {
+      const message = t('settings.passwordMismatch');
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await api.changePassword({ currentPassword, newPassword });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success(result.message || t('settings.passwordChanged'));
+    } catch (nextError) {
+      setError(nextError.message);
+      toast.error(nextError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="glass-panel space-y-5 p-6">
+      <div>
+        <h3 className="font-display text-2xl text-white">{t('settings.passwordTitle')}</h3>
+        <p className="mt-1 text-sm text-slate-400">{t('settings.passwordSubtitle')}</p>
+      </div>
+
+      <label className="block space-y-2 text-sm text-slate-300">
+        <span>{t('settings.currentPassword')}</span>
+        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+      </label>
+
+      <label className="block space-y-2 text-sm text-slate-300">
+        <span>{t('settings.newPassword')}</span>
+        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+      </label>
+
+      <label className="block space-y-2 text-sm text-slate-300">
+        <span>{t('settings.confirmPassword')}</span>
+        <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+      </label>
+
+      {error && <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>}
+
+      <button type="submit" disabled={saving} className="primary-button disabled:opacity-60">
+        {saving ? t('settings.changingPassword') : t('settings.changePassword')}
+      </button>
+    </form>
   );
 }
 
@@ -195,6 +335,8 @@ function Settings() {
           {saving ? t('settings.saving') : t('settings.save')}
         </button>
       </form>
+
+      <PasswordPanel />
 
       <section className="glass-panel flex items-center justify-between gap-4 p-6">
         <div>
