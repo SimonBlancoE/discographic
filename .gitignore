@@ -1,0 +1,28 @@
+node_modules
+dist
+data/*.db
+data/*.db-*
+data/covers/
+.DS_Store
+.env
+*.log
+.playwright-cli/
+data/backups/
+
+# Internal dev tooling
+.agents/
+.aidevops.json
+.beads/
+AGENTS.md
+DESIGN.md
+TODO.md
+todo/
+migrations/
+schemas/
+seeds/
+docs/plans/
+
+# Beads / Dolt files
+.dolt/
+*.db
+.beads-credential-key

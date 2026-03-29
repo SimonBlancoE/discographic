@@ -1,0 +1,60 @@
+import express from 'express';
+import { clearUserCollectionData, getDiscogsAccount, upsertDiscogsAccount } from '../db.js';
+import { requireAuth } from '../middleware/auth.js';
+
+const router = express.Router();
+
+router.use(requireAuth);
+
+function maskToken(token) {
+  if (!token || token.length <= 8) {
+    return null;
+  }
+
+  return `${token.slice(0, 4)}...${token.slice(-4)}`;
+}
+
+function serializeAccount(account) {
+  return {
+    discogsUsername: account?.discogs_username || '',
+    tokenConfigured: Boolean(account?.discogs_token),
+    tokenPreview: account?.discogs_token ? maskToken(account.discogs_token) : null
+  };
+}
+
+router.get('/', (req, res) => {
+  const account = getDiscogsAccount(req.session.userId);
+  res.json(serializeAccount(account));
+});
+
+router.put('/', (req, res) => {
+  const discogsUsername = String(req.body.discogsUsername || '').trim();
+  const discogsToken = String(req.body.discogsToken || '').trim();
+  const currentAccount = getDiscogsAccount(req.session.userId);
+
+  if (!discogsUsername) {
+    return res.status(400).json({ error: req.t('backend.account.userRequired') });
+  }
+
+  const tokenChanged = Boolean(discogsToken) && discogsToken !== currentAccount?.discogs_token;
+  const shouldResetCache = !currentAccount || currentAccount.discogs_username !== discogsUsername || tokenChanged;
+  if (shouldResetCache) {
+    clearUserCollectionData(req.session.userId);
+  }
+
+  const account = upsertDiscogsAccount(req.session.userId, discogsUsername, discogsToken || undefined);
+  return res.json({
+    ...serializeAccount(account),
+    cacheReset: shouldResetCache,
+    message: shouldResetCache
+      ? req.t('backend.account.updatedReset')
+      : req.t('backend.account.updated')
+  });
+});
+
+router.post('/reset', (req, res) => {
+  clearUserCollectionData(req.session.userId);
+  return res.json({ ok: true, message: req.t('backend.account.reset') });
+});
+
+export default router;
