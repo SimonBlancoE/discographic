@@ -2,7 +2,25 @@
   "name": "discographic",
   "version": "1.0.0",
   "type": "module",
-  "description": "Multilingual Discogs collection manager for vinyl collectors",
+  "description": "Self-hosted Discogs collection manager for vinyl collectors",
+  "author": "Simon Blanco",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SimonBlancoE/discographic.git"
+  },
+  "homepage": "https://github.com/SimonBlancoE/discographic#readme",
+  "keywords": [
+    "discogs",
+    "vinyl",
+    "collection",
+    "music",
+    "dashboard",
+    "self-hosted"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
