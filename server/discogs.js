@@ -12,7 +12,7 @@ class DiscogsClient {
 
   ensureConfigured() {
     if (!this.token || !this.username) {
-      throw new Error('La cuenta de Discogs no esta configurada');
+      throw new Error('Discogs account is not configured');
     }
   }
 
@@ -34,7 +34,7 @@ class DiscogsClient {
 
       if (response.status === 429) {
         if (attempt >= MAX_RETRIES) {
-          throw new Error('Discogs 429: demasiadas peticiones, reintentos agotados');
+          throw new Error('Discogs 429: too many requests, retries exhausted');
         }
         const waitMs = parseRetryAfter(response);
         await new Promise((resolve) => setTimeout(resolve, waitMs));
@@ -59,7 +59,7 @@ class DiscogsClient {
       return response.json();
     }
 
-    throw new Error('No se pudo completar la peticion a Discogs');
+    throw new Error('Could not complete the Discogs request');
   }
 
   getCollection(page = 1, perPage = 100) {

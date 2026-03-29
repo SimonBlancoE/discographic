@@ -83,7 +83,7 @@ export async function ensureCachedCover({ release, userId, variant }) {
   }
 
   if (!release.cover_url || !isAllowedRemote(release.cover_url)) {
-    throw new Error('La portada no esta disponible');
+    throw new Error('Cover image is not available');
   }
 
   const response = await fetch(release.cover_url, {
@@ -93,7 +93,7 @@ export async function ensureCachedCover({ release, userId, variant }) {
   });
 
   if (!response.ok) {
-    throw new Error('No se pudo descargar la portada');
+    throw new Error('Could not download cover image');
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());

@@ -104,7 +104,7 @@ function migrateReleases() {
   const v2Columns = getColumns('releases_v2');
 
   if (tableExists('releases') && !v2Columns.length) {
-    throw new Error('Tabla releases_v2 no creada');
+    throw new Error('Table releases_v2 was not created');
   }
 
   if (tableExists('releases') && releaseColumns.some((column) => column.name === 'release_id')) {
@@ -333,7 +333,7 @@ export function upsertDiscogsAccount(userId, discogsUsername, discogsToken) {
   const current = getDiscogsAccount(userId);
   const nextToken = discogsToken || current?.discogs_token;
   if (!nextToken) {
-    throw new Error('El token de Discogs es obligatorio');
+    throw new Error('Discogs token is required');
   }
 
   db.prepare(`

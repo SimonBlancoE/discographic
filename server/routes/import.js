@@ -45,15 +45,15 @@ const EDITABLE_COLUMNS = new Set(['rating', 'notas', 'notes']);
 function parseFile(buffer, filename) {
   const ext = (filename || '').toLowerCase().split('.').pop();
   if (ext !== 'xlsx' && ext !== 'csv') {
-    throw new Error('El archivo debe ser .xlsx o .csv. Otros formatos no estan soportados.');
+    throw new Error('File must be .xlsx or .csv. Other formats are not supported.');
   }
 
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
-  if (!sheetName) throw new Error('El archivo no contiene hojas de datos.');
+  if (!sheetName) throw new Error('The file does not contain any sheets.');
 
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
-  if (!rows.length) throw new Error('El archivo no contiene filas con datos.');
+  if (!rows.length) throw new Error('The file does not contain any data rows.');
 
   return rows;
 }
@@ -80,11 +80,11 @@ function mapColumns(rows) {
   }
 
   if (!hasId) {
-    throw new Error('No se encontro ninguna columna de identificacion (ID, Release_Discogs o Instancia). Asegurate de que tu archivo tenga al menos una de estas columnas.');
+    throw new Error('No identification column found (ID, Release_Discogs, or Instance). Make sure your file has at least one of these columns.');
   }
 
   if (!hasEditable) {
-    throw new Error('No se encontraron columnas editables (Rating o Notas). Anade al menos una de estas columnas al archivo.');
+    throw new Error('No editable columns found (Rating or Notes). Add at least one of these columns to your file.');
   }
 
   return columnMap;
