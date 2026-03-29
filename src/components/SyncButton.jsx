@@ -153,7 +153,7 @@ function SyncButton({ onSyncComplete, disabled = false }) {
       </div>
 
       <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
-        <span>{status?.phase || 'idle'}</span>
+        <span>{t(`sync.phase.${status?.phase || 'idle'}`)}</span>
         <span>{status?.current || 0} / {status?.total || 0}</span>
       </div>
 

@@ -2,6 +2,7 @@ import express from 'express';
 import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { ensureCachedCover } from './media.js';
+import { translate } from '../../shared/i18n.js';
 
 const router = express.Router();
 const PER_PAGE = 100;
@@ -10,14 +11,19 @@ const syncStates = new Map();
 
 router.use(requireAuth);
 
-function getSyncState(userId) {
+function syncT(locale, key, vars) {
+  return translate(locale || 'es', key, vars);
+}
+
+function getSyncState(userId, locale = 'es') {
   if (!syncStates.has(userId)) {
     syncStates.set(userId, {
+      locale,
       status: 'idle',
       current: 0,
       total: 0,
       phase: 'idle',
-      message: 'Sin sincronizacion activa',
+      message: syncT(locale, 'backend.sync.idle'),
       startedAt: null,
       finishedAt: null,
       recordsSynced: 0,
@@ -110,16 +116,17 @@ const upsertBatch = db.transaction((userId, items) => {
   }
 });
 
-async function runSync({ userId, logId, discogs }) {
+async function runSync({ userId, logId, discogs, locale }) {
   const firstPage = await discogs.getCollection(1, PER_PAGE);
   const totalPages = firstPage?.pagination?.pages || 0;
   const totalItems = firstPage?.pagination?.items || 0;
 
   setSyncState(userId, {
-    phase: 'descarga',
+    locale,
+    phase: 'downloading',
     total: totalItems,
     current: 0,
-    message: `Descargando ${totalItems} discos (${totalPages} paginas)...`
+    message: syncT(locale, 'backend.sync.downloading', { items: totalItems, pages: totalPages })
   });
 
   let totalSynced = 0;
@@ -135,7 +142,7 @@ async function runSync({ userId, logId, discogs }) {
 
     setSyncState(userId, {
       current: totalSynced,
-      message: `Pagina ${page} de ${totalPages} (${totalSynced} discos guardados)`
+      message: syncT(locale, 'backend.sync.page', { page, pages: totalPages, count: totalSynced })
     });
   }
 
@@ -166,23 +173,23 @@ async function runSync({ userId, logId, discogs }) {
 
   setSyncState(userId, {
     status: 'completed',
-    phase: 'listo',
+    phase: 'ready',
     current: totalSynced,
     total: totalItems,
-    message: `Sincronizacion completada: ${totalSynced} discos`,
+    message: syncT(locale, 'backend.sync.completed', { count: totalSynced }),
     finishedAt: new Date().toISOString(),
     recordsSynced: totalSynced,
     enrichment: {
       pending,
       message: pending
-        ? `${pending} discos pendientes de enriquecer (precio, pais, tracklist).`
-        : 'Todos los discos estan completos.'
+        ? syncT(locale, 'backend.sync.pending', { count: pending })
+        : syncT(locale, 'backend.sync.completeSet')
     },
     thumbnails: {
       status: 'idle',
       current: 0,
       total: 0,
-      message: 'Miniaturas listas para calentarse en segundo plano.'
+      message: syncT(locale, 'backend.sync.warmReady')
     }
   });
 
@@ -192,7 +199,7 @@ async function runSync({ userId, logId, discogs }) {
         status: 'failed',
         current: 0,
         total: 0,
-        message: `No se pudieron precalentar miniaturas: ${error.message}`
+        message: syncT(locale, 'backend.sync.thumbFail', { error: error.message })
       }
     });
   });
@@ -201,6 +208,7 @@ async function runSync({ userId, logId, discogs }) {
 const thumbnailWarmupRunning = new Set();
 
 async function warmupThumbnails(userId) {
+  const { locale = 'es' } = getSyncState(userId);
   if (thumbnailWarmupRunning.has(userId)) {
     return;
   }
@@ -222,7 +230,7 @@ async function warmupThumbnails(userId) {
           status: 'idle',
           current: 0,
           total: 0,
-          message: 'No hay portadas que precalentar.'
+          message: syncT(locale, 'backend.sync.noCovers')
         }
       });
       return;
@@ -233,7 +241,7 @@ async function warmupThumbnails(userId) {
         status: 'running',
         current: 0,
         total: rows.length,
-        message: `Preparando miniaturas ${0}/${rows.length}...`
+        message: syncT(locale, 'backend.sync.thumbPreparing', { current: 0, total: rows.length })
       }
     });
 
@@ -252,7 +260,7 @@ async function warmupThumbnails(userId) {
           status: 'running',
           current: processed,
           total: rows.length,
-          message: `Preparando miniaturas ${processed}/${rows.length}...`
+          message: syncT(locale, 'backend.sync.thumbPreparing', { current: processed, total: rows.length })
         }
       });
     }
@@ -262,7 +270,7 @@ async function warmupThumbnails(userId) {
         status: 'completed',
         current: rows.length,
         total: rows.length,
-        message: 'Miniaturas listas para el mosaico y el poster.'
+        message: syncT(locale, 'backend.sync.thumbDone')
       }
     });
   } finally {
@@ -273,6 +281,7 @@ async function warmupThumbnails(userId) {
 const enrichRunning = new Set();
 
 async function runEnrichAll({ userId, discogs }) {
+  const { locale = 'es' } = getSyncState(userId);
   if (enrichRunning.has(userId)) {
     return;
   }
@@ -287,14 +296,14 @@ async function runEnrichAll({ userId, discogs }) {
 
     if (!totalPending) {
       setSyncState(userId, {
-        enrichment: { status: 'idle', pending: 0, current: 0, total: 0, message: 'Todos los discos estan completos.' }
+        enrichment: { status: 'idle', pending: 0, current: 0, total: 0, message: syncT(locale, 'backend.sync.completeSet') }
       });
       return;
     }
 
     let processed = 0;
     setSyncState(userId, {
-      enrichment: { status: 'running', pending: totalPending, current: 0, total: totalPending, message: `Enriqueciendo 0/${totalPending}...` }
+      enrichment: { status: 'running', pending: totalPending, current: 0, total: totalPending, message: syncT(locale, 'backend.sync.enrichProgress', { current: 0, total: totalPending }) }
     });
 
     while (enrichRunning.has(userId)) {
@@ -342,7 +351,7 @@ async function runEnrichAll({ userId, discogs }) {
             pending: remaining,
             current: processed,
             total: totalPending,
-            message: `Enriqueciendo ${processed}/${totalPending}...`
+            message: syncT(locale, 'backend.sync.enrichProgress', { current: processed, total: totalPending })
           }
         });
       }
@@ -359,8 +368,8 @@ async function runEnrichAll({ userId, discogs }) {
         current: processed,
         total: totalPending,
         message: finalPending
-          ? `${processed} discos enriquecidos. Quedan ${finalPending} pendientes.`
-          : `${processed} discos enriquecidos. Completado.`
+          ? syncT(locale, 'backend.sync.enrichRemaining', { processed, pending: finalPending })
+          : syncT(locale, 'backend.sync.enrichDone', { processed })
       }
     });
   } catch (error) {
@@ -377,10 +386,10 @@ async function runEnrichAll({ userId, discogs }) {
 
 router.post('/', async (req, res) => {
   const userId = req.session.userId;
-  const state = getSyncState(userId);
+  const state = getSyncState(userId, req.locale);
 
   if (state.status === 'running') {
-    return res.status(409).json({ error: 'Ya hay una sincronizacion en curso' });
+    return res.status(409).json({ error: req.t('backend.sync.active') });
   }
 
   try {
@@ -391,11 +400,12 @@ router.post('/', async (req, res) => {
     `).run(userId).lastInsertRowid;
 
     setSyncState(userId, {
+      locale: req.locale,
       status: 'running',
       current: 0,
       total: 0,
-      phase: 'inicializando',
-      message: 'Preparando sincronizacion...',
+      phase: 'initializing',
+      message: req.t('backend.sync.initializing'),
       startedAt: new Date().toISOString(),
       finishedAt: null,
       recordsSynced: 0,
@@ -405,7 +415,7 @@ router.post('/', async (req, res) => {
 
     res.json({ ok: true });
 
-    runSync({ userId, logId, discogs }).catch((error) => {
+    runSync({ userId, logId, discogs, locale: req.locale }).catch((error) => {
       db.prepare(`
         UPDATE sync_log
         SET finished_at = CURRENT_TIMESTAMP,
@@ -429,7 +439,7 @@ router.post('/enrich', async (req, res) => {
   const userId = req.session.userId;
 
   if (enrichRunning.has(userId)) {
-    return res.status(409).json({ error: 'Ya hay un enriquecimiento en curso' });
+    return res.status(409).json({ error: req.t('backend.sync.activeEnrich') });
   }
 
   try {
@@ -450,7 +460,7 @@ router.post('/enrich/stop', (req, res) => {
 });
 
 router.get('/status', (req, res) => {
-  const state = getSyncState(req.session.userId);
+  const state = getSyncState(req.session.userId, req.locale);
   const pending = db.prepare(
     'SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND estimated_value IS NULL'
   ).get(req.session.userId).count;

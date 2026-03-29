@@ -18,19 +18,19 @@ const DEFAULT_FILTERS = {
 
 const EXPORT_SIZE = 86;
 const QUALITY_PRESETS = {
-  rapido: { label: 'Rapido', quality: 0.82, pixelRatio: 1.1 },
-  equilibrado: { label: 'Equilibrado', quality: 0.9, pixelRatio: 1.5 },
-  alta: { label: 'Alta calidad', quality: 0.96, pixelRatio: 1.9 }
+  fast: { labelKey: 'wall.quality.fast', quality: 0.82, pixelRatio: 1.1 },
+  balanced: { labelKey: 'wall.quality.balanced', quality: 0.9, pixelRatio: 1.5 },
+  high: { labelKey: 'wall.quality.high', quality: 0.96, pixelRatio: 1.9 }
 };
 
 function CoverWall({ releases, filters: availableFilters }) {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const toast = useToast();
   const [size, setSize] = useState(110);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [showTitles, setShowTitles] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [exportQuality, setExportQuality] = useState('equilibrado');
+  const [exportQuality, setExportQuality] = useState('balanced');
   const [exportStage, setExportStage] = useState('');
   const [tapeteGenerating, setTapeteGenerating] = useState(false);
   const posterRef = useRef(null);
@@ -155,8 +155,8 @@ function CoverWall({ releases, filters: availableFilters }) {
             <span>{t('wall.quality')}</span>
             <select value={exportQuality} onChange={(event) => setExportQuality(event.target.value)} className="bg-transparent outline-none">
               {Object.entries(QUALITY_PRESETS).map(([key, preset]) => (
-                <option key={key} value={key} className="bg-slate-950 text-slate-100">{preset.label}</option>
-              ))}
+                 <option key={key} value={key} className="bg-slate-950 text-slate-100">{t(preset.labelKey)}</option>
+               ))}
             </select>
           </label>
           <button type="button" onClick={handleExport} disabled={exporting} className="primary-button disabled:opacity-60">
@@ -177,7 +177,7 @@ function CoverWall({ releases, filters: availableFilters }) {
       {exporting && exportStage ? (
         <div className="glass-panel flex items-center justify-between gap-3 p-4 text-sm text-slate-300">
           <span>{exportStage}</span>
-          <span className="text-slate-500">Modo {QUALITY_PRESETS[exportQuality].label.toLowerCase()}</span>
+          <span className="text-slate-500">{t('wall.mode', { mode: t(QUALITY_PRESETS[exportQuality].labelKey).toLowerCase() })}</span>
         </div>
       ) : null}
 
