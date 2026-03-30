@@ -2,14 +2,11 @@
 
 # Discographic
 
-**Tu centro de mando autohospedado para tu colección de vinilos.**
+**Centro de mando autohospedado para tu colección de vinilos.**
 
 Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y exporta pósteres u hojas de cálculo desde una sola app que puedes ejecutar en tu ordenador o servidor.
 
-**Idioma principal:** Español  
 **English version:** [Read in English](./README.en.md)
-
-> `README.md` es la versión canónica. Cualquier cambio de contenido debe reflejarse también en `README.en.md` dentro del mismo PR.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/get-docker/)
@@ -24,7 +21,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 <br />
 <br />
 
-*Pensado para coleccionistas que quieren un panel rápido y personal para su discoteca, sin entregar sus datos a otro servicio más.*
+*Pensado para coleccionistas que quieren un panel rápido y personal para su colección de discos*
 
 </div>
 
@@ -32,7 +29,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 
 Discographic es una aplicación web autohospedada para explorar y gestionar tu colección de Discogs de una forma realmente útil en el día a día.
 
-En lugar de limitarse a mostrar una lista cruda de lanzamientos, ofrece un panel real, un navegador de colección con búsqueda, un muro visual de portadas, exportaciones, notas, valoraciones y una caché local para que la app siga siendo rápida una vez sincronizada tu biblioteca. Funciona muy bien para una sola persona, pero también tiene sentido para un pequeño grupo de amigos compartiendo la misma instancia.
+En lugar de limitarse a mostrar una lista de lanzamientos, ofrece un panel real, un navegador de colección con búsqueda, un muro visual de portadas, exportaciones, notas, valoraciones y una caché local para que la app siga siendo rápida una vez sincronizada tu biblioteca. Funciona muy bien para una sola persona, pero también tiene sentido para un pequeño grupo de amigos compartiendo la misma instancia.
 
 ## ¿Por qué usarlo?
 
@@ -185,7 +182,7 @@ Es normal en colecciones grandes. Discogs aplica rate limiting a la API, así qu
 
 **Las portadas van lentas la primera vez**
 
-Las miniaturas se cachean localmente. La primera generación del muro o del póster es la lenta; después mejora mucho.
+Las miniaturas se almacenan en caché localmente. La primera generación del muro o del póster es la lenta; después mejora mucho.
 
 ## Licencia
 
