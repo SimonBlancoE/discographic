@@ -134,6 +134,7 @@ npm run dev
 Copy `.env.example` to `.env` if you want to override the defaults:
 
 ```env
+HOST_IP=127.0.0.1                         # Docker bind IP (use your LAN IP to expose it)
 PORT=3800                                 # API port
 SESSION_SECRET=change-this-in-production  # Cookie signing secret
 COOKIE_SECURE=false                       # Set to true behind HTTPS

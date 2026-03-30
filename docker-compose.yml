@@ -3,9 +3,9 @@ services:
     build: .
     container_name: discographic
     ports:
-      - "3800:3800"
+      - "${HOST_IP:-127.0.0.1}:${PORT:-3800}:3800"
     environment:
-      PORT: 3800
+      PORT: ${PORT:-3800}
       SESSION_SECRET: ${SESSION_SECRET:-discographic-dev-secret}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     volumes:
