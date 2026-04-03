@@ -7,102 +7,112 @@ const ACHIEVEMENT_COPY = {
     tiered: {
       collector: {
         title: 'Coleccionista en alza',
-        description: 'Tu maleta crece por fases: entrada, escalada y dominación total.',
+        description: 'No solo acumulas discos: estás levantando una colección con peso propio, desde las primeras cajas hasta una estantería que ya impone respeto.',
         tiers: ['Fácil entrada', 'Gran escalada', 'Cabina seria', 'Archivador feroz', 'Monstruo de estantería', 'Discographic mitológico']
       },
       notes: {
         title: 'Cronista de funda',
-        description: 'Cada nota convierte una compra en una historia.',
+        description: 'Cada nota deja contexto, recuerdos y porqués. Lo que otros guardan como inventario, tú lo conviertes en memoria curada.',
         tiers: ['Fácil entrada', 'Gran escalada', 'Archivo maestro', 'Anotador feroz', 'Memoria total']
       },
       ratings: {
         title: 'Selector con criterio',
-        description: 'Poner estrellas también es declarar principios.',
+        description: 'Poner estrellas aquí no es trámite: es separar relleno de favoritos y dejar claro qué merece volver a sonar.',
         tiers: ['Fácil entrada', 'Gran escalada', 'Jurador supremo', 'Tajante profesional', 'Canon absoluto']
       },
       market: {
         title: 'Radar de mercado',
-        description: 'Tu colección aprende a hablar en precios reales.',
+        description: 'No te basta con tenerlos; también sigues su pulso económico. Tu colección empieza a comportarse como archivo y como mercado.',
         tiers: ['Fácil entrada', 'Gran escalada', 'Mercado dominado', 'Mesa de tasación', 'Ticker viviente']
       },
       timeline: {
         title: 'Viajero del tiempo',
-        description: 'Saltas entre épocas como si nada.',
+        description: 'Tu estantería cruza décadas con intención. Cuanto más avanzas, más se parece a un mapa temporal de tus obsesiones.',
         tiers: ['Fácil entrada', 'Gran escalada', 'Museo personal', 'Curador temporal']
       },
       styles: {
         title: 'Mutante de estilos',
-        description: 'No te casas con un solo sonido.',
+        description: 'Saltas de un sonido a otro sin pedir permiso. La colección gana color porque tu gusto no se deja encerrar en una sola etiqueta.',
         tiers: ['Fácil entrada', 'Gran escalada', 'Abarca todo', 'Quimera sonora']
       }
     },
     hidden: {
-      earlyBird: ['Madrugador del crate', 'Tienes discos de tres o más décadas y menos de 80 discos. Empezaste con hambre fina.'],
-      wall: ['Pared maestra', 'Tu artista más repetido ya ocupa una pared imaginaria.'],
-      fearless: ['Sin miedo al ridículo', 'Tocas al menos 15 estilos distintos. Que pase el siguiente género.'],
-      marker: ['Subrayador compulsivo', 'Anotaste tanto que cada funda empieza a tener segunda vida.'],
-      appraiser: ['Tasador de pasillo', 'Conoces el precio de una buena parte de tu arsenal.'],
-      label: ['Sello fijo', 'Un sello ya te conoce por tu nombre.'],
-      loop: ['Loop infinito', 'Un género reina con mano de hierro.'],
-      blackBox: ['Caja negra', 'Has valorado tantos discos que ya no finges objetividad.'],
-      archivedBooth: ['Cabina archivada', 'Tienes notas y ratings por todas partes. Esto ya parece una auditoría.'],
-      marathon: ['Maratonista del vinilo', 'La cronología de entrada ya parece una serie larga.'],
-      showcase: ['Vitrina obsesiva', 'Tienes un buen trozo de la colección ya tasado.'],
-      balance: ['Equilibrista', 'Mantienes una colección grande sin dejar de documentarla.'],
-      terminal: ['Coleccionismo terminal', 'Has entrado en la órbita de las cuatro cifras.'],
-      curve: ['Curva peligrosa', 'Tu biblioteca crece con un pulso sospechosamente constante.'],
-      altar: ['Altar privado', 'Un solo artista ya parece una religión doméstica.']
+      earlyBird: ['Madrugador del crate', 'Tienes discos de tres o más décadas y todavía una colección pequeña. Empezaste afinando el gusto antes que el volumen.'],
+      wall: ['Pared maestra', 'Tu artista más repetido ya no cabe en un rincón mental: empieza a levantar una pared propia dentro de la colección.'],
+      fearless: ['Sin miedo al ridículo', 'Tocas al menos 15 estilos distintos y sigues entrando sin pedir permiso. Tu colección no tolera fronteras cómodas.'],
+      marker: ['Subrayador compulsivo', 'Has escrito tanto sobre tus discos que cada funda parece llevar una capa extra de memoria personal.'],
+      appraiser: ['Tasador de pasillo', 'Conoces el precio de una parte seria de tu arsenal. Ya no miras la colección solo con oído, también con tasación.'],
+      label: ['Sello fijo', 'Un sello aparece tantas veces que ya parece una relación estable, no una coincidencia de catálogo.'],
+      loop: ['Loop infinito', 'Un género reina con mano de hierro y vuelve una y otra vez al centro de gravedad de tu estantería.'],
+      blackBox: ['Caja negra', 'Has valorado tantos discos que tu criterio ya opera como sistema autónomo. La neutralidad quedó atrás hace tiempo.'],
+      archivedBooth: ['Cabina archivada', 'Notas y ratings se acumulan por todas partes. Tu colección empieza a parecer un puesto de escucha auditado.'],
+      marathon: ['Maratonista del vinilo', 'La cronología de entradas ya tiene temporadas, capítulos y continuidad. Lo tuyo dejó de ser una racha pasajera.'],
+      showcase: ['Vitrina obsesiva', 'Una parte importante de la colección ya está tasada. Tu archivo empieza a lucirse como exposición y balance a la vez.'],
+      balance: ['Equilibrista', 'Mantienes una colección grande sin renunciar a documentarla. Sigues ampliando sin perder el pulso del detalle.'],
+      terminal: ['Coleccionismo terminal', 'Entraste en la órbita de las cuatro cifras. A esta altura ya no visitas el hobby: vives dentro de él.'],
+      curve: ['Curva peligrosa', 'Tu biblioteca crece con un pulso demasiado constante para llamarlo casualidad. Aquí ya hay método, impulso y hambre.'],
+      altar: ['Altar privado', 'Un solo artista ocupa tanto espacio que la colección ya le reservó una liturgia doméstica.'],
+      commentedSleeves: ['Funda comentada', 'No dejas discos mudos: toda la colección ya tiene contexto propio escrito por ti, como si cada pieza llevara libreto.'],
+      finalVerdict: ['Veredicto final', 'Todo lo que entra en tu colección pasa por jurado. No queda un solo disco sin estrellas ni sentencia.'],
+      pricedInventory: ['Inventario tasado', 'Toda la colección ya habla en cifras. Cada disco tiene precio y cara de balance doméstico.'],
+      soundAtlas: ['Atlas sonoro', 'Cruzas décadas, estilos y sellos a la vez. La colección ya parece más geografía musical que capricho aislado.'],
+      totalControl: ['Control total', 'Ratings, notas y precios avanzan casi al mismo ritmo. Esto ya no es solo coleccionar: es gobernar un archivo.']
     }
   },
   en: {
     tiered: {
       collector: {
         title: 'Collector on the rise',
-        description: 'Your crate grows in stages: entry, escalation, and total domination.',
+        description: 'You are not just stacking records; you are building a collection with real gravity, from first crates to shelves that already command respect.',
         tiers: ['Easy entry', 'Big climb', 'Serious booth', 'Fierce archivist', 'Shelf monster', 'Mythic Discographic']
       },
       notes: {
         title: 'Sleeve chronicler',
-        description: 'Every note turns a purchase into a story.',
+        description: 'Every note adds context, memory, and motive. What others keep as inventory, you turn into a curated memory bank.',
         tiers: ['Easy entry', 'Big climb', 'Master archive', 'Relentless annotator', 'Total memory']
       },
       ratings: {
         title: 'Sharp-eared selector',
-        description: 'Giving stars is also a way to declare your principles.',
+        description: 'Star ratings are not paperwork here; they draw a hard line between filler and favorites and show what deserves another spin.',
         tiers: ['Easy entry', 'Big climb', 'Supreme judge', 'Professional hardliner', 'Absolute canon']
       },
       market: {
         title: 'Market radar',
-        description: 'Your collection learns to speak in real prices.',
+        description: 'Owning records is not enough; you also track their market pulse. The collection starts acting like both archive and asset.',
         tiers: ['Easy entry', 'Big climb', 'Market mastered', 'Valuation desk', 'Living ticker']
       },
       timeline: {
         title: 'Time traveler',
-        description: 'You jump across eras as if it were nothing.',
+        description: 'Your shelves move across decades with intent. The deeper you go, the more they look like a time map of your obsessions.',
         tiers: ['Easy entry', 'Big climb', 'Personal museum', 'Time curator']
       },
       styles: {
         title: 'Style mutant',
-        description: 'You do not commit to a single sound.',
+        description: 'You jump from one sound to another without asking permission. The collection gets richer because your taste refuses one label.',
         tiers: ['Easy entry', 'Big climb', 'All-embracing', 'Sound chimera']
       }
     },
     hidden: {
-      earlyBird: ['Early crate bird', 'You own records from three or more decades and fewer than 80 records total. You started with refined hunger.'],
-      wall: ['Master wall', 'Your most repeated artist already fills an imaginary wall.'],
-      fearless: ['Fearless taste', 'You touch at least 15 different styles. Bring on the next genre.'],
-      marker: ['Compulsive highlighter', 'You have written so many notes that every sleeve is living a second life.'],
-      appraiser: ['Hallway appraiser', 'You know the price of a large part of your arsenal.'],
-      label: ['Label regular', 'A label already knows you by name.'],
-      loop: ['Infinite loop', 'One genre rules with an iron fist.'],
-      blackBox: ['Black box', 'You have rated so many records that objectivity is no longer an option.'],
-      archivedBooth: ['Archived booth', 'You have notes and ratings everywhere. This is starting to look like an audit.'],
-      marathon: ['Vinyl marathoner', 'Your add-history timeline already feels like a long-running series.'],
-      showcase: ['Obsessive showcase', 'A good chunk of the collection is already priced.'],
-      balance: ['Tightrope walker', 'You keep a large collection without stopping the documentation work.'],
-      terminal: ['Terminal collecting', 'You have entered four-digit orbit.'],
-      curve: ['Dangerous curve', 'Your library grows with suspiciously steady momentum.'],
-      altar: ['Private altar', 'A single artist already feels like a household religion.']
+      earlyBird: ['Early crate bird', 'You own records from three or more decades while the collection is still small. You started by sharpening taste before chasing volume.'],
+      wall: ['Master wall', 'Your most repeated artist no longer fits in a mental corner. They are starting to claim a wall of their own.'],
+      fearless: ['Fearless taste', 'You move through at least 15 styles without hesitation. Your collection has no patience for safe borders.'],
+      marker: ['Compulsive highlighter', 'You have written so many notes that every sleeve feels like it now carries a second layer of personal memory.'],
+      appraiser: ['Hallway appraiser', 'You know the price of a serious portion of your arsenal. You hear the collection, but you also value it.'],
+      label: ['Label regular', 'One label appears so often that it feels less like coincidence and more like an ongoing relationship.'],
+      loop: ['Infinite loop', 'One genre rules with an iron fist and keeps pulling the whole shelf back into its orbit.'],
+      blackBox: ['Black box', 'You have rated so many records that your taste now runs like an autonomous system. Neutrality left long ago.'],
+      archivedBooth: ['Archived booth', 'Notes and ratings pile up everywhere. The collection is starting to look like an audited listening station.'],
+      marathon: ['Vinyl marathoner', 'Your add-history timeline already has seasons, episodes, and continuity. This stopped being a short phase a while ago.'],
+      showcase: ['Obsessive showcase', 'A meaningful slice of the collection is already priced. Your archive is turning into both exhibit and balance sheet.'],
+      balance: ['Tightrope walker', 'You keep a large collection growing without abandoning the documentation work. Scale has not killed discipline.'],
+      terminal: ['Terminal collecting', 'You have entered four-digit orbit. At this point you do not visit the hobby; you live inside it.'],
+      curve: ['Dangerous curve', 'Your library grows with momentum far too steady to call accidental. There is method, appetite, and repetition here.'],
+      altar: ['Private altar', 'A single artist takes up so much space that the collection has effectively built them a household shrine.'],
+      commentedSleeves: ['Annotated sleeves', 'You do not leave records mute: the whole collection now carries your written context, like every piece ships with liner notes.'],
+      finalVerdict: ['Final verdict', 'Everything in your collection passes through a jury of one. Not a single record remains unrated.'],
+      pricedInventory: ['Valued inventory', 'The whole collection now speaks in numbers. Every record has a price and a place in the household ledger.'],
+      soundAtlas: ['Sound atlas', 'You cross decades, styles, and labels at once. The collection now feels more like musical geography than isolated impulse.'],
+      totalControl: ['Total control', 'Ratings, notes, and prices are all moving together. This is no longer just collecting; it is archive governance.']
     }
   }
 };
@@ -269,7 +279,12 @@ export function buildAchievements(stats, t, locale = 'es') {
     createHiddenAchievement({ id: 'equilibrista', emoji: '⚖️', title: copy.hidden.balance[0], description: copy.hidden.balance[1], unlocked: totalRecords >= 600 && notesRecords >= 200 }, t),
     createHiddenAchievement({ id: 'coleccionismo-terminal', emoji: '🛰️', title: copy.hidden.terminal[0], description: copy.hidden.terminal[1], unlocked: totalRecords >= 1000 }, t),
     createHiddenAchievement({ id: 'curva-peligrosa', emoji: '📈', title: copy.hidden.curve[0], description: copy.hidden.curve[1], unlocked: growthMonths >= 12 && totalRecords >= 300 }, t),
-    createHiddenAchievement({ id: 'altar-privado', emoji: '🕯️', title: copy.hidden.altar[0], description: copy.hidden.altar[1], unlocked: topArtistStack >= 30 }, t)
+    createHiddenAchievement({ id: 'altar-privado', emoji: '🕯️', title: copy.hidden.altar[0], description: copy.hidden.altar[1], unlocked: topArtistStack >= 30 }, t),
+    createHiddenAchievement({ id: 'funda-comentada', emoji: '📓', title: copy.hidden.commentedSleeves[0], description: copy.hidden.commentedSleeves[1], unlocked: totalRecords >= 120 && notesRecords === totalRecords }, t),
+    createHiddenAchievement({ id: 'veredicto-final', emoji: '⚔️', title: copy.hidden.finalVerdict[0], description: copy.hidden.finalVerdict[1], unlocked: totalRecords >= 120 && ratedRecords === totalRecords }, t),
+    createHiddenAchievement({ id: 'inventario-tasado', emoji: '🧾', title: copy.hidden.pricedInventory[0], description: copy.hidden.pricedInventory[1], unlocked: totalRecords >= 120 && pricedRecords === totalRecords }, t),
+    createHiddenAchievement({ id: 'atlas-sonoro', emoji: '🗺️', title: copy.hidden.soundAtlas[0], description: copy.hidden.soundAtlas[1], unlocked: decades >= 8 && styles >= 25 && labels >= 15 }, t),
+    createHiddenAchievement({ id: 'control-total', emoji: '🧠', title: copy.hidden.totalControl[0], description: copy.hidden.totalControl[1], unlocked: totalRecords >= 300 && ratedRecords / totalRecords >= 0.75 && notesRecords / totalRecords >= 0.5 && pricedRecords / totalRecords >= 0.5 }, t)
   ];
 
   return { tiered, hidden };
