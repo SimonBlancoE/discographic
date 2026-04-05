@@ -110,6 +110,15 @@ docker compose up -d
 
 Tus datos se conservan en el volumen de Docker.
 
+### Cómo actualizar a una nueva versión
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Tu base de datos y tus portadas cacheadas se conservan — viven en un volumen de Docker separado de la imagen. Si la nueva versión necesita cambios en la base de datos, se aplican solos al arrancar.
+
 ## Desarrollo local
 
 Si quieres trabajar en el código en vez de solo ejecutar la aplicación:
