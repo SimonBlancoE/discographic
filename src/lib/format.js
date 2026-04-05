@@ -1,10 +1,10 @@
 import { getCurrentLocale } from '../../shared/i18n';
 
-export function formatCurrency(value) {
+export function formatCurrency(value, currency = 'EUR') {
   const locale = getCurrentLocale();
   return new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'es-ES', {
     style: 'currency',
-    currency: 'EUR',
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(Number(value || 0));

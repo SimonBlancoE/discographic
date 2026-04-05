@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
+import db, { getSettingForUser, normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { ensureCachedCover } from './media.js';
 import { translate } from '../../shared/i18n.js';
@@ -381,7 +381,8 @@ async function runEnrichAll({ userId, discogs }) {
 
         try {
           const detail = await discogs.getRelease(row.release_id);
-          const stats = await discogs.getMarketplaceStats(row.release_id, 'EUR').catch(() => null);
+          const currency = getSettingForUser(userId, 'currency', 'EUR');
+          const stats = await discogs.getMarketplaceStats(row.release_id, currency).catch(() => null);
           const priceEur = stats?.lowest_price?.value ?? 0;
 
           db.prepare(`
