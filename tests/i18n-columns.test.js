@@ -15,9 +15,14 @@ describe('i18n keys for columns', () => {
     }
   });
 
-  it('has collection.listings key in both locales', () => {
-    expect(messages.es['collection.listings']).toBe('En venta');
-    expect(messages.en['collection.listings']).toBe('For sale');
+  it('has listing status key in both locales', () => {
+    expect(messages.es['collection.listingStatus']).toBe('Estado venta');
+    expect(messages.en['collection.listingStatus']).toBe('Listing');
+  });
+
+  it('has listing price key in both locales', () => {
+    expect(messages.es['collection.listingPrice']).toBe('Mi precio');
+    expect(messages.en['collection.listingPrice']).toBe('My price');
   });
 
   it('has collection.columns key in both locales', () => {
