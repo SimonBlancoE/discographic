@@ -45,6 +45,11 @@ export const api = {
   getAccount: () => request('/account'),
   updateAccount: (payload) => request('/account', { method: 'PUT', body: JSON.stringify(payload) }),
   resetCollection: () => request('/account/reset', { method: 'POST' }),
+  getPreference: (key) => request(`/account/preferences/${encodeURIComponent(key)}`),
+  setPreference: (key, value) => request(`/account/preferences/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value })
+  }),
   getStats: () => request('/stats'),
   getCollection: (params = {}) => request(`/collection?${new URLSearchParams(params).toString()}`),
   getCollectionCovers: () => request('/collection/covers'),

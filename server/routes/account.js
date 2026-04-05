@@ -1,5 +1,5 @@
 import express from 'express';
-import { clearUserCollectionData, getDiscogsAccount, upsertDiscogsAccount } from '../db.js';
+import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -55,6 +55,26 @@ router.put('/', (req, res) => {
 router.post('/reset', (req, res) => {
   clearUserCollectionData(req.session.userId);
   return res.json({ ok: true, message: req.t('backend.account.reset') });
+});
+
+router.get('/preferences/:key', (req, res) => {
+  if (!/^[\w]+$/.test(req.params.key)) {
+    return res.status(400).json({ error: 'Invalid key' });
+  }
+  const value = getSettingForUser(req.session.userId, req.params.key);
+  res.json({ value });
+});
+
+router.put('/preferences/:key', (req, res) => {
+  if (!/^[\w]+$/.test(req.params.key)) {
+    return res.status(400).json({ error: 'Invalid key' });
+  }
+  const { value } = req.body;
+  if (value === undefined) {
+    return res.status(400).json({ error: 'value is required' });
+  }
+  setSettingForUser(req.session.userId, req.params.key, typeof value === 'string' ? value : JSON.stringify(value));
+  res.json({ ok: true });
 });
 
 export default router;

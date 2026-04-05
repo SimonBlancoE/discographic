@@ -71,6 +71,7 @@ function createBaseTables() {
       notes TEXT,
       date_added TEXT,
       estimated_value REAL,
+      num_for_sale INTEGER DEFAULT NULL,
       tracklist TEXT,
       folder_id INTEGER DEFAULT 0,
       raw_json TEXT,
@@ -218,12 +219,19 @@ function migrateUsersRole() {
   }
 }
 
+function migrateNumForSale() {
+  if (!hasColumn('releases', 'num_for_sale')) {
+    db.exec('ALTER TABLE releases ADD COLUMN num_for_sale INTEGER DEFAULT NULL');
+  }
+}
+
 createBaseTables();
 migrateReleases();
 migrateSyncLog();
 migrateSettings();
 migrateUsersRole();
 createIndexes();
+migrateNumForSale();
 
 export function parseJson(value, fallback = []) {
   if (!value) {

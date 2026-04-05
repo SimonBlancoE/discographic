@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import CollectionTable from '../components/CollectionTable';
+import ColumnToggle from '../components/ColumnToggle';
 import ExportButton from '../components/ExportButton';
 import ImportButton from '../components/ImportButton';
 import FilterPanel from '../components/FilterPanel';
@@ -8,6 +9,7 @@ import { CollectionSkeleton } from '../components/LoadingSkeletons';
 import SearchBar from '../components/SearchBar';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
+import { DEFAULT_VISIBLE, COLUMNS, MANDATORY } from '../lib/columns';
 import { formatNumber } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
@@ -43,6 +45,7 @@ function Collection() {
   const [sortOrder, setSortOrder] = useState('asc');
   const [payload, setPayload] = useState({ releases: [], pagination: {}, filters: {} });
   const [loading, setLoading] = useState(true);
+  const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
 
   async function load(nextPage = page, nextFilters = filters, nextSortBy = sortBy, nextSortOrder = sortOrder) {
     try {
@@ -61,6 +64,19 @@ function Collection() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    api.getPreference('collection_visible_columns').then(({ value }) => {
+      if (value) {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setVisibleColumns(parsed);
+          }
+        } catch {}
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     load();
@@ -105,6 +121,24 @@ function Collection() {
     const nextOrder = sortBy === column && sortOrder === 'asc' ? 'desc' : 'asc';
     setSortBy(column);
     setSortOrder(nextOrder);
+  }
+
+  function handleColumnToggle(columnId) {
+    setVisibleColumns((prev) => {
+      const next = prev.includes(columnId)
+        ? prev.filter((id) => id !== columnId)
+        : [...prev, columnId];
+      api.setPreference('collection_visible_columns', JSON.stringify(next)).catch(() => {});
+
+      // If the currently sorted column is being hidden, reset sort to artist
+      const hiddenColumnDef = COLUMNS.find((c) => c.id === columnId);
+      if (hiddenColumnDef?.sortColumn === sortBy && !next.includes(columnId)) {
+        setSortBy('artist');
+        setSortOrder('asc');
+      }
+
+      return next;
+    });
   }
 
   async function handleUpdate(release, patch) {
@@ -154,7 +188,10 @@ function Collection() {
             {totalLabel} {filterLabel}
           </p>
         </div>
-        <ExportButton filters={filters} disabled={!discogsConfigured} />
+        <div className="flex gap-2">
+          <ColumnToggle visibleColumns={visibleColumns} onToggle={handleColumnToggle} />
+          <ExportButton filters={filters} disabled={!discogsConfigured} />
+        </div>
       </section>
 
       <ImportButton disabled={!discogsConfigured} />
@@ -184,7 +221,7 @@ function Collection() {
       {loading ? (
         <CollectionSkeleton />
       ) : (
-        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} />
+        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} visibleColumns={[...new Set([...MANDATORY, ...visibleColumns])]} />
       )}
 
       <div className="glass-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
