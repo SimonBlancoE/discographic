@@ -9,6 +9,8 @@ data/covers/
 .playwright-cli/
 data/backups/
 
+enhancements/
+
 # Internal dev tooling
 .agents/
 .aidevops.json
