@@ -177,7 +177,7 @@ function CoveragePanel({ totals }) {
 }
 
 function Dashboard() {
-  const { discogsConfigured } = useAuth();
+  const { discogsConfigured, currency } = useAuth();
   const { locale, t } = useI18n();
   const navigate = useNavigate();
   const toast = useToast();
@@ -358,7 +358,7 @@ function Dashboard() {
                       </td>
                       <td className="py-3 pr-4">{release.artist}</td>
                       <td className="py-3 pr-4">{release.year || '-'}</td>
-                      <td className="py-3 text-right text-brand-100">{formatCurrency(release.estimated_value)}</td>
+                      <td className="py-3 text-right text-brand-100">{formatCurrency(release.estimated_value, currency)}</td>
                     </tr>
                   ))
                 ) : (

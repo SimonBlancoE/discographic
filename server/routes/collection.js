@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { hydrateRelease, normalizeNotes, parseJson, stringifyJson } from '../db.js';
+import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -132,7 +132,8 @@ async function enrichReleaseIfNeeded(req, release) {
     return hydrateRelease(release);
   }
   const detail = await discogs.getRelease(release.release_id);
-  const stats = await discogs.getMarketplaceStats(release.release_id, 'EUR').catch(() => null);
+  const currency = getSettingForUser(req.session.userId, 'currency', 'EUR');
+  const stats = await discogs.getMarketplaceStats(release.release_id, currency).catch(() => null);
   const priceEur = stats?.lowest_price?.value ?? 0;
 
   db.prepare(`

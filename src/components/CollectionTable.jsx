@@ -97,7 +97,7 @@ const RENDERERS = {
   },
   price: {
     header: (t, sortProps) => <SortButton label={t('collection.price')} column="estimated_value" {...sortProps} />,
-    cell: (release) => <span className="text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value) : '-'}</span>,
+    cell: (release, { currency }) => <span className="text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value, currency) : '-'}</span>,
   },
   listingStatus: {
     header: (t) => t('collection.listingStatus'),
@@ -109,11 +109,11 @@ const RENDERERS = {
   },
   listingPrice: {
     header: (t, sortProps) => <SortButton label={t('collection.listingPrice')} column="listing_price" {...sortProps} />,
-    cell: (release) => <span className="text-brand-100">{release.listing_price != null ? formatCurrency(release.listing_price) : '-'}</span>,
+    cell: (release, { currency }) => <span className="text-brand-100">{release.listing_price != null ? formatCurrency(release.listing_price, currency) : '-'}</span>,
   },
 };
 
-function CollectionTable({ releases, sortBy, sortOrder, onSort, onUpdate, visibleColumns }) {
+function CollectionTable({ releases, sortBy, sortOrder, onSort, onUpdate, visibleColumns, currency = 'EUR' }) {
   const { t } = useI18n();
   const sortProps = { sortBy, sortOrder, onSort };
   const activeColumns = COLUMNS.filter((c) => visibleColumns.includes(c.id));
@@ -136,7 +136,7 @@ function CollectionTable({ releases, sortBy, sortOrder, onSort, onUpdate, visibl
               <tr key={`${release.id}-${release.instance_id}`} className="border-t border-white/5 align-top text-slate-200 transition hover:bg-white/5">
                 {activeColumns.map((col) => (
                   <td key={col.id} className={`px-4 py-3 ${RENDERERS[col.id].cellClass || ''}`}>
-                    {RENDERERS[col.id].cell(release, { t, onUpdate })}
+                    {RENDERERS[col.id].cell(release, { t, onUpdate, currency })}
                   </td>
                 ))}
               </tr>

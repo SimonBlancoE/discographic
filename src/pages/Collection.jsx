@@ -35,7 +35,7 @@ function getFiltersFromSearchParams(searchParams) {
 }
 
 function Collection() {
-  const { discogsConfigured } = useAuth();
+  const { discogsConfigured, currency } = useAuth();
   const { t } = useI18n();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -221,7 +221,7 @@ function Collection() {
       {loading ? (
         <CollectionSkeleton />
       ) : (
-        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} visibleColumns={[...new Set([...MANDATORY, ...visibleColumns])]} />
+        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} visibleColumns={[...new Set([...MANDATORY, ...visibleColumns])]} currency={currency} />
       )}
 
       <div className="glass-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">

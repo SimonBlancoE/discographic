@@ -4,6 +4,7 @@ import { ReleaseDetailSkeleton } from '../components/LoadingSkeletons';
 import StarRating from '../components/StarRating';
 import { downloadNodeAsPng, shareNodeAsPng } from '../lib/exportImage';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/AuthContext';
 import { formatCurrency, formatDate, joinNames } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
@@ -20,6 +21,7 @@ function MetaItem({ label, value }) {
 function ReleaseDetail() {
   const { id } = useParams();
   const { t } = useI18n();
+  const { currency } = useAuth();
   const toast = useToast();
   const [release, setRelease] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -120,7 +122,7 @@ function ReleaseDetail() {
             </div>
             <div>
                <p className="mb-2 text-sm text-slate-400">{t('release.marketplacePrice')}</p>
-              <p className="text-2xl text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value) : '-'}</p>
+              <p className="text-2xl text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value, currency) : '-'}</p>
             </div>
           </div>
 
