@@ -24,7 +24,8 @@ const BASE_FIELDS = `
   notes,
   date_added,
   estimated_value,
-  num_for_sale,
+  listing_status,
+  listing_price,
   tracklist,
   folder_id,
   raw_json,
@@ -133,7 +134,6 @@ async function enrichReleaseIfNeeded(req, release) {
   const detail = await discogs.getRelease(release.release_id);
   const stats = await discogs.getMarketplaceStats(release.release_id, 'EUR').catch(() => null);
   const priceEur = stats?.lowest_price?.value ?? 0;
-  const numForSale = stats?.num_for_sale ?? null;
 
   db.prepare(`
     UPDATE releases
@@ -142,7 +142,6 @@ async function enrichReleaseIfNeeded(req, release) {
         country = ?,
         tracklist = ?,
         estimated_value = ?,
-        num_for_sale = ?,
         raw_json = ?,
         synced_at = CURRENT_TIMESTAMP
     WHERE id = ? AND user_id = ?
@@ -152,7 +151,6 @@ async function enrichReleaseIfNeeded(req, release) {
     detail.country || release.country || null,
     stringifyJson(detail.tracklist || []),
     priceEur,
-    numForSale,
     JSON.stringify(detail),
     release.id,
     req.session.userId
@@ -168,7 +166,7 @@ router.get('/', (req, res) => {
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25)));
     const offset = (page - 1) * limit;
-    const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value', 'num_for_sale']);
+    const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value', 'listing_price']);
     const sortBy = validSort.has(req.query.sortBy) ? req.query.sortBy : 'artist';
     const sortOrder = String(req.query.sortOrder || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     const { clause, params } = buildCollectionWhere(req.query, userId);

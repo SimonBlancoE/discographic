@@ -99,9 +99,17 @@ const RENDERERS = {
     header: (t, sortProps) => <SortButton label={t('collection.price')} column="estimated_value" {...sortProps} />,
     cell: (release) => <span className="text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value) : '-'}</span>,
   },
-  listings: {
-    header: (t, sortProps) => <SortButton label={t('collection.listings')} column="num_for_sale" {...sortProps} />,
-    cell: (release) => <span className="text-slate-300">{release.num_for_sale != null ? release.num_for_sale : '-'}</span>,
+  listingStatus: {
+    header: (t) => t('collection.listingStatus'),
+    cell: (release) => {
+      if (!release.listing_status) return <span className="text-slate-500">-</span>;
+      const color = release.listing_status === 'For Sale' ? 'text-emerald-300' : 'text-amber-300';
+      return <span className={`text-xs font-medium ${color}`}>{release.listing_status}</span>;
+    },
+  },
+  listingPrice: {
+    header: (t, sortProps) => <SortButton label={t('collection.listingPrice')} column="listing_price" {...sortProps} />,
+    cell: (release) => <span className="text-brand-100">{release.listing_price != null ? formatCurrency(release.listing_price) : '-'}</span>,
   },
 };
 

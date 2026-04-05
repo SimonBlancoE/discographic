@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-// Test that serializeRelease produces the correct shape including num_for_sale
+// Test that serializeRelease produces the correct shape including listing columns
 describe('Export serialization', () => {
   function serializeRelease(release) {
     const formats = release.formats.map((format) => format?.name || format).join(', ');
@@ -22,7 +22,8 @@ describe('Export serialization', () => {
       Notas: release.notes_text,
       Fecha_Agregado: release.date_added,
       Precio_Min_EUR: release.estimated_value,
-      En_Venta: release.num_for_sale ?? '',
+      En_Venta: release.listing_status ?? '',
+      Mi_Precio: release.listing_price ?? '',
       Pistas: release.tracklist.map((track) => `${track.position || ''} ${track.title || ''}`.trim()).join(' | ')
     };
   }
@@ -46,33 +47,45 @@ describe('Export serialization', () => {
     tracklist: [{ position: 'A1', title: 'Track 1' }],
   };
 
-  it('includes En_Venta field with integer value', () => {
-    const result = serializeRelease({ ...baseRelease, num_for_sale: 15 });
-    expect(result.En_Venta).toBe(15);
+  it('includes En_Venta with listing status', () => {
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 15.00 });
+    expect(result.En_Venta).toBe('For Sale');
   });
 
-  it('En_Venta is empty string when null', () => {
-    const result = serializeRelease({ ...baseRelease, num_for_sale: null });
+  it('includes Mi_Precio with listing price', () => {
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 15.00 });
+    expect(result.Mi_Precio).toBe(15.00);
+  });
+
+  it('En_Venta is empty string when not listed', () => {
+    const result = serializeRelease({ ...baseRelease, listing_status: null, listing_price: null });
     expect(result.En_Venta).toBe('');
   });
 
-  it('En_Venta is empty string when undefined', () => {
+  it('Mi_Precio is empty string when not listed', () => {
+    const result = serializeRelease({ ...baseRelease, listing_status: null, listing_price: null });
+    expect(result.Mi_Precio).toBe('');
+  });
+
+  it('handles undefined listing fields', () => {
     const result = serializeRelease({ ...baseRelease });
     expect(result.En_Venta).toBe('');
+    expect(result.Mi_Precio).toBe('');
   });
 
-  it('En_Venta is 0 when 0', () => {
-    const result = serializeRelease({ ...baseRelease, num_for_sale: 0 });
-    expect(result.En_Venta).toBe(0);
+  it('Draft status is preserved', () => {
+    const result = serializeRelease({ ...baseRelease, listing_status: 'Draft', listing_price: 20.00 });
+    expect(result.En_Venta).toBe('Draft');
+    expect(result.Mi_Precio).toBe(20.00);
   });
 
   it('export has all expected fields in order', () => {
-    const result = serializeRelease({ ...baseRelease, num_for_sale: 5 });
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 15 });
     const keys = Object.keys(result);
     expect(keys).toEqual([
       'ID', 'Release_Discogs', 'Instancia', 'Artista', 'Titulo', 'Ano',
       'Generos', 'Estilos', 'Formatos', 'Sellos', 'Pais', 'Rating',
-      'Notas', 'Fecha_Agregado', 'Precio_Min_EUR', 'En_Venta', 'Pistas'
+      'Notas', 'Fecha_Agregado', 'Precio_Min_EUR', 'En_Venta', 'Mi_Precio', 'Pistas'
     ]);
   });
 });
