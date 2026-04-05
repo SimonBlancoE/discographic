@@ -324,16 +324,19 @@ async function runEnrichAll({ userId, discogs }) {
           const detail = await discogs.getRelease(row.release_id);
           const stats = await discogs.getMarketplaceStats(row.release_id, 'EUR').catch(() => null);
           const priceEur = stats?.lowest_price?.value ?? 0;
+          const numForSale = stats?.num_for_sale ?? null;
 
           db.prepare(`
             UPDATE releases
             SET estimated_value = ?,
+                num_for_sale = ?,
                 country = COALESCE(?, country),
                 tracklist = CASE WHEN tracklist IS NULL OR tracklist = '[]' THEN ? ELSE tracklist END,
                 synced_at = CURRENT_TIMESTAMP
             WHERE id = ? AND user_id = ?
           `).run(
             priceEur,
+            numForSale,
             detail.country || null,
             stringifyJson(detail.tracklist || []),
             row.id,

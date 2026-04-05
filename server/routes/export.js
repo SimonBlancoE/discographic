@@ -62,6 +62,7 @@ function serializeRelease(release) {
     Notas: release.notes_text,
     Fecha_Agregado: release.date_added,
     Precio_Min_EUR: release.estimated_value,
+    En_Venta: release.num_for_sale ?? '',
     Pistas: release.tracklist.map((track) => `${track.position || ''} ${track.title || ''}`.trim()).join(' | ')
   };
 }
