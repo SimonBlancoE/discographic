@@ -1,6 +1,7 @@
 import express from 'express';
 import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { normalizeCurrency } from '../../shared/currency.js';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ function serializeAccount(account, userId) {
     discogsUsername: account?.discogs_username || '',
     tokenConfigured: Boolean(account?.discogs_token),
     tokenPreview: account?.discogs_token ? maskToken(account.discogs_token) : null,
-    currency: getSettingForUser(userId, 'currency', 'EUR')
+    currency: normalizeCurrency(getSettingForUser(userId, 'currency', 'EUR'))
   };
 }
 
@@ -38,10 +39,7 @@ router.put('/', (req, res) => {
   }
 
   if (req.body.currency) {
-    const currency = String(req.body.currency).trim().toUpperCase();
-    if (/^[A-Z]{3}$/.test(currency)) {
-      setSettingForUser(req.session.userId, 'currency', currency);
-    }
+    setSettingForUser(req.session.userId, 'currency', normalizeCurrency(req.body.currency));
   }
 
   const tokenChanged = Boolean(discogsToken) && discogsToken !== currentAccount?.discogs_token;
@@ -88,7 +86,10 @@ router.put('/preferences/:key', (req, res) => {
   if (value === undefined) {
     return res.status(400).json({ error: 'value is required' });
   }
-  setSettingForUser(req.session.userId, req.params.key, typeof value === 'string' ? value : JSON.stringify(value));
+  const nextValue = req.params.key === 'currency'
+    ? normalizeCurrency(value)
+    : typeof value === 'string' ? value : JSON.stringify(value);
+  setSettingForUser(req.session.userId, req.params.key, nextValue);
   res.json({ ok: true });
 });
 

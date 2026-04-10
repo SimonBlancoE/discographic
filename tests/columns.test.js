@@ -20,9 +20,9 @@ describe('Column registry', () => {
     expect(DEFAULT_VISIBLE).toEqual(expected);
   });
 
-  it('listingPrice column sorts by listing_price', () => {
+  it('listingPrice column sorts by canonical EUR listing price', () => {
     const col = COLUMNS.find(c => c.id === 'listingPrice');
-    expect(col.sortColumn).toBe('listing_price');
+    expect(col.sortColumn).toBe('listing_price_eur');
     expect(col.sortable).toBe(true);
     expect(col.defaultHidden).toBe(true);
   });

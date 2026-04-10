@@ -1,6 +1,7 @@
 import express from 'express';
 import db, { getSettingForUser, parseJson } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 
 const router = express.Router();
 
@@ -25,9 +26,10 @@ function countJsonValues(rows, mapValue) {
     .sort((left, right) => right.count - left.count);
 }
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const userId = req.session.userId;
+    const displayCurrency = normalizeCurrency(req.query.currency || getSettingForUser(userId, 'currency', DEFAULT_CURRENCY));
     const totalRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ?').get(userId).count;
     const ratedRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND rating > 0').get(userId).count;
     const notesRecords = db.prepare(`
@@ -40,7 +42,11 @@ router.get('/', (req, res) => {
       FROM releases
       WHERE user_id = ? AND estimated_value IS NOT NULL AND estimated_value > 0
     `).get(userId).count;
-    const cachedValue = getSettingForUser(userId, 'collection_value', null);
+    const totalValueEur = db.prepare(`
+      SELECT COALESCE(SUM(estimated_value), 0) AS total
+      FROM releases
+      WHERE user_id = ? AND estimated_value IS NOT NULL AND estimated_value > 0
+    `).get(userId).total;
 
     const genres = countJsonValues(
       db.prepare('SELECT genres AS value FROM releases WHERE user_id = ? AND genres IS NOT NULL').all(userId),
@@ -106,7 +112,7 @@ router.get('/', (req, res) => {
     res.json({
       totals: {
         total_records: totalRecords,
-        total_value: cachedValue,
+        total_value: await convertAmount(totalValueEur, DEFAULT_CURRENCY, displayCurrency),
         rated_records: ratedRecords,
         notes_records: notesRecords,
         priced_records: pricedRecords
@@ -117,9 +123,13 @@ router.get('/', (req, res) => {
       labels,
       styles,
       growth,
-      topValue,
+      topValue: await Promise.all(topValue.map(async (release) => ({
+        ...release,
+        estimated_value: await convertAmount(release.estimated_value, DEFAULT_CURRENCY, displayCurrency)
+      }))),
       artists,
-      lastSync
+      lastSync,
+      displayCurrency
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

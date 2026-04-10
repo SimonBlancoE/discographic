@@ -43,9 +43,11 @@ describe('listing columns migration', () => {
     const cols = db.prepare('PRAGMA table_info(releases)').all().map(c => c.name);
     expect(cols).not.toContain('listing_status');
     expect(cols).not.toContain('listing_price');
+    expect(cols).not.toContain('listing_currency');
+    expect(cols).not.toContain('listing_price_eur');
   });
 
-  it('migration adds listing_status and listing_price columns', () => {
+  it('migration adds listing columns for status, original currency and EUR value', () => {
     const hasCols = (col) => db.prepare('PRAGMA table_info(releases)').all().some(c => c.name === col);
     if (!hasCols('listing_status')) {
       db.exec('ALTER TABLE releases ADD COLUMN listing_status TEXT DEFAULT NULL');
@@ -53,9 +55,17 @@ describe('listing columns migration', () => {
     if (!hasCols('listing_price')) {
       db.exec('ALTER TABLE releases ADD COLUMN listing_price REAL DEFAULT NULL');
     }
+    if (!hasCols('listing_currency')) {
+      db.exec('ALTER TABLE releases ADD COLUMN listing_currency TEXT DEFAULT NULL');
+    }
+    if (!hasCols('listing_price_eur')) {
+      db.exec('ALTER TABLE releases ADD COLUMN listing_price_eur REAL DEFAULT NULL');
+    }
     const cols = db.prepare('PRAGMA table_info(releases)').all().map(c => c.name);
     expect(cols).toContain('listing_status');
     expect(cols).toContain('listing_price');
+    expect(cols).toContain('listing_currency');
+    expect(cols).toContain('listing_price_eur');
   });
 
   it('migration is idempotent', () => {
@@ -67,16 +77,26 @@ describe('listing columns migration', () => {
     if (!hasCols('listing_price')) {
       db.exec('ALTER TABLE releases ADD COLUMN listing_price REAL DEFAULT NULL');
     }
+    if (!hasCols('listing_currency')) {
+      db.exec('ALTER TABLE releases ADD COLUMN listing_currency TEXT DEFAULT NULL');
+    }
+    if (!hasCols('listing_price_eur')) {
+      db.exec('ALTER TABLE releases ADD COLUMN listing_price_eur REAL DEFAULT NULL');
+    }
     const cols = db.prepare('PRAGMA table_info(releases)').all().map(c => c.name);
     expect(cols).toContain('listing_status');
     expect(cols).toContain('listing_price');
+    expect(cols).toContain('listing_currency');
+    expect(cols).toContain('listing_price_eur');
   });
 
   it('listing columns default to NULL for existing rows', () => {
     db.prepare(`INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (1, 100, 200, 'Test', 'Artist')`).run();
-    const row = db.prepare('SELECT listing_status, listing_price FROM releases WHERE release_id = 100').get();
+    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE release_id = 100').get();
     expect(row.listing_status).toBeNull();
     expect(row.listing_price).toBeNull();
+    expect(row.listing_currency).toBeNull();
+    expect(row.listing_price_eur).toBeNull();
   });
 
   it('listing_status stores text values', () => {
@@ -91,10 +111,19 @@ describe('listing columns migration', () => {
     expect(row.listing_price).toBeCloseTo(29.99);
   });
 
+  it('listing_currency and listing_price_eur store canonical pricing metadata', () => {
+    db.prepare(`UPDATE releases SET listing_currency = 'USD', listing_price_eur = 18.18 WHERE release_id = 100`).run();
+    const row = db.prepare('SELECT listing_currency, listing_price_eur FROM releases WHERE release_id = 100').get();
+    expect(row.listing_currency).toBe('USD');
+    expect(row.listing_price_eur).toBeCloseTo(18.18);
+  });
+
   it('NULL listing_status means not listed', () => {
-    db.prepare(`UPDATE releases SET listing_status = NULL, listing_price = NULL WHERE release_id = 100`).run();
-    const row = db.prepare('SELECT listing_status, listing_price FROM releases WHERE release_id = 100').get();
+    db.prepare(`UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE release_id = 100`).run();
+    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE release_id = 100').get();
     expect(row.listing_status).toBeNull();
     expect(row.listing_price).toBeNull();
+    expect(row.listing_currency).toBeNull();
+    expect(row.listing_price_eur).toBeNull();
   });
 });

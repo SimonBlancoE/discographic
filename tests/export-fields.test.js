@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { translate } from '../shared/i18n.js';
+import { DEFAULT_CURRENCY, convertAmountWithRates } from '../server/services/exchangeRates.js';
 
-// Mirror the export's serializeRelease with localized headers
-function serializeRelease(release, t) {
+const rates = { EUR: 1, USD: 1.1, GBP: 0.85 };
+
+function serializeRelease(release, t, currency) {
   const formats = release.formats.map((format) => format?.name || format).join(', ');
   const labels = release.labels.map((label) => label?.name || label).join(', ');
 
@@ -21,9 +23,9 @@ function serializeRelease(release, t) {
     [t('export.rating')]: release.rating,
     [t('export.notes')]: release.notes_text,
     [t('export.dateAdded')]: release.date_added,
-    [t('export.minPrice')]: release.estimated_value,
+    [t('export.minPrice')]: convertAmountWithRates(release.estimated_value, DEFAULT_CURRENCY, currency, rates),
     [t('export.listingStatus')]: release.listing_status ?? '',
-    [t('export.listingPrice')]: release.listing_price ?? '',
+    [t('export.listingPrice')]: release.listing_price_eur == null ? '' : convertAmountWithRates(release.listing_price_eur, DEFAULT_CURRENCY, currency, rates),
     [t('export.tracks')]: release.tracklist.map((track) => `${track.position || ''} ${track.title || ''}`.trim()).join(' | ')
   };
 }
@@ -44,6 +46,7 @@ const baseRelease = {
   notes_text: 'Great album',
   date_added: '2024-01-01',
   estimated_value: 25.99,
+  listing_price_eur: 13.64,
   tracklist: [{ position: 'A1', title: 'Track 1' }],
 };
 
@@ -51,23 +54,24 @@ describe('Export serialization — Spanish locale', () => {
   const t = (key, vars) => translate('es', key, vars);
 
   it('uses Spanish column headers', () => {
-    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 15 }, t);
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale' }, t, 'EUR');
     const keys = Object.keys(result);
     expect(keys).toEqual([
       'ID', 'Release Discogs', 'Instancia', 'Artista', 'Título', 'Año',
       'Géneros', 'Estilos', 'Formatos', 'Sellos', 'País', 'Rating',
-      'Notas', 'Fecha agregado', 'Precio mín. EUR', 'En venta', 'Mi precio', 'Pistas'
+      'Notas', 'Fecha agregado', 'Precio mín.', 'En venta', 'Mi precio', 'Pistas'
     ]);
   });
 
-  it('listing status shows For Sale', () => {
-    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 15 }, t);
+  it('listing status shows For Sale and price is converted', () => {
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale' }, t, 'USD');
     expect(result['En venta']).toBe('For Sale');
-    expect(result['Mi precio']).toBe(15);
+    expect(result['Mi precio']).toBeCloseTo(15.0);
+    expect(result['Precio mín.']).toBeCloseTo(28.59);
   });
 
   it('listing fields are empty string when not listed', () => {
-    const result = serializeRelease({ ...baseRelease, listing_status: null, listing_price: null }, t);
+    const result = serializeRelease({ ...baseRelease, listing_status: null, listing_price_eur: null }, t, 'EUR');
     expect(result['En venta']).toBe('');
     expect(result['Mi precio']).toBe('');
   });
@@ -77,23 +81,23 @@ describe('Export serialization — English locale', () => {
   const t = (key, vars) => translate('en', key, vars);
 
   it('uses English column headers', () => {
-    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 15 }, t);
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale' }, t, 'EUR');
     const keys = Object.keys(result);
     expect(keys).toEqual([
       'ID', 'Discogs Release', 'Instance', 'Artist', 'Title', 'Year',
       'Genres', 'Styles', 'Formats', 'Labels', 'Country', 'Rating',
-      'Notes', 'Date added', 'Min. price EUR', 'Listing', 'My price', 'Tracks'
+      'Notes', 'Date added', 'Min. price', 'Listing', 'My price', 'Tracks'
     ]);
   });
 
-  it('listing status shows For Sale', () => {
-    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 15 }, t);
+  it('listing status shows For Sale and GBP conversion', () => {
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale' }, t, 'GBP');
     expect(result['Listing']).toBe('For Sale');
-    expect(result['My price']).toBe(15);
+    expect(result['My price']).toBeCloseTo(11.59);
   });
 
   it('listing fields are empty string when not listed', () => {
-    const result = serializeRelease({ ...baseRelease }, t);
+    const result = serializeRelease({ ...baseRelease, listing_status: null, listing_price_eur: null }, t, 'EUR');
     expect(result['Listing']).toBe('');
     expect(result['My price']).toBe('');
   });
@@ -103,13 +107,13 @@ describe('Export serialization — edge cases', () => {
   const t = (key, vars) => translate('es', key, vars);
 
   it('Draft status is preserved', () => {
-    const result = serializeRelease({ ...baseRelease, listing_status: 'Draft', listing_price: 20 }, t);
+    const result = serializeRelease({ ...baseRelease, listing_status: 'Draft' }, t, 'EUR');
     expect(result['En venta']).toBe('Draft');
-    expect(result['Mi precio']).toBe(20);
+    expect(result['Mi precio']).toBeCloseTo(13.64);
   });
 
   it('price 0 is preserved (not empty string)', () => {
-    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price: 0 }, t);
+    const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price_eur: 0 }, t, 'EUR');
     expect(result['Mi precio']).toBe(0);
   });
 });
