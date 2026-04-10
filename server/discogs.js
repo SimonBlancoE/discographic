@@ -108,6 +108,13 @@ class DiscogsClient {
     return this.request(`/marketplace/stats/${releaseId}?curr_abbr=${currency}`);
   }
 
+  // User's marketplace inventory (items they have listed for sale)
+  getInventory(page = 1, perPage = 100) {
+    return this.request(
+      `/users/${this.username}/inventory?page=${page}&per_page=${perPage}&sort=listed&sort_order=desc`
+    );
+  }
+
   // List custom fields for the user's collection
   getCustomFields() {
     return this.request(`/users/${this.username}/collection/fields`);

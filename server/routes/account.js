@@ -1,5 +1,5 @@
 import express from 'express';
-import { clearUserCollectionData, getDiscogsAccount, upsertDiscogsAccount } from '../db.js';
+import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -14,17 +14,18 @@ function maskToken(token) {
   return `${token.slice(0, 4)}...${token.slice(-4)}`;
 }
 
-function serializeAccount(account) {
+function serializeAccount(account, userId) {
   return {
     discogsUsername: account?.discogs_username || '',
     tokenConfigured: Boolean(account?.discogs_token),
-    tokenPreview: account?.discogs_token ? maskToken(account.discogs_token) : null
+    tokenPreview: account?.discogs_token ? maskToken(account.discogs_token) : null,
+    currency: getSettingForUser(userId, 'currency', 'EUR')
   };
 }
 
 router.get('/', (req, res) => {
   const account = getDiscogsAccount(req.session.userId);
-  res.json(serializeAccount(account));
+  res.json(serializeAccount(account, req.session.userId));
 });
 
 router.put('/', (req, res) => {
@@ -36,6 +37,13 @@ router.put('/', (req, res) => {
     return res.status(400).json({ error: req.t('backend.account.userRequired') });
   }
 
+  if (req.body.currency) {
+    const currency = String(req.body.currency).trim().toUpperCase();
+    if (/^[A-Z]{3}$/.test(currency)) {
+      setSettingForUser(req.session.userId, 'currency', currency);
+    }
+  }
+
   const tokenChanged = Boolean(discogsToken) && discogsToken !== currentAccount?.discogs_token;
   const shouldResetCache = !currentAccount || currentAccount.discogs_username !== discogsUsername || tokenChanged;
   if (shouldResetCache) {
@@ -44,7 +52,7 @@ router.put('/', (req, res) => {
 
   const account = upsertDiscogsAccount(req.session.userId, discogsUsername, discogsToken || undefined);
   return res.json({
-    ...serializeAccount(account),
+    ...serializeAccount(account, req.session.userId),
     cacheReset: shouldResetCache,
     message: shouldResetCache
       ? req.t('backend.account.updatedReset')
@@ -55,6 +63,26 @@ router.put('/', (req, res) => {
 router.post('/reset', (req, res) => {
   clearUserCollectionData(req.session.userId);
   return res.json({ ok: true, message: req.t('backend.account.reset') });
+});
+
+router.get('/preferences/:key', (req, res) => {
+  if (!/^[\w]+$/.test(req.params.key)) {
+    return res.status(400).json({ error: 'Invalid key' });
+  }
+  const value = getSettingForUser(req.session.userId, req.params.key);
+  res.json({ value });
+});
+
+router.put('/preferences/:key', (req, res) => {
+  if (!/^[\w]+$/.test(req.params.key)) {
+    return res.status(400).json({ error: 'Invalid key' });
+  }
+  const { value } = req.body;
+  if (value === undefined) {
+    return res.status(400).json({ error: 'value is required' });
+  }
+  setSettingForUser(req.session.userId, req.params.key, typeof value === 'string' ? value : JSON.stringify(value));
+  res.json({ ok: true });
 });
 
 export default router;

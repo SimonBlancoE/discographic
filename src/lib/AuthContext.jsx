@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
   const [user, setUser] = useState(null);
   const [discogsConfigured, setDiscogsConfigured] = useState(false);
+  const [currency, setCurrency] = useState('EUR');
 
   async function refresh() {
     setLoading(true);
@@ -17,10 +18,12 @@ export function AuthProvider({ children }) {
       setUser(status.user || null);
 
       if (status.loggedIn) {
-        const account = await api.getAccount().catch(() => ({ tokenConfigured: false }));
+        const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: 'EUR' }));
         setDiscogsConfigured(Boolean(account.tokenConfigured));
+        setCurrency(account.currency || 'EUR');
       } else {
         setDiscogsConfigured(false);
+        setCurrency('EUR');
       }
     } catch {
       setUser(null);
@@ -41,13 +44,15 @@ export function AuthProvider({ children }) {
     loggedIn: Boolean(user),
     isAdmin: user?.role === 'admin',
     discogsConfigured,
+    currency,
     async login(username, password) {
       const result = await api.login({ username, password });
       setNeedsBootstrap(false);
       setUser(result.user);
       setLoading(false);
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false }));
+      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: 'EUR' }));
       setDiscogsConfigured(Boolean(account.tokenConfigured));
+      setCurrency(account.currency || 'EUR');
       return result;
     },
     async bootstrap(username, password) {
@@ -63,12 +68,13 @@ export function AuthProvider({ children }) {
       await refresh();
     },
     async refreshAccount() {
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false }));
+      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: 'EUR' }));
       setDiscogsConfigured(Boolean(account.tokenConfigured));
+      setCurrency(account.currency || 'EUR');
       return account;
     },
     refresh
-  }), [loading, needsBootstrap, user, discogsConfigured]);
+  }), [loading, needsBootstrap, user, discogsConfigured, currency]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

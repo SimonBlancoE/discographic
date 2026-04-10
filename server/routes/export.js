@@ -42,27 +42,29 @@ function buildWhere(query, userId) {
   };
 }
 
-function serializeRelease(release) {
+function serializeRelease(release, t) {
   const formats = release.formats.map((format) => format?.name || format).join(', ');
   const labels = release.labels.map((label) => label?.name || label).join(', ');
 
   return {
-    ID: release.id,
-    Release_Discogs: release.release_id,
-    Instancia: release.instance_id,
-    Artista: release.artist,
-    Titulo: release.title,
-    Ano: release.year,
-    Generos: release.genres.join(', '),
-    Estilos: release.styles.join(', '),
-    Formatos: formats,
-    Sellos: labels,
-    Pais: release.country,
-    Rating: release.rating,
-    Notas: release.notes_text,
-    Fecha_Agregado: release.date_added,
-    Precio_Min_EUR: release.estimated_value,
-    Pistas: release.tracklist.map((track) => `${track.position || ''} ${track.title || ''}`.trim()).join(' | ')
+    [t('export.id')]: release.id,
+    [t('export.releaseDiscogs')]: release.release_id,
+    [t('export.instance')]: release.instance_id,
+    [t('export.artist')]: release.artist,
+    [t('export.title')]: release.title,
+    [t('export.year')]: release.year,
+    [t('export.genres')]: release.genres.join(', '),
+    [t('export.styles')]: release.styles.join(', '),
+    [t('export.formats')]: formats,
+    [t('export.labels')]: labels,
+    [t('export.country')]: release.country,
+    [t('export.rating')]: release.rating,
+    [t('export.notes')]: release.notes_text,
+    [t('export.dateAdded')]: release.date_added,
+    [t('export.minPrice')]: release.estimated_value,
+    [t('export.listingStatus')]: release.listing_status ?? '',
+    [t('export.listingPrice')]: release.listing_price ?? '',
+    [t('export.tracks')]: release.tracklist.map((track) => `${track.position || ''} ${track.title || ''}`.trim()).join(' | ')
   };
 }
 
@@ -71,12 +73,12 @@ router.get('/', (req, res) => {
     const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
     const { clause, params } = buildWhere(req.query, req.session.userId);
     const rows = db.prepare(`SELECT * FROM releases ${clause} ORDER BY artist ASC, title ASC`).all(...params);
-    const payload = rows.map(hydrateRelease).map(serializeRelease);
+    const payload = rows.map(hydrateRelease).map((r) => serializeRelease(r, req.t));
 
     if (format === 'xlsx') {
       const sheet = XLSX.utils.json_to_sheet(payload);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Coleccion');
+      XLSX.utils.book_append_sheet(workbook, sheet, req.t('export.sheetName'));
       const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

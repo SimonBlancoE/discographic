@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { hydrateRelease, normalizeNotes, parseJson, stringifyJson } from '../db.js';
+import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -24,6 +24,8 @@ const BASE_FIELDS = `
   notes,
   date_added,
   estimated_value,
+  listing_status,
+  listing_price,
   tracklist,
   folder_id,
   raw_json,
@@ -130,7 +132,8 @@ async function enrichReleaseIfNeeded(req, release) {
     return hydrateRelease(release);
   }
   const detail = await discogs.getRelease(release.release_id);
-  const stats = await discogs.getMarketplaceStats(release.release_id, 'EUR').catch(() => null);
+  const currency = getSettingForUser(req.session.userId, 'currency', 'EUR');
+  const stats = await discogs.getMarketplaceStats(release.release_id, currency).catch(() => null);
   const priceEur = stats?.lowest_price?.value ?? 0;
 
   db.prepare(`
@@ -164,7 +167,7 @@ router.get('/', (req, res) => {
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25)));
     const offset = (page - 1) * limit;
-    const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value']);
+    const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value', 'listing_price']);
     const sortBy = validSort.has(req.query.sortBy) ? req.query.sortBy : 'artist';
     const sortOrder = String(req.query.sortOrder || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     const { clause, params } = buildCollectionWhere(req.query, userId);

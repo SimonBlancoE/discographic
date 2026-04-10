@@ -113,6 +113,15 @@ docker compose up -d
 
 Your data stays in the Docker volume.
 
+### Updating to a new version
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Your database and cached covers are preserved — they live in a Docker volume separate from the image. If the new version needs changes to the database, they are applied automatically on startup.
+
 ## Local development
 
 If you want to work on the code instead of just running the app:

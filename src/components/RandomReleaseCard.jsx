@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/AuthContext';
 import { formatCurrency, joinNames } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 
 function RandomReleaseCard() {
   const { locale, t } = useI18n();
+  const { currency } = useAuth();
   const [release, setRelease] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -81,7 +83,7 @@ function RandomReleaseCard() {
                   <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">{release.year || t('random.unknownYear')}</span>
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">{joinNames(release.genres)}</span>
-                    {release.estimated_value ? <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-emerald-100">{formatCurrency(release.estimated_value)}</span> : null}
+                    {release.estimated_value ? <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-emerald-100">{formatCurrency(release.estimated_value, currency)}</span> : null}
                   </div>
                 </div>
               </div>

@@ -80,6 +80,25 @@ docker compose up -d
 
 Después abre **http://localhost:3800** en tu navegador.
 
+### Ephemeral manual test instance
+
+If you want a throwaway instance for QA with seeded users and no persistent data:
+
+```bash
+npm run test:instance:start -- --host 127.0.0.1 --port 3801
+```
+
+That command starts a disposable Docker instance with these users already created:
+
+- **Admin** — `admin-demo` / `demo12345`
+- **User** — `user-demo` / `demo12345`
+
+All data lives in memory only. When you finish testing, destroy everything with:
+
+```bash
+npm run test:instance:stop -- --host 127.0.0.1 --port 3801
+```
+
 ### 2. Crea tu primer usuario
 
 En el primer arranque, Discographic te pedirá crear una cuenta de administrador.
@@ -109,6 +128,15 @@ docker compose up -d
 ```
 
 Tus datos se conservan en el volumen de Docker.
+
+### Cómo actualizar a una nueva versión
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Tu base de datos y tus portadas cacheadas se conservan — viven en un volumen de Docker separado de la imagen. Si la nueva versión necesita cambios en la base de datos, se aplican solos al arrancar.
 
 ## Desarrollo local
 
