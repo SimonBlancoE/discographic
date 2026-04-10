@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import CollectionTable from '../components/CollectionTable';
 import ColumnToggle from '../components/ColumnToggle';
@@ -46,6 +46,7 @@ function Collection() {
   const [payload, setPayload] = useState({ releases: [], pagination: {}, filters: {} });
   const [loading, setLoading] = useState(true);
   const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
+  const saveColumnsTimer = useRef(null);
 
   async function load(nextPage = page, nextFilters = filters, nextSortBy = sortBy, nextSortOrder = sortOrder) {
     try {
@@ -128,7 +129,10 @@ function Collection() {
       const next = prev.includes(columnId)
         ? prev.filter((id) => id !== columnId)
         : [...prev, columnId];
-      api.setPreference('collection_visible_columns', JSON.stringify(next)).catch(() => {});
+      clearTimeout(saveColumnsTimer.current);
+      saveColumnsTimer.current = setTimeout(() => {
+        api.setPreference('collection_visible_columns', JSON.stringify(next)).catch(() => {});
+      }, 500);
 
       // If the currently sorted column is being hidden, reset sort to artist
       const hiddenColumnDef = COLUMNS.find((c) => c.id === columnId);
