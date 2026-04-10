@@ -168,7 +168,7 @@ async function runSync({ userId, logId, discogs, locale }) {
   `).run(totalSynced, logId, userId);
 
   const pending = db.prepare(
-    "SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (estimated_value IS NULL OR country IS NULL OR country = '')"
+    "SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (estimated_value IS NULL)"
   ).get(userId).count;
 
   setSyncState(userId, {
@@ -348,7 +348,7 @@ async function runEnrichAll({ userId, discogs }) {
   enrichRunning.add(userId);
 
   try {
-    const ENRICH_CONDITION = "estimated_value IS NULL OR country IS NULL OR country = ''";
+    const ENRICH_CONDITION = "estimated_value IS NULL";
     const totalPending = db.prepare(
       `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
     ).get(userId).count;
