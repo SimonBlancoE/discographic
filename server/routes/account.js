@@ -65,17 +65,24 @@ router.post('/reset', (req, res) => {
   return res.json({ ok: true, message: req.t('backend.account.reset') });
 });
 
+// Whitelist of valid preference keys. Add new entries here when introducing
+// new user-facing preferences that should be persisted via the API.
+const ALLOWED_PREFERENCE_KEYS = new Set([
+  'collection_visible_columns',
+  'currency',
+]);
+
 router.get('/preferences/:key', (req, res) => {
-  if (!/^[\w]+$/.test(req.params.key)) {
-    return res.status(400).json({ error: 'Invalid key' });
+  if (!ALLOWED_PREFERENCE_KEYS.has(req.params.key)) {
+    return res.status(400).json({ error: 'Unknown preference key' });
   }
   const value = getSettingForUser(req.session.userId, req.params.key);
   res.json({ value });
 });
 
 router.put('/preferences/:key', (req, res) => {
-  if (!/^[\w]+$/.test(req.params.key)) {
-    return res.status(400).json({ error: 'Invalid key' });
+  if (!ALLOWED_PREFERENCE_KEYS.has(req.params.key)) {
+    return res.status(400).json({ error: 'Unknown preference key' });
   }
   const { value } = req.body;
   if (value === undefined) {
