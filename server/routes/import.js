@@ -35,9 +35,11 @@ function normalizeHeader(header) {
 const ID_COLUMNS = new Map([
   ['id', 'id'],
   ['releasediscogs', 'release_id'],
-  ['instancia', 'instance_id'],
-  ['instanceid', 'instance_id'],
+  ['discogsrelease', 'release_id'],
   ['releaseid', 'release_id'],
+  ['instancia', 'instance_id'],
+  ['instance', 'instance_id'],
+  ['instanceid', 'instance_id'],
 ]);
 
 const EDITABLE_COLUMNS = new Set(['rating', 'notas', 'notes']);

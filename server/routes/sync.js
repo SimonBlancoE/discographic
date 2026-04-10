@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
+import db, { getSettingForUser, normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { ensureCachedCover } from './media.js';
 import { translate } from '../../shared/i18n.js';
@@ -193,6 +193,10 @@ async function runSync({ userId, logId, discogs, locale }) {
     }
   });
 
+  await syncInventory({ userId, discogs }).catch((error) => {
+    console.log('[sync] inventory sync failed:', error.message);
+  });
+
   warmupThumbnails(userId).catch((error) => {
     setSyncState(userId, {
       thumbnails: {
@@ -203,6 +207,61 @@ async function runSync({ userId, logId, discogs, locale }) {
       }
     });
   });
+}
+
+async function syncInventory({ userId, discogs }) {
+  const { locale = 'es' } = getSyncState(userId);
+  try {
+    // Clear existing listing data — items may have been delisted
+    db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL WHERE user_id = ?').run(userId);
+
+    // Fetch all pages of the user's inventory
+    const firstPage = await discogs.getInventory(1, 100);
+    const totalPages = firstPage?.pagination?.pages || 0;
+    const allListings = [...(firstPage?.listings || [])];
+
+    for (let page = 2; page <= totalPages; page += 1) {
+      const payload = await discogs.getInventory(page, 100);
+      allListings.push(...(payload?.listings || []));
+    }
+
+    if (!allListings.length) return;
+
+    // Build a map of release_id -> best listing (prefer "For Sale" over "Draft", lowest price)
+    const listingMap = new Map();
+    for (const listing of allListings) {
+      const releaseId = listing.release?.id;
+      if (!releaseId) continue;
+
+      const entry = {
+        status: listing.status || 'For Sale',
+        price: listing.price?.value ? Number(listing.price.value) : null,
+      };
+
+      const existing = listingMap.get(releaseId);
+      if (!existing) {
+        listingMap.set(releaseId, entry);
+      } else {
+        // Prefer "For Sale" over "Draft"; among same status, prefer lower price
+        const statusRank = (s) => (s === 'For Sale' ? 0 : 1);
+        if (statusRank(entry.status) < statusRank(existing.status) ||
+            (entry.status === existing.status && entry.price != null && (existing.price == null || entry.price < existing.price))) {
+          listingMap.set(releaseId, entry);
+        }
+      }
+    }
+
+    // Update releases that match
+    const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ? WHERE user_id = ? AND release_id = ?');
+    const updateTx = db.transaction(() => {
+      for (const [releaseId, listing] of listingMap) {
+        updateStmt.run(listing.status, listing.price, userId, releaseId);
+      }
+    });
+    updateTx();
+  } catch (error) {
+    console.log('[inventory-sync] error:', error.message);
+  }
 }
 
 const thumbnailWarmupRunning = new Set();
@@ -322,7 +381,8 @@ async function runEnrichAll({ userId, discogs }) {
 
         try {
           const detail = await discogs.getRelease(row.release_id);
-          const stats = await discogs.getMarketplaceStats(row.release_id, 'EUR').catch(() => null);
+          const currency = getSettingForUser(userId, 'currency', 'EUR');
+          const stats = await discogs.getMarketplaceStats(row.release_id, currency).catch(() => null);
           const priceEur = stats?.lowest_price?.value ?? 0;
 
           db.prepare(`
