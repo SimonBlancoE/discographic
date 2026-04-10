@@ -1,4 +1,4 @@
-export const ENRICH_CONDITION = "estimated_value IS NULL OR country IS NULL OR country = ''";
+export const ENRICH_CONDITION = "estimated_value IS NULL";
 
 export function getPendingEnrichmentCount(database, userId) {
   return database.prepare(

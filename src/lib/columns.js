@@ -10,7 +10,7 @@ export const COLUMNS = [
   { id: 'notes',         i18nKey: 'collection.notes',          mandatory: false, sortable: false },
   { id: 'price',         i18nKey: 'collection.price',          mandatory: false, sortable: true,  sortColumn: 'estimated_value' },
   { id: 'listingStatus', i18nKey: 'collection.listingStatus',  mandatory: false, sortable: false, defaultHidden: true },
-  { id: 'listingPrice',  i18nKey: 'collection.listingPrice',   mandatory: false, sortable: true,  sortColumn: 'listing_price', defaultHidden: true },
+  { id: 'listingPrice',  i18nKey: 'collection.listingPrice',   mandatory: false, sortable: true,  sortColumn: 'listing_price_eur', defaultHidden: true },
 ];
 
 export const DEFAULT_VISIBLE = COLUMNS.filter(c => !c.defaultHidden).map(c => c.id);
