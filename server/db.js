@@ -73,6 +73,8 @@ function createBaseTables() {
       estimated_value REAL,
       listing_status TEXT DEFAULT NULL,
       listing_price REAL DEFAULT NULL,
+      listing_currency TEXT DEFAULT NULL,
+      listing_price_eur REAL DEFAULT NULL,
       tracklist TEXT,
       folder_id INTEGER DEFAULT 0,
       raw_json TEXT,
@@ -204,6 +206,7 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_releases_user_date_added ON releases(user_id, date_added);
     CREATE INDEX IF NOT EXISTS idx_releases_user_value ON releases(user_id, estimated_value);
     CREATE INDEX IF NOT EXISTS idx_releases_user_release ON releases(user_id, release_id);
+    CREATE INDEX IF NOT EXISTS idx_releases_user_listing_price_eur ON releases(user_id, listing_price_eur);
     CREATE INDEX IF NOT EXISTS idx_sync_log_user_started ON sync_log(user_id, started_at);
   `);
 }
@@ -227,6 +230,12 @@ function migrateListingColumns() {
   if (!hasColumn('releases', 'listing_price')) {
     db.exec('ALTER TABLE releases ADD COLUMN listing_price REAL DEFAULT NULL');
   }
+  if (!hasColumn('releases', 'listing_currency')) {
+    db.exec('ALTER TABLE releases ADD COLUMN listing_currency TEXT DEFAULT NULL');
+  }
+  if (!hasColumn('releases', 'listing_price_eur')) {
+    db.exec('ALTER TABLE releases ADD COLUMN listing_price_eur REAL DEFAULT NULL');
+  }
 }
 
 createBaseTables();
@@ -234,8 +243,8 @@ migrateReleases();
 migrateSyncLog();
 migrateSettings();
 migrateUsersRole();
-createIndexes();
 migrateListingColumns();
+createIndexes();
 
 export function parseJson(value, fallback = []) {
   if (!value) {
