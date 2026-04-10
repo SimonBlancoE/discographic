@@ -28,7 +28,9 @@
     "dev:server": "node server/index.js",
     "server": "node server/index.js",
     "start": "node server/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:instance:start": "bash scripts/test-instance.sh start",
+    "test:instance:stop": "bash scripts/test-instance.sh stop"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

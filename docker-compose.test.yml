@@ -1,0 +1,13 @@
+services:
+  discographic:
+    build: .
+    container_name: ${DISCOGRAPHIC_CONTAINER_NAME:-discographic-test}
+    ports:
+      - "${TEST_HOST:-127.0.0.1}:${TEST_PORT:-3801}:3800"
+    environment:
+      PORT: 3800
+      SESSION_SECRET: ${SESSION_SECRET:-discographic-dev-secret}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    tmpfs:
+      - /app/data
+    restart: "no"
