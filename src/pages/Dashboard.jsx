@@ -256,7 +256,7 @@ function Dashboard() {
       },
       {
         label: t('dashboard.collectionValue'),
-        displayValue: stats.totals.total_value || '-',
+        displayValue: stats.totals.total_value ? formatCurrency(stats.totals.total_value, currency) : '-',
         accent: 'from-emerald-400 to-cyan-300',
         meta: 'Discogs',
         eyebrow: t('dashboard.marketToday'),
@@ -279,7 +279,7 @@ function Dashboard() {
         description: t('dashboard.topGenreDesc')
       }
     ];
-  }, [stats, t]);
+  }, [currency, stats, t]);
 
   const achievements = useMemo(() => buildAchievements(stats, t, locale), [stats, t, locale]);
 

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
+import { DEFAULT_CURRENCY } from '../../shared/currency';
 
 const AuthContext = createContext(null);
 
@@ -8,7 +9,7 @@ export function AuthProvider({ children }) {
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
   const [user, setUser] = useState(null);
   const [discogsConfigured, setDiscogsConfigured] = useState(false);
-  const [currency, setCurrency] = useState('EUR');
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
 
   async function refresh() {
     setLoading(true);
@@ -18,12 +19,12 @@ export function AuthProvider({ children }) {
       setUser(status.user || null);
 
       if (status.loggedIn) {
-        const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: 'EUR' }));
+        const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
         setDiscogsConfigured(Boolean(account.tokenConfigured));
-        setCurrency(account.currency || 'EUR');
+        setCurrency(account.currency || DEFAULT_CURRENCY);
       } else {
         setDiscogsConfigured(false);
-        setCurrency('EUR');
+        setCurrency(DEFAULT_CURRENCY);
       }
     } catch {
       setUser(null);
@@ -50,9 +51,9 @@ export function AuthProvider({ children }) {
       setNeedsBootstrap(false);
       setUser(result.user);
       setLoading(false);
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: 'EUR' }));
+      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
       setDiscogsConfigured(Boolean(account.tokenConfigured));
-      setCurrency(account.currency || 'EUR');
+      setCurrency(account.currency || DEFAULT_CURRENCY);
       return result;
     },
     async bootstrap(username, password) {
@@ -68,10 +69,15 @@ export function AuthProvider({ children }) {
       await refresh();
     },
     async refreshAccount() {
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: 'EUR' }));
+      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
       setDiscogsConfigured(Boolean(account.tokenConfigured));
-      setCurrency(account.currency || 'EUR');
+      setCurrency(account.currency || DEFAULT_CURRENCY);
       return account;
+    },
+    async setCurrencyPreference(nextCurrency) {
+      await api.setPreference('currency', nextCurrency);
+      setCurrency(nextCurrency);
+      return nextCurrency;
     },
     refresh
   }), [loading, needsBootstrap, user, discogsConfigured, currency]);

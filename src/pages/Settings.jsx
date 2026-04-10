@@ -272,7 +272,6 @@ function Settings() {
   const [newToken, setNewToken] = useState('');
   const [tokenPreview, setTokenPreview] = useState(null);
   const [tokenConfigured, setTokenConfigured] = useState(false);
-  const [currency, setCurrency] = useState('EUR');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -281,7 +280,6 @@ function Settings() {
       setDiscogsUsername(account.discogsUsername || '');
       setTokenPreview(account.tokenPreview);
       setTokenConfigured(account.tokenConfigured);
-      setCurrency(account.currency || 'EUR');
     }).catch((nextError) => setError(nextError.message));
   }, []);
 
@@ -290,7 +288,7 @@ function Settings() {
     setSaving(true);
     setError('');
     try {
-      const account = await api.updateAccount({ discogsUsername, discogsToken: newToken, currency });
+      const account = await api.updateAccount({ discogsUsername, discogsToken: newToken });
       setTokenPreview(account.tokenPreview);
       setTokenConfigured(account.tokenConfigured);
       setNewToken('');
@@ -330,27 +328,6 @@ function Settings() {
         <label className="block space-y-2 text-sm text-slate-300">
           <span>{tokenConfigured ? t('settings.newTokenOptional') : t('settings.discogsToken')}</span>
           <input value={newToken} onChange={(e) => setNewToken(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
-        </label>
-        <label className="block space-y-2 text-sm text-slate-300">
-          <span>{t('settings.currency')}</span>
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300"
-          >
-            <option value="EUR">EUR — Euro</option>
-            <option value="USD">USD — US Dollar</option>
-            <option value="GBP">GBP — British Pound</option>
-            <option value="JPY">JPY — Japanese Yen</option>
-            <option value="CAD">CAD — Canadian Dollar</option>
-            <option value="AUD">AUD — Australian Dollar</option>
-            <option value="CHF">CHF — Swiss Franc</option>
-            <option value="SEK">SEK — Swedish Krona</option>
-            <option value="NZD">NZD — New Zealand Dollar</option>
-            <option value="BRL">BRL — Brazilian Real</option>
-            <option value="MXN">MXN — Mexican Peso</option>
-          </select>
-          <p className="text-xs text-slate-500">{t('settings.currencyHint')}</p>
         </label>
 
         {error && <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>}

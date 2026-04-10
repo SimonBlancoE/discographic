@@ -108,7 +108,7 @@ const RENDERERS = {
     },
   },
   listingPrice: {
-    header: (t, sortProps) => <SortButton label={t('collection.listingPrice')} column="listing_price" {...sortProps} />,
+    header: (t, sortProps) => <SortButton label={t('collection.listingPrice')} column="listing_price_eur" {...sortProps} />,
     cell: (release, { currency }) => <span className="text-brand-100">{release.listing_price != null ? formatCurrency(release.listing_price, currency) : '-'}</span>,
   },
 };
