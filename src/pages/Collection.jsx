@@ -135,6 +135,7 @@ function Collection() {
       if (hiddenColumnDef?.sortColumn === sortBy && !next.includes(columnId)) {
         setSortBy('artist');
         setSortOrder('asc');
+        toast.info(t('collection.sortReset'));
       }
 
       return next;
