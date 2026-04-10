@@ -1,8 +1,10 @@
 import express from 'express';
-import db, { getSettingForUser, normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
+import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { ensureCachedCover } from './media.js';
 import { translate } from '../../shared/i18n.js';
+import { DEFAULT_CURRENCY, convertAmountWithRates, getExchangeSnapshot } from '../services/exchangeRates.js';
+import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows } from '../services/enrichmentQueue.js';
 
 const router = express.Router();
 const PER_PAGE = 100;
@@ -168,7 +170,7 @@ async function runSync({ userId, logId, discogs, locale }) {
   `).run(totalSynced, logId, userId);
 
   const pending = db.prepare(
-    "SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (estimated_value IS NULL)"
+    `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
   ).get(userId).count;
 
   setSyncState(userId, {
@@ -195,6 +197,12 @@ async function runSync({ userId, logId, discogs, locale }) {
 
   await syncInventory({ userId, discogs }).catch((error) => {
     console.log('[sync] inventory sync failed:', error.message);
+    setSyncState(userId, {
+      inventory: {
+        status: 'failed',
+        message: syncT(locale, 'backend.sync.inventoryFail', { error: error.message })
+      }
+    });
   });
 
   warmupThumbnails(userId).catch((error) => {
@@ -210,10 +218,9 @@ async function runSync({ userId, logId, discogs, locale }) {
 }
 
 async function syncInventory({ userId, discogs }) {
-  const { locale = 'es' } = getSyncState(userId);
   try {
     // Clear existing listing data — items may have been delisted
-    db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL WHERE user_id = ?').run(userId);
+    db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE user_id = ?').run(userId);
 
     // Fetch all pages of the user's inventory
     const firstPage = await discogs.getInventory(1, 100);
@@ -227,15 +234,27 @@ async function syncInventory({ userId, discogs }) {
 
     if (!allListings.length) return;
 
+    const exchangeSnapshot = await getExchangeSnapshot(
+      allListings.map((listing) => listing.price?.currency).filter(Boolean)
+    );
+
     // Build a map of release_id -> best listing (prefer "For Sale" over "Draft", lowest price)
     const listingMap = new Map();
     for (const listing of allListings) {
       const releaseId = listing.release?.id;
       if (!releaseId) continue;
 
+      const originalCurrency = (listing.price?.currency || DEFAULT_CURRENCY).toUpperCase();
+      const originalPrice = listing.price?.value != null ? Number(listing.price.value) : null;
+      const priceEur = originalPrice == null
+        ? null
+        : convertAmountWithRates(originalPrice, originalCurrency, DEFAULT_CURRENCY, exchangeSnapshot.rates);
+
       const entry = {
         status: listing.status || 'For Sale',
-        price: listing.price?.value ? Number(listing.price.value) : null,
+        price: originalPrice,
+        currency: originalPrice == null ? null : originalCurrency,
+        priceEur,
       };
 
       const existing = listingMap.get(releaseId);
@@ -245,22 +264,23 @@ async function syncInventory({ userId, discogs }) {
         // Prefer "For Sale" over "Draft"; among same status, prefer lower price
         const statusRank = (s) => (s === 'For Sale' ? 0 : 1);
         if (statusRank(entry.status) < statusRank(existing.status) ||
-            (entry.status === existing.status && entry.price != null && (existing.price == null || entry.price < existing.price))) {
+            (entry.status === existing.status && entry.priceEur != null && (existing.priceEur == null || entry.priceEur < existing.priceEur))) {
           listingMap.set(releaseId, entry);
         }
       }
     }
 
     // Update releases that match
-    const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ? WHERE user_id = ? AND release_id = ?');
+    const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ?, listing_currency = ?, listing_price_eur = ? WHERE user_id = ? AND release_id = ?');
     const updateTx = db.transaction(() => {
       for (const [releaseId, listing] of listingMap) {
-        updateStmt.run(listing.status, listing.price, userId, releaseId);
+        updateStmt.run(listing.status, listing.price, listing.currency, listing.priceEur, userId, releaseId);
       }
     });
     updateTx();
   } catch (error) {
     console.log('[inventory-sync] error:', error.message);
+    throw error;
   }
 }
 
@@ -348,10 +368,8 @@ async function runEnrichAll({ userId, discogs }) {
   enrichRunning.add(userId);
 
   try {
-    const ENRICH_CONDITION = "estimated_value IS NULL";
-    const totalPending = db.prepare(
-      `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
-    ).get(userId).count;
+    const pendingRows = getPendingEnrichmentRows(db, userId);
+    const totalPending = pendingRows.length;
 
     if (!totalPending) {
       setSyncState(userId, {
@@ -365,24 +383,14 @@ async function runEnrichAll({ userId, discogs }) {
       enrichment: { status: 'running', pending: totalPending, current: 0, total: totalPending, message: syncT(locale, 'backend.sync.enrichProgress', { current: 0, total: totalPending }) }
     });
 
-    while (enrichRunning.has(userId)) {
-      const rows = db.prepare(`
-        SELECT id, release_id
-        FROM releases
-        WHERE user_id = ? AND (${ENRICH_CONDITION})
-        ORDER BY date_added DESC, id DESC
-        LIMIT ?
-      `).all(userId, ENRICH_BATCH_SIZE);
-
-      if (!rows.length) break;
-
+    for (let offset = 0; offset < pendingRows.length && enrichRunning.has(userId); offset += ENRICH_BATCH_SIZE) {
+      const rows = pendingRows.slice(offset, offset + ENRICH_BATCH_SIZE);
       for (const row of rows) {
         if (!enrichRunning.has(userId)) break;
 
         try {
           const detail = await discogs.getRelease(row.release_id);
-          const currency = getSettingForUser(userId, 'currency', 'EUR');
-          const stats = await discogs.getMarketplaceStats(row.release_id, currency).catch(() => null);
+          const stats = await discogs.getMarketplaceStats(row.release_id, DEFAULT_CURRENCY).catch(() => null);
           const priceEur = stats?.lowest_price?.value ?? 0;
 
           db.prepare(`
@@ -417,9 +425,7 @@ async function runEnrichAll({ userId, discogs }) {
       }
     }
 
-    const finalPending = db.prepare(
-      `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
-    ).get(userId).count;
+    const finalPending = getPendingEnrichmentCount(db, userId);
 
     setSyncState(userId, {
       enrichment: {

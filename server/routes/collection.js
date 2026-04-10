@@ -1,6 +1,7 @@
 import express from 'express';
 import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
+import { DEFAULT_CURRENCY, convertReleasePrices, normalizeCurrency } from '../services/exchangeRates.js';
 
 const router = express.Router();
 
@@ -26,11 +27,21 @@ const BASE_FIELDS = `
   estimated_value,
   listing_status,
   listing_price,
+  listing_currency,
+  listing_price_eur,
   tracklist,
   folder_id,
   raw_json,
   synced_at
 `;
+
+function getDisplayCurrency(req) {
+  return normalizeCurrency(req.query.currency || getSettingForUser(req.session.userId, 'currency', DEFAULT_CURRENCY));
+}
+
+async function convertHydratedRelease(req, release) {
+  return convertReleasePrices(hydrateRelease(release), getDisplayCurrency(req));
+}
 
 function buildCollectionWhere(query, userId) {
   const { search = '', genre = '', style = '', decade = '', format = '', label = '' } = query;
@@ -122,18 +133,17 @@ async function enrichReleaseIfNeeded(req, release) {
   // tracklist stays '[]' until we call /releases/:id for the first time.
   const neverEnriched = !release.tracklist || release.tracklist === '[]';
   if (!neverEnriched) {
-    return hydrateRelease(release);
+    return convertHydratedRelease(req, release);
   }
 
   let discogs;
   try {
     discogs = getDiscogsClientForUser(req);
   } catch {
-    return hydrateRelease(release);
+    return convertHydratedRelease(req, release);
   }
   const detail = await discogs.getRelease(release.release_id);
-  const currency = getSettingForUser(req.session.userId, 'currency', 'EUR');
-  const stats = await discogs.getMarketplaceStats(release.release_id, currency).catch(() => null);
+  const stats = await discogs.getMarketplaceStats(release.release_id, DEFAULT_CURRENCY).catch(() => null);
   const priceEur = stats?.lowest_price?.value ?? 0;
 
   db.prepare(`
@@ -158,31 +168,33 @@ async function enrichReleaseIfNeeded(req, release) {
   );
 
   const fresh = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(release.id, req.session.userId);
-  return hydrateRelease(fresh);
+  return convertHydratedRelease(req, fresh);
 }
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const userId = req.session.userId;
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25)));
     const offset = (page - 1) * limit;
-    const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value', 'listing_price']);
+    const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value', 'listing_price_eur']);
     const sortBy = validSort.has(req.query.sortBy) ? req.query.sortBy : 'artist';
     const sortOrder = String(req.query.sortOrder || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     const { clause, params } = buildCollectionWhere(req.query, userId);
 
     const total = db.prepare(`SELECT COUNT(*) AS count FROM releases ${clause}`).get(...params).count;
-    const releases = db.prepare(`
+    const rawReleases = db.prepare(`
       SELECT ${BASE_FIELDS}
       FROM releases
       ${clause}
       ORDER BY ${sortBy} ${sortOrder}, artist ASC, title ASC
       LIMIT ? OFFSET ?
-    `).all(...params, limit, offset).map(hydrateRelease);
+    `).all(...params, limit, offset);
+    const releases = await Promise.all(rawReleases.map((release) => convertHydratedRelease(req, release)));
 
     res.json({
       releases,
+      displayCurrency: getDisplayCurrency(req),
       pagination: {
         page,
         limit,
@@ -196,7 +208,7 @@ router.get('/', (req, res) => {
   }
 });
 
-router.get('/random', (req, res) => {
+router.get('/random', async (req, res) => {
   try {
     const release = db.prepare(`
       SELECT ${BASE_FIELDS}
@@ -210,8 +222,10 @@ router.get('/random', (req, res) => {
       return res.status(404).json({ error: 'No hay discos en la coleccion todavia' });
     }
 
+    const converted = await convertHydratedRelease(req, release);
+
     return res.json({
-      ...hydrateRelease(release),
+      ...converted,
       detail_cover_url: `/api/media/cover/${release.id}?variant=detail`,
       wall_cover_url: `/api/media/cover/${release.id}?variant=wall`,
       poster_cover_url: `/api/media/cover/${release.id}?variant=poster`
@@ -330,8 +344,9 @@ router.put('/:id', async (req, res) => {
     `).run(nextRating, stringifyJson(nextNotes), req.params.id, req.session.userId);
 
     const updated = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(req.params.id, req.session.userId);
+    const converted = await convertHydratedRelease(req, updated);
     return res.json({
-      ...hydrateRelease(updated),
+      ...converted,
       detail_cover_url: `/api/media/cover/${updated.id}?variant=detail`,
       wall_cover_url: `/api/media/cover/${updated.id}?variant=wall`,
       poster_cover_url: `/api/media/cover/${updated.id}?variant=poster`
