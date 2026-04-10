@@ -37,6 +37,11 @@ describe('i18n keys for table columns', () => {
     expect(messages.es['collection.columns']).toBe('Columnas');
     expect(messages.en['collection.columns']).toBe('Columns');
   });
+
+  it('has collection.currency key in both locales', () => {
+    expect(messages.es['collection.currency']).toBe('Divisa');
+    expect(messages.en['collection.currency']).toBe('Currency');
+  });
 });
 
 describe('i18n keys for export headers', () => {
@@ -55,6 +60,8 @@ describe('i18n keys for export headers', () => {
   it('Spanish and English export headers differ where expected', () => {
     expect(messages.es['export.artist']).toBe('Artista');
     expect(messages.en['export.artist']).toBe('Artist');
+    expect(messages.es['export.minPrice']).toBe('Precio mín.');
+    expect(messages.en['export.minPrice']).toBe('Min. price');
     expect(messages.es['export.sheetName']).toBe('Colección');
     expect(messages.en['export.sheetName']).toBe('Collection');
   });
