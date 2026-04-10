@@ -13,6 +13,7 @@ import { DEFAULT_VISIBLE, COLUMNS, MANDATORY } from '../lib/columns';
 import { formatNumber } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
+import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from '../../shared/currency';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -21,6 +22,12 @@ const DEFAULT_FILTERS = {
   decade: '',
   format: '',
   label: ''
+};
+
+const CURRENCY_LABELS = {
+  EUR: 'EUR · €',
+  USD: 'USD · $',
+  GBP: 'GBP · £'
 };
 
 function getFiltersFromSearchParams(searchParams) {
@@ -35,7 +42,7 @@ function getFiltersFromSearchParams(searchParams) {
 }
 
 function Collection() {
-  const { discogsConfigured, currency } = useAuth();
+  const { discogsConfigured, currency, setCurrencyPreference } = useAuth();
   const { t } = useI18n();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,8 +54,13 @@ function Collection() {
   const [loading, setLoading] = useState(true);
   const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
   const saveColumnsTimer = useRef(null);
+  const [displayCurrency, setDisplayCurrency] = useState(currency || DEFAULT_CURRENCY);
 
-  async function load(nextPage = page, nextFilters = filters, nextSortBy = sortBy, nextSortOrder = sortOrder) {
+  useEffect(() => {
+    setDisplayCurrency(currency || DEFAULT_CURRENCY);
+  }, [currency]);
+
+  async function load(nextPage = page, nextFilters = filters, nextSortBy = sortBy, nextSortOrder = sortOrder, nextCurrency = displayCurrency) {
     try {
       setLoading(true);
       const response = await api.getCollection({
@@ -56,7 +68,8 @@ function Collection() {
         page: nextPage,
         limit: 20,
         sortBy: nextSortBy,
-        sortOrder: nextSortOrder
+        sortOrder: nextSortOrder,
+        currency: nextCurrency
       });
       setPayload(response);
     } catch (error) {
@@ -81,7 +94,7 @@ function Collection() {
 
   useEffect(() => {
     load();
-  }, [page, sortBy, sortOrder]);
+  }, [page, sortBy, sortOrder, displayCurrency]);
 
   useEffect(() => {
     const nextFilters = getFiltersFromSearchParams(searchParams);
@@ -93,7 +106,7 @@ function Collection() {
 
     setFilters(nextFilters);
     setPage(1);
-    load(1, nextFilters, sortBy, sortOrder);
+    load(1, nextFilters, sortBy, sortOrder, displayCurrency);
   }, [searchParams]);
 
   const activeFilterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
@@ -115,7 +128,17 @@ function Collection() {
     setFilters(next);
     setPage(1);
     syncFilterParams(next);
-    load(1, next, sortBy, sortOrder);
+    load(1, next, sortBy, sortOrder, displayCurrency);
+  }
+
+  async function handleCurrencyChange(nextCurrency) {
+    setDisplayCurrency(nextCurrency);
+
+    try {
+      await setCurrencyPreference(nextCurrency);
+    } catch (error) {
+      toast.error(t('collection.loadError', { error: error.message }));
+    }
   }
 
   function handleSort(column) {
@@ -193,9 +216,23 @@ function Collection() {
             {totalLabel} {filterLabel}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
+            <span className="text-xs uppercase tracking-[0.25em] text-slate-400">{t('collection.currency')}</span>
+            <select
+              value={displayCurrency}
+              onChange={(event) => handleCurrencyChange(event.target.value)}
+              className="bg-transparent text-sm text-slate-100 outline-none"
+            >
+              {SUPPORTED_CURRENCIES.map((option) => (
+                <option key={option} value={option} className="bg-slate-950 text-slate-100">
+                  {CURRENCY_LABELS[option] || option}
+                </option>
+              ))}
+            </select>
+          </label>
           <ColumnToggle visibleColumns={visibleColumns} onToggle={handleColumnToggle} />
-          <ExportButton filters={filters} disabled={!discogsConfigured} />
+          <ExportButton filters={{ ...filters, currency: displayCurrency }} disabled={!discogsConfigured} />
         </div>
       </section>
 
@@ -219,14 +256,14 @@ function Collection() {
           setFilters(DEFAULT_FILTERS);
           setPage(1);
           syncFilterParams(DEFAULT_FILTERS);
-          load(1, DEFAULT_FILTERS, sortBy, sortOrder);
+          load(1, DEFAULT_FILTERS, sortBy, sortOrder, displayCurrency);
         }}
       />
 
       {loading ? (
         <CollectionSkeleton />
       ) : (
-        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} visibleColumns={[...new Set([...MANDATORY, ...visibleColumns])]} currency={currency} />
+        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} visibleColumns={[...new Set([...MANDATORY, ...visibleColumns])]} currency={displayCurrency} />
       )}
 
       <div className="glass-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
