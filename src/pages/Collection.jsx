@@ -180,7 +180,7 @@ function Collection() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel relative z-20 flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
+      <section className="glass-panel relative flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('collection.eyebrow')}</p>
           <h2 className="mt-2 font-display text-4xl text-white">{t('collection.title')}</h2>
