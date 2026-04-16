@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import express from 'express';
-import { createUser, getUserAuthById, getUserAuthByUsername, getUserCount, getUserById, migrateLegacyDataToUser, updateUserPasswordHash } from '../db.js';
+import { createUser, getUserAuthById, getUserAuthByUsername, getUserCount, getUserById, updateUserPasswordHash } from '../db.js';
 import { getCurrentUser, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -36,7 +36,6 @@ router.post('/bootstrap', async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = createUser(username, passwordHash, 'admin');
-  migrateLegacyDataToUser(user.id);
   req.session.userId = user.id;
 
   return req.session.save((error) => {

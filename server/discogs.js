@@ -114,11 +114,6 @@ class DiscogsClient {
       `/users/${this.username}/inventory?page=${page}&per_page=${perPage}&sort=listed&sort_order=desc`
     );
   }
-
-  // List custom fields for the user's collection
-  getCustomFields() {
-    return this.request(`/users/${this.username}/collection/fields`);
-  }
 }
 
 export function createDiscogsClient(config) {
