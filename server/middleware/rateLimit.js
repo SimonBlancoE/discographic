@@ -19,7 +19,7 @@ export function createDiscogsRateLimiter() {
       // Wait until the oldest request in the window expires
       const oldest = timestamps[0];
       const waitMs = WINDOW_MS - (now - oldest) + 200; // +200ms safety margin
-      console.log(`[rate-limit] cuota llena, esperando ${(waitMs / 1000).toFixed(1)}s`);
+      console.warn(`[rate-limit] quota full, waiting ${(waitMs / 1000).toFixed(1)}s`);
       await new Promise((resolve) => setTimeout(resolve, waitMs));
 
       // Purge again after sleeping

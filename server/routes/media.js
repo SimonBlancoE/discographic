@@ -79,7 +79,7 @@ export async function ensureCachedCover({ release, userId, variant }) {
     await access(cachePath);
     return cachePath;
   } catch {
-    // continue
+    // cache miss — fall through to fetch
   }
 
   if (!release.cover_url || !isAllowedRemote(release.cover_url)) {
@@ -132,11 +132,7 @@ router.get('/cover/:id', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Server-side gapless poster composition ("Tapete")
-// Uses sharp.composite() to stitch all covers into a single large image.
-// ---------------------------------------------------------------------------
-
+// Server-side gapless poster ("Tapete"): stitches all covers via sharp.composite().
 function computeOptimalTileSize(numItems, canvasWidth, canvasHeight) {
   const a = Math.ceil(Math.sqrt(numItems * canvasWidth / canvasHeight));
   const r = (Math.floor(a * canvasHeight / canvasWidth) * a < numItems)
@@ -204,7 +200,6 @@ router.get('/tapete', async (req, res) => {
     const canvasWidth = cols * tileSize;
     const canvasHeight = rows * tileSize;
 
-    // Ensure thumbnails exist at the chosen variant
     const tiles = [];
     for (const release of releases) {
       try {
@@ -215,7 +210,6 @@ router.get('/tapete', async (req, res) => {
       }
     }
 
-    // Build composite input array for sharp
     const compositeInputs = [];
     for (let i = 0; i < tiles.length; i++) {
       if (!tiles[i]) continue;
@@ -234,7 +228,6 @@ router.get('/tapete', async (req, res) => {
       });
     }
 
-    // Create base canvas and composite all tiles
     const result = await sharp({
       create: {
         width: canvasWidth,
@@ -252,7 +245,7 @@ router.get('/tapete', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     return res.send(result);
   } catch (error) {
-    console.log('[tapete] error:', error.message);
+    console.error('[tapete] error:', error.message);
     return res.status(500).json({ error: `No se pudo generar el tapete: ${error.message}` });
   }
 });

@@ -298,13 +298,11 @@ router.put('/:id', async (req, res) => {
       instanceId: release.instance_id
     };
 
-    // --- Rating ---
     const nextRating = req.body.rating !== undefined ? Number(req.body.rating) : release.rating;
     if (req.body.rating !== undefined && nextRating !== release.rating) {
       await discogs.updateRating({ ...base, rating: nextRating });
     }
 
-    // --- Notes (custom fields) ---
     const currentNotes = parseJson(release.notes, []);
     let nextNotes = currentNotes;
 

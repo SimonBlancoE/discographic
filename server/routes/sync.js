@@ -156,7 +156,7 @@ async function runSync({ userId, logId, discogs, locale }) {
       setSettingForUser(userId, 'collection_value', value.median);
     }
   } catch (error) {
-    console.log('[sync] no se pudo obtener el valor de la coleccion:', error.message);
+    console.error('[sync] failed to fetch collection value:', error.message);
   }
 
   setSettingForUser(userId, 'last_collection_sync_at', new Date().toISOString());
@@ -196,7 +196,7 @@ async function runSync({ userId, logId, discogs, locale }) {
   });
 
   await syncInventory({ userId, discogs }).catch((error) => {
-    console.log('[sync] inventory sync failed:', error.message);
+    console.error('[sync] inventory sync failed:', error.message);
     setSyncState(userId, {
       inventory: {
         status: 'failed',
@@ -222,7 +222,6 @@ async function syncInventory({ userId, discogs }) {
     // Clear existing listing data — items may have been delisted
     db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE user_id = ?').run(userId);
 
-    // Fetch all pages of the user's inventory
     const firstPage = await discogs.getInventory(1, 100);
     const totalPages = firstPage?.pagination?.pages || 0;
     const allListings = [...(firstPage?.listings || [])];
@@ -270,7 +269,6 @@ async function syncInventory({ userId, discogs }) {
       }
     }
 
-    // Update releases that match
     const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ?, listing_currency = ?, listing_price_eur = ? WHERE user_id = ? AND release_id = ?');
     const updateTx = db.transaction(() => {
       for (const [releaseId, listing] of listingMap) {
@@ -279,7 +277,7 @@ async function syncInventory({ userId, discogs }) {
     });
     updateTx();
   } catch (error) {
-    console.log('[inventory-sync] error:', error.message);
+    console.error('[inventory-sync] error:', error.message);
     throw error;
   }
 }
@@ -408,7 +406,7 @@ async function runEnrichAll({ userId, discogs }) {
             userId
           );
         } catch (error) {
-          console.log('[enrich] error:', row.release_id, error.message);
+          console.error('[enrich] error:', row.release_id, error.message);
         }
 
         processed += 1;
@@ -439,7 +437,7 @@ async function runEnrichAll({ userId, discogs }) {
       }
     });
   } catch (error) {
-    console.log('[enrich] error fatal:', error.message);
+    console.error('[enrich] fatal error:', error.message);
     setSyncState(userId, {
       enrichment: { status: 'failed', pending: 0, current: 0, total: 0, message: error.message }
     });
@@ -447,8 +445,6 @@ async function runEnrichAll({ userId, discogs }) {
     enrichRunning.delete(userId);
   }
 }
-
-// --- Routes ---
 
 router.post('/', async (req, res) => {
   const userId = req.session.userId;
@@ -513,7 +509,7 @@ router.post('/enrich', async (req, res) => {
     res.json({ ok: true });
 
     runEnrichAll({ userId, discogs }).catch((error) => {
-      console.log('[enrich] background error:', error.message);
+      console.error('[enrich] background error:', error.message);
     });
   } catch (error) {
     return res.status(400).json({ error: error.message });
