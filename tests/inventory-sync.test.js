@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import { existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { DEFAULT_CURRENCY, convertAmountWithRates } from '../server/services/exchangeRates.js';
+import { selectBestListings } from '../server/lib/inventory.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,37 +46,9 @@ describe('Inventory sync logic', () => {
   const rates = { EUR: 1, USD: 1.1, GBP: 0.85 };
 
   function simulateInventorySync(userId, listings) {
-    // Clear existing listing data (same as the real sync)
     db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE user_id = ?').run(userId);
 
-    // Build map of release_id -> best listing
-    const listingMap = new Map();
-    for (const listing of listings) {
-      const releaseId = listing.release?.id;
-      if (!releaseId) continue;
-
-      const currency = listing.price?.currency || DEFAULT_CURRENCY;
-      const originalPrice = listing.price?.value != null ? Number(listing.price.value) : null;
-      const priceEur = originalPrice == null ? null : convertAmountWithRates(originalPrice, currency, DEFAULT_CURRENCY, rates);
-
-      const entry = {
-        status: listing.status || 'For Sale',
-        price: originalPrice,
-        currency: originalPrice == null ? null : currency,
-        priceEur,
-      };
-
-      const existing = listingMap.get(releaseId);
-      if (!existing) {
-        listingMap.set(releaseId, entry);
-      } else {
-        const statusRank = (s) => (s === 'For Sale' ? 0 : 1);
-        if (statusRank(entry.status) < statusRank(existing.status) ||
-            (entry.status === existing.status && entry.priceEur != null && (existing.priceEur == null || entry.priceEur < existing.priceEur))) {
-          listingMap.set(releaseId, entry);
-        }
-      }
-    }
+    const listingMap = selectBestListings(listings, rates);
 
     const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ?, listing_currency = ?, listing_price_eur = ? WHERE user_id = ? AND release_id = ?');
     const updateTx = db.transaction(() => {

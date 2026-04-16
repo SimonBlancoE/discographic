@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import express from 'express';
 import { createUser, deleteUser, getUserById, listUsers, updateUserPasswordHash } from '../db.js';
+import { serializeUser } from '../lib/userView.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -8,14 +9,7 @@ const router = express.Router();
 router.use(requireAdmin);
 
 router.get('/users', (req, res) => {
-  const users = listUsers().map((user) => ({
-    id: user.id,
-    username: user.username,
-    role: user.role,
-    created_at: user.created_at
-  }));
-
-  res.json({ users });
+  res.json({ users: listUsers().map(serializeUser) });
 });
 
 router.post('/users', async (req, res) => {

@@ -1,13 +1,10 @@
 import bcrypt from 'bcryptjs';
 import express from 'express';
 import { createUser, getUserAuthById, getUserAuthByUsername, getUserCount, getUserById, updateUserPasswordHash } from '../db.js';
+import { serializeUser as sanitizeUser } from '../lib/userView.js';
 import { getCurrentUser, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
-
-function sanitizeUser(user) {
-  return user ? { id: user.id, username: user.username, role: user.role, created_at: user.created_at } : null;
-}
 
 router.get('/status', (req, res) => {
   const user = getCurrentUser(req);

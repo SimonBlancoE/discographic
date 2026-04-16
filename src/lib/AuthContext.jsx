@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { DEFAULT_CURRENCY } from '../../shared/currency';
+import { EMPTY_ACCOUNT } from '../../shared/account';
+import { PREFERENCE_KEYS } from '../../shared/preferences';
 
 const AuthContext = createContext(null);
 
@@ -19,7 +21,7 @@ export function AuthProvider({ children }) {
       setUser(status.user || null);
 
       if (status.loggedIn) {
-        const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
+        const account = await api.getAccount().catch(() => EMPTY_ACCOUNT);
         setDiscogsConfigured(Boolean(account.tokenConfigured));
         setCurrency(account.currency || DEFAULT_CURRENCY);
       } else {
@@ -51,7 +53,7 @@ export function AuthProvider({ children }) {
       setNeedsBootstrap(false);
       setUser(result.user);
       setLoading(false);
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
+      const account = await api.getAccount().catch(() => EMPTY_ACCOUNT);
       setDiscogsConfigured(Boolean(account.tokenConfigured));
       setCurrency(account.currency || DEFAULT_CURRENCY);
       return result;
@@ -69,13 +71,13 @@ export function AuthProvider({ children }) {
       await refresh();
     },
     async refreshAccount() {
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
+      const account = await api.getAccount().catch(() => EMPTY_ACCOUNT);
       setDiscogsConfigured(Boolean(account.tokenConfigured));
       setCurrency(account.currency || DEFAULT_CURRENCY);
       return account;
     },
     async setCurrencyPreference(nextCurrency) {
-      await api.setPreference('currency', nextCurrency);
+      await api.setPreference(PREFERENCE_KEYS.CURRENCY, nextCurrency);
       setCurrency(nextCurrency);
       return nextCurrency;
     },
