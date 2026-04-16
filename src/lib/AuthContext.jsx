@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { DEFAULT_CURRENCY } from '../../shared/currency';
-import { EMPTY_ACCOUNT } from '../../shared/account';
 import { PREFERENCE_KEYS } from '../../shared/preferences';
 
 const AuthContext = createContext(null);
@@ -13,6 +12,11 @@ export function AuthProvider({ children }) {
   const [discogsConfigured, setDiscogsConfigured] = useState(false);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
 
+  function applyAccount(account) {
+    setDiscogsConfigured(Boolean(account.tokenConfigured));
+    setCurrency(account.currency || DEFAULT_CURRENCY);
+  }
+
   async function refresh() {
     setLoading(true);
     try {
@@ -21,14 +25,13 @@ export function AuthProvider({ children }) {
       setUser(status.user || null);
 
       if (status.loggedIn) {
-        const account = await api.getAccount().catch(() => EMPTY_ACCOUNT);
-        setDiscogsConfigured(Boolean(account.tokenConfigured));
-        setCurrency(account.currency || DEFAULT_CURRENCY);
+        applyAccount(await api.getAccount());
       } else {
         setDiscogsConfigured(false);
         setCurrency(DEFAULT_CURRENCY);
       }
-    } catch {
+    } catch (error) {
+      console.error('[auth] refresh failed:', error);
       setUser(null);
       setDiscogsConfigured(false);
     } finally {
@@ -53,9 +56,7 @@ export function AuthProvider({ children }) {
       setNeedsBootstrap(false);
       setUser(result.user);
       setLoading(false);
-      const account = await api.getAccount().catch(() => EMPTY_ACCOUNT);
-      setDiscogsConfigured(Boolean(account.tokenConfigured));
-      setCurrency(account.currency || DEFAULT_CURRENCY);
+      applyAccount(await api.getAccount());
       return result;
     },
     async bootstrap(username, password) {
@@ -71,9 +72,8 @@ export function AuthProvider({ children }) {
       await refresh();
     },
     async refreshAccount() {
-      const account = await api.getAccount().catch(() => EMPTY_ACCOUNT);
-      setDiscogsConfigured(Boolean(account.tokenConfigured));
-      setCurrency(account.currency || DEFAULT_CURRENCY);
+      const account = await api.getAccount();
+      applyAccount(account);
       return account;
     },
     async setCurrencyPreference(nextCurrency) {

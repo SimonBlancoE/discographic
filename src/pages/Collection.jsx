@@ -75,9 +75,13 @@ function Collection() {
           if (Array.isArray(parsed) && parsed.length > 0) {
             setVisibleColumns(parsed);
           }
-        } catch {}
+        } catch (error) {
+          console.warn('[collection] stored visible-columns preference is corrupt:', error);
+        }
       }
-    }).catch(() => {});
+    }).catch((error) => {
+      console.warn('[collection] failed to load visible-columns preference:', error);
+    });
   }, []);
 
   useEffect(() => {
@@ -142,7 +146,8 @@ function Collection() {
         : [...prev, columnId];
       clearTimeout(saveColumnsTimer.current);
       saveColumnsTimer.current = setTimeout(() => {
-        api.setPreference(PREFERENCE_KEYS.COLLECTION_VISIBLE_COLUMNS, JSON.stringify(next)).catch(() => {});
+        api.setPreference(PREFERENCE_KEYS.COLLECTION_VISIBLE_COLUMNS, JSON.stringify(next))
+          .catch((error) => console.warn('[collection] failed to save column preference:', error));
       }, 500);
 
       // If the currently sorted column is being hidden, reset sort to artist

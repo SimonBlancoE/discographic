@@ -55,12 +55,23 @@ export async function getExchangeSnapshot(extraCurrencies = []) {
     return pendingFetch;
   }
 
+  // The today→yesterday fallback is expected: ECB doesn't publish the new
+  // day's rate until midday CET. Logging the swallowed error preserves
+  // visibility of real network/auth failures that just look the same.
+  async function fetchRate(currency, date) {
+    try {
+      return latestRate(await ecb.getRate(currency, date));
+    } catch (error) {
+      console.warn(`[exchangeRates] ${currency} ${date} fetch failed:`, error.message);
+      return null;
+    }
+  }
+
   pendingFetch = (async () => {
     try {
       const results = await Promise.all(requiredCurrencies.map(async (currency) => {
-        const today = todayIsoDate();
-        const rate = latestRate(await ecb.getRate(currency, today).catch(() => null))
-          ?? latestRate(await ecb.getRate(currency, yesterdayIsoDate()).catch(() => null));
+        const rate = await fetchRate(currency, todayIsoDate())
+          ?? await fetchRate(currency, yesterdayIsoDate());
         return [currency, rate];
       }));
 

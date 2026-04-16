@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import db, { hydrateRelease } from '../db.js';
 import { pickName } from '../../shared/discogs.js';
 import { buildCollectionWhere } from '../lib/collectionFilters.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 
@@ -37,32 +38,28 @@ async function serializeRelease(release, t, currency) {
   };
 }
 
-router.get('/', async (req, res) => {
-  try {
-    const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
-    const currency = normalizeCurrency(req.query.currency || DEFAULT_CURRENCY);
-    const { clause, params } = buildCollectionWhere(req.query, req.session.userId);
-    const rows = db.prepare(`SELECT * FROM releases ${clause} ORDER BY artist ASC, title ASC`).all(...params);
-    const payload = await Promise.all(rows.map(hydrateRelease).map((release) => serializeRelease(release, req.t, currency)));
+router.get('/', asyncHandler(async (req, res) => {
+  const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
+  const currency = normalizeCurrency(req.query.currency || DEFAULT_CURRENCY);
+  const { clause, params } = buildCollectionWhere(req.query, req.session.userId);
+  const rows = db.prepare(`SELECT * FROM releases ${clause} ORDER BY artist ASC, title ASC`).all(...params);
+  const payload = await Promise.all(rows.map(hydrateRelease).map((release) => serializeRelease(release, req.t, currency)));
 
-    if (format === 'xlsx') {
-      const sheet = XLSX.utils.json_to_sheet(payload);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, req.t('export.sheetName'));
-      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+  if (format === 'xlsx') {
+    const sheet = XLSX.utils.json_to_sheet(payload);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, req.t('export.sheetName'));
+    const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', 'attachment; filename="discographic-collection.xlsx"');
-      return res.send(buffer);
-    }
-
-    const csv = stringify(payload, { header: true });
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="discographic-collection.csv"');
-    return res.send(`\uFEFF${csv}`);
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="discographic-collection.xlsx"');
+    return res.send(buffer);
   }
-});
+
+  const csv = stringify(payload, { header: true });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="discographic-collection.csv"');
+  return res.send(`\uFEFF${csv}`);
+}));
 
 export default router;

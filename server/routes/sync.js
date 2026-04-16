@@ -9,6 +9,7 @@ import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows }
 import { LISTING_STATUS, SYNC_PHASE, SYNC_STATUS } from '../../shared/progress.js';
 import { SETTING_KEYS } from '../../shared/preferences.js';
 import { selectBestListings } from '../lib/inventory.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 
 const router = express.Router();
 const PER_PAGE = 100;
@@ -351,23 +352,43 @@ async function runEnrichAll({ userId, discogs }) {
 
         try {
           const detail = await discogs.getRelease(row.release_id);
-          const stats = await discogs.getMarketplaceStats(row.release_id, DEFAULT_CURRENCY).catch(() => null);
-          const priceEur = stats?.lowest_price?.value ?? 0;
 
-          db.prepare(`
-            UPDATE releases
-            SET estimated_value = ?,
-                country = COALESCE(?, country),
-                tracklist = CASE WHEN tracklist IS NULL OR tracklist = '[]' THEN ? ELSE tracklist END,
-                synced_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND user_id = ?
-          `).run(
-            priceEur,
-            detail.country || null,
-            stringifyJson(detail.tracklist || []),
-            row.id,
-            userId
-          );
+          // Marketplace stats are best-effort. If the call fails, leave
+          // estimated_value untouched so the row stays in the enrichment
+          // queue and gets retried next sync — writing 0 would corrupt
+          // dashboard totals.
+          let priceUpdate = 'estimated_value';
+          let priceValue = null;
+          try {
+            const stats = await discogs.getMarketplaceStats(row.release_id, DEFAULT_CURRENCY);
+            if (stats?.lowest_price?.value != null) {
+              priceValue = stats.lowest_price.value;
+            } else {
+              priceUpdate = null;
+            }
+          } catch (error) {
+            console.warn('[enrich] marketplace stats failed:', row.release_id, error.message);
+            priceUpdate = null;
+          }
+
+          if (priceUpdate) {
+            db.prepare(`
+              UPDATE releases
+              SET estimated_value = ?,
+                  country = COALESCE(?, country),
+                  tracklist = CASE WHEN tracklist IS NULL OR tracklist = '[]' THEN ? ELSE tracklist END,
+                  synced_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND user_id = ?
+            `).run(priceValue, detail.country || null, stringifyJson(detail.tracklist || []), row.id, userId);
+          } else {
+            db.prepare(`
+              UPDATE releases
+              SET country = COALESCE(?, country),
+                  tracklist = CASE WHEN tracklist IS NULL OR tracklist = '[]' THEN ? ELSE tracklist END,
+                  synced_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND user_id = ?
+            `).run(detail.country || null, stringifyJson(detail.tracklist || []), row.id, userId);
+          }
         } catch (error) {
           console.error('[enrich] error:', row.release_id, error.message);
         }
@@ -409,7 +430,7 @@ async function runEnrichAll({ userId, discogs }) {
   }
 }
 
-router.post('/', async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const userId = req.session.userId;
   const state = getSyncState(userId, req.locale);
 
@@ -417,67 +438,74 @@ router.post('/', async (req, res) => {
     return res.status(409).json({ error: req.t('backend.sync.active') });
   }
 
+  // getDiscogsClientForUser throws when the user hasn't configured their
+  // Discogs token — surface as 400 rather than the generic 500.
+  let discogs;
   try {
-    const discogs = getDiscogsClientForUser(req);
-    const logId = db.prepare(`
-      INSERT INTO sync_log (user_id, started_at, status, records_synced)
-      VALUES (?, CURRENT_TIMESTAMP, 'running', 0)
-    `).run(userId).lastInsertRowid;
-
-    setSyncState(userId, {
-      locale: req.locale,
-      status: SYNC_STATUS.RUNNING,
-      current: 0,
-      total: 0,
-      phase: SYNC_PHASE.INITIALIZING,
-      message: req.t('backend.sync.initializing'),
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-      recordsSynced: 0,
-      enrichment: null,
-      thumbnails: null
-    });
-
-    res.json({ ok: true });
-
-    runSync({ userId, logId, discogs, locale: req.locale }).catch((error) => {
-      db.prepare(`
-        UPDATE sync_log
-        SET finished_at = CURRENT_TIMESTAMP,
-            status = 'failed'
-        WHERE id = ? AND user_id = ?
-      `).run(logId, userId);
-
-      setSyncState(userId, {
-        status: SYNC_STATUS.FAILED,
-        phase: SYNC_PHASE.ERROR,
-        message: error.message,
-        finishedAt: new Date().toISOString()
-      });
-    });
+    discogs = getDiscogsClientForUser(req);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
-});
 
-router.post('/enrich', async (req, res) => {
+  const logId = db.prepare(`
+    INSERT INTO sync_log (user_id, started_at, status, records_synced)
+    VALUES (?, CURRENT_TIMESTAMP, 'running', 0)
+  `).run(userId).lastInsertRowid;
+
+  setSyncState(userId, {
+    locale: req.locale,
+    status: SYNC_STATUS.RUNNING,
+    current: 0,
+    total: 0,
+    phase: SYNC_PHASE.INITIALIZING,
+    message: req.t('backend.sync.initializing'),
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    recordsSynced: 0,
+    enrichment: null,
+    thumbnails: null
+  });
+
+  res.json({ ok: true });
+
+  runSync({ userId, logId, discogs, locale: req.locale }).catch((error) => {
+    console.error('[sync] background error:', error);
+    db.prepare(`
+      UPDATE sync_log
+      SET finished_at = CURRENT_TIMESTAMP,
+          status = 'failed'
+      WHERE id = ? AND user_id = ?
+    `).run(logId, userId);
+
+    setSyncState(userId, {
+      status: SYNC_STATUS.FAILED,
+      phase: SYNC_PHASE.ERROR,
+      message: error.message,
+      finishedAt: new Date().toISOString()
+    });
+  });
+}));
+
+router.post('/enrich', asyncHandler(async (req, res) => {
   const userId = req.session.userId;
 
   if (enrichRunning.has(userId)) {
     return res.status(409).json({ error: req.t('backend.sync.activeEnrich') });
   }
 
+  let discogs;
   try {
-    const discogs = getDiscogsClientForUser(req);
-    res.json({ ok: true });
-
-    runEnrichAll({ userId, discogs }).catch((error) => {
-      console.error('[enrich] background error:', error.message);
-    });
+    discogs = getDiscogsClientForUser(req);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
-});
+
+  res.json({ ok: true });
+
+  runEnrichAll({ userId, discogs }).catch((error) => {
+    console.error('[enrich] background error:', error.message);
+  });
+}));
 
 router.post('/enrich/stop', (req, res) => {
   enrichRunning.delete(req.session.userId);
