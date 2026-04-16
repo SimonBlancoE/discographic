@@ -309,10 +309,6 @@ export function setSettingForUser(userId, key, value) {
   `).run(userId, key, String(value));
 }
 
-export function getUserByUsername(username) {
-  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-}
-
 export function getUserById(id) {
   return db.prepare('SELECT id, username, role, created_at FROM users WHERE id = ?').get(id);
 }
