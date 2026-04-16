@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseJson, stringifyJson, withCoverUrls } from '../db.js';
+import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseFormats, parseGenres, parseLabels, parseNotes, parseStyles, stringifyJson, withCoverUrls } from '../db.js';
 import { pickName } from '../../shared/discogs.js';
 import { RELEASE_BASE_FIELDS } from '../../shared/release.js';
 import { isValidSortColumn } from '../../shared/releaseSort.js';
@@ -32,17 +32,17 @@ function getFilterOptions(userId) {
   const decades = new Set();
 
   for (const release of releases) {
-    for (const genre of parseJson(release.genres, [])) {
+    for (const genre of parseGenres(release.genres)) {
       if (genre) genres.add(genre);
     }
-    for (const style of parseJson(release.styles, [])) {
+    for (const style of parseStyles(release.styles)) {
       if (style) styles.add(style);
     }
-    for (const format of parseJson(release.formats, [])) {
+    for (const format of parseFormats(release.formats)) {
       const name = pickName(format);
       if (name) formats.add(name);
     }
-    for (const label of parseJson(release.labels, [])) {
+    for (const label of parseLabels(release.labels)) {
       const name = pickName(label);
       if (name) labels.add(name);
     }
@@ -93,7 +93,7 @@ async function enrichReleaseIfNeeded(req, release) {
         synced_at = CURRENT_TIMESTAMP
     WHERE id = ? AND user_id = ?
   `).run(
-    stringifyJson(detail.genres || parseJson(release.genres, [])),
+    stringifyJson(detail.genres || parseGenres(release.genres)),
     stringifyJson(detail.styles || []),
     detail.country || release.country || null,
     stringifyJson(detail.tracklist || []),
@@ -174,10 +174,10 @@ router.get('/covers', (req, res) => {
       ORDER BY date_added DESC, artist ASC, title ASC
     `).all(req.session.userId).map((release) => withCoverUrls({
       ...release,
-      genres: parseJson(release.genres, []),
-      styles: parseJson(release.styles, []),
-      formats: parseJson(release.formats, []),
-      labels: parseJson(release.labels, [])
+      genres: parseGenres(release.genres),
+      styles: parseStyles(release.styles),
+      formats: parseFormats(release.formats),
+      labels: parseLabels(release.labels)
     }));
 
     return res.json({ releases, filters: getFilterOptions(req.session.userId) });
@@ -220,12 +220,19 @@ router.put('/:id', async (req, res) => {
       instanceId: release.instance_id
     };
 
-    const nextRating = req.body.rating !== undefined ? Number(req.body.rating) : release.rating;
-    if (req.body.rating !== undefined && nextRating !== release.rating) {
-      await discogs.updateRating({ ...base, rating: nextRating });
+    let nextRating = release.rating;
+    if (req.body.rating !== undefined) {
+      const candidate = Number(req.body.rating);
+      if (!Number.isInteger(candidate) || candidate < 0 || candidate > 5) {
+        return res.status(400).json({ error: 'El rating debe estar entre 0 y 5' });
+      }
+      nextRating = candidate;
+      if (nextRating !== release.rating) {
+        await discogs.updateRating({ ...base, rating: nextRating });
+      }
     }
 
-    const currentNotes = parseJson(release.notes, []);
+    const currentNotes = parseNotes(release.notes);
     let nextNotes = currentNotes;
 
     if (req.body.notes !== undefined) {
