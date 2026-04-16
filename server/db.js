@@ -144,6 +144,16 @@ export function hydrateRelease(release) {
   return hydrated;
 }
 
+export function withCoverUrls(release) {
+  if (!release) return release;
+  return {
+    ...release,
+    detail_cover_url: `/api/media/cover/${release.id}?variant=detail`,
+    wall_cover_url: `/api/media/cover/${release.id}?variant=wall`,
+    poster_cover_url: `/api/media/cover/${release.id}?variant=poster`
+  };
+}
+
 export function getSettingForUser(userId, key, fallback = null) {
   const row = db.prepare('SELECT value FROM settings WHERE user_id = ? AND key = ?').get(userId, key);
   return row ? row.value : fallback;

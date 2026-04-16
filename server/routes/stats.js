@@ -1,5 +1,6 @@
 import express from 'express';
 import db, { getSettingForUser, parseJson } from '../db.js';
+import { pickName } from '../../shared/discogs.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 
@@ -55,12 +56,12 @@ router.get('/', async (req, res) => {
 
     const formats = countJsonValues(
       db.prepare('SELECT formats AS value FROM releases WHERE user_id = ? AND formats IS NOT NULL').all(userId),
-      (entry) => entry?.name || entry
+      pickName
     );
 
     const labels = countJsonValues(
       db.prepare('SELECT labels AS value FROM releases WHERE user_id = ? AND labels IS NOT NULL').all(userId),
-      (entry) => entry?.name || entry
+      pickName
     ).slice(0, 20);
 
     const decades = db.prepare(`
