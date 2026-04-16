@@ -17,10 +17,6 @@ const PREVIEW_TTL_MS = 10 * 60 * 1000;
 // In-memory import sync state per user
 const importSyncStates = new Map();
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function cleanPreviewCache() {
   const now = Date.now();
   for (const [key, entry] of previewCache) {
@@ -186,10 +182,6 @@ function extractChanges(userId, rows, columnMap) {
   return { changes, unmatchedRows, errors };
 }
 
-// ---------------------------------------------------------------------------
-// Background sync with Discogs
-// ---------------------------------------------------------------------------
-
 function getImportSyncState(userId) {
   if (!importSyncStates.has(userId)) {
     importSyncStates.set(userId, {
@@ -245,7 +237,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
         });
       }
     } catch (error) {
-      console.log('[import-sync] error:', change.releaseId, error.message);
+      console.error('[import-sync] error:', change.releaseId, error.message);
     }
 
     synced += 1;
@@ -262,10 +254,6 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
     message: `${synced} cambios sincronizados con Discogs correctamente.`
   });
 }
-
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
 
 router.get('/template', (req, res) => {
   const data = [
@@ -351,7 +339,6 @@ router.post('/apply', async (req, res) => {
     previewCache.delete(previewId);
     const userId = req.session.userId;
 
-    // Apply to local DB immediately
     const applyTx = db.transaction(() => {
       for (const change of changes) {
         if (change.ratingChanged) {

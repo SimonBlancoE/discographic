@@ -110,7 +110,6 @@ function SyncButton({ onSyncComplete, disabled = false }) {
     }
   }, []);
 
-  // If we mount while enrichment is running, start polling
   useEffect(() => {
     if (enrichRunning) {
       const timer = setTimeout(pollEnrich, POLL_MS);

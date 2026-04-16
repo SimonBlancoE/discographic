@@ -20,7 +20,6 @@ function ColumnToggle({ visibleColumns, onToggle }) {
   useEffect(() => {
     if (!open) return;
 
-    // Position once after render
     requestAnimationFrame(updatePosition);
 
     function handleClickOutside(event) {

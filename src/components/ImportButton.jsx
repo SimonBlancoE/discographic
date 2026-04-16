@@ -19,7 +19,6 @@ function ImportButton({ disabled = false }) {
   const fileRef = useRef(null);
   const disposed = useRef(false);
 
-  // Poll import sync status
   const poll = useCallback(async () => {
     if (disposed.current) return;
     try {
@@ -94,7 +93,6 @@ function ImportButton({ disabled = false }) {
 
   return (
     <div className="space-y-4">
-      {/* ── Idle: buttons + explanation ── */}
       {phase === 'idle' && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -123,14 +121,12 @@ function ImportButton({ disabled = false }) {
         </div>
       )}
 
-      {/* ── Loading ── */}
       {phase === 'loading' && (
         <div className="glass-panel p-5 text-center text-slate-300">
           {t('collection.importLoading')}
         </div>
       )}
 
-      {/* ── Preview ── */}
       {phase === 'preview' && preview && (
         <div className="glass-panel space-y-4 p-5">
           <div>
@@ -228,14 +224,12 @@ function ImportButton({ disabled = false }) {
         </div>
       )}
 
-      {/* ── Applying ── */}
       {phase === 'applying' && (
         <div className="glass-panel p-5 text-center text-slate-300">
           {t('collection.applying')}
         </div>
       )}
 
-      {/* ── Syncing with Discogs ── */}
       {phase === 'syncing' && syncState && (
         <div className="glass-panel space-y-3 p-5">
           <div>
@@ -253,7 +247,6 @@ function ImportButton({ disabled = false }) {
         </div>
       )}
 
-      {/* ── Done ── */}
       {phase === 'done' && (
         <div className="glass-panel space-y-3 p-5">
           <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
@@ -265,7 +258,6 @@ function ImportButton({ disabled = false }) {
         </div>
       )}
 
-      {/* ── Inline errors ── */}
       {error && phase === 'idle' && (
         <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
           {error}
