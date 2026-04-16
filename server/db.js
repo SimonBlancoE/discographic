@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { USER_PUBLIC_COLUMNS } from './lib/userView.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -168,7 +169,7 @@ export function setSettingForUser(userId, key, value) {
 }
 
 export function getUserById(id) {
-  return db.prepare('SELECT id, username, role, created_at FROM users WHERE id = ?').get(id);
+  return db.prepare(`SELECT ${USER_PUBLIC_COLUMNS} FROM users WHERE id = ?`).get(id);
 }
 
 export function getUserCount() {
@@ -181,7 +182,7 @@ export function createUser(username, passwordHash, role = 'user') {
 }
 
 export function listUsers() {
-  return db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
+  return db.prepare(`SELECT ${USER_PUBLIC_COLUMNS} FROM users ORDER BY id ASC`).all();
 }
 
 export function deleteUser(id) {

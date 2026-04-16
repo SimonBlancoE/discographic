@@ -6,6 +6,7 @@ import db, { parseJson, stringifyJson } from '../db.js';
 import { createUserStateStore } from '../lib/userStateStore.js';
 import { resolveNotesFieldId, upsertNote } from '../lib/discogsNotes.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
+import { SYNC_STATUS } from '../../shared/progress.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -17,7 +18,7 @@ const previewCache = new Map();
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 const importSyncStateStore = createUserStateStore(() => ({
-  status: 'idle',
+  status: SYNC_STATUS.IDLE,
   current: 0,
   total: 0,
   message: 'Sin importacion activa'
@@ -193,7 +194,7 @@ const setImportSyncState = (userId, patch) => importSyncStateStore.patch(userId,
 
 async function syncChangesWithDiscogs({ userId, changes, discogs }) {
   setImportSyncState(userId, {
-    status: 'running',
+    status: SYNC_STATUS.RUNNING,
     current: 0,
     total: changes.length,
     message: `Sincronizando 0/${changes.length} con Discogs...`
@@ -238,7 +239,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
   }
 
   setImportSyncState(userId, {
-    status: 'completed',
+    status: SYNC_STATUS.COMPLETED,
     current: synced,
     total: changes.length,
     message: `${synced} cambios sincronizados con Discogs correctamente.`
@@ -357,7 +358,7 @@ router.post('/apply', async (req, res) => {
       discogs = getDiscogsClientForUser(req);
     } catch {
       setImportSyncState(userId, {
-        status: 'completed',
+        status: SYNC_STATUS.COMPLETED,
         current: changes.length,
         total: changes.length,
         message: `${changes.length} cambios guardados localmente. No se pudo conectar con Discogs para sincronizar.`
@@ -367,7 +368,7 @@ router.post('/apply', async (req, res) => {
 
     syncChangesWithDiscogs({ userId, changes, discogs }).catch((error) => {
       setImportSyncState(userId, {
-        status: 'failed',
+        status: SYNC_STATUS.FAILED,
         message: `Error sincronizando con Discogs: ${error.message}`
       });
     });

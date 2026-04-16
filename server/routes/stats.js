@@ -1,6 +1,7 @@
 import express from 'express';
 import db, { getSettingForUser, parseJson } from '../db.js';
 import { pickName } from '../../shared/discogs.js';
+import { PREFERENCE_KEYS, SETTING_KEYS } from '../../shared/preferences.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 
@@ -30,7 +31,7 @@ function countJsonValues(rows, mapValue) {
 router.get('/', async (req, res) => {
   try {
     const userId = req.session.userId;
-    const displayCurrency = normalizeCurrency(req.query.currency || getSettingForUser(userId, 'currency', DEFAULT_CURRENCY));
+    const displayCurrency = normalizeCurrency(req.query.currency || getSettingForUser(userId, PREFERENCE_KEYS.CURRENCY, DEFAULT_CURRENCY));
     const totalRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ?').get(userId).count;
     const ratedRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND rating > 0').get(userId).count;
     const notesRecords = db.prepare(`

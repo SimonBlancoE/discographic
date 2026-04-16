@@ -4,6 +4,7 @@ import { formatCurrency, joinNames } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { COLUMNS } from '../lib/columns';
 import StarRating from './StarRating';
+import { LISTING_STATUS } from '../../shared/progress';
 
 function NotesInput({ value, onCommit }) {
   const { t } = useI18n();
@@ -103,7 +104,7 @@ const RENDERERS = {
     header: (t) => t('collection.listingStatus'),
     cell: (release) => {
       if (!release.listing_status) return <span className="text-slate-500">-</span>;
-      const color = release.listing_status === 'For Sale' ? 'text-emerald-300' : 'text-amber-300';
+      const color = release.listing_status === LISTING_STATUS.FOR_SALE ? 'text-emerald-300' : 'text-amber-300';
       return <span className={`text-xs font-medium ${color}`}>{release.listing_status}</span>;
     },
   },

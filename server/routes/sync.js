@@ -6,6 +6,9 @@ import { ensureCachedCover } from './media.js';
 import { translate } from '../../shared/i18n.js';
 import { DEFAULT_CURRENCY, convertAmountWithRates, getExchangeSnapshot } from '../services/exchangeRates.js';
 import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows } from '../services/enrichmentQueue.js';
+import { LISTING_STATUS, SYNC_PHASE, SYNC_STATUS } from '../../shared/progress.js';
+import { SETTING_KEYS } from '../../shared/preferences.js';
+import { selectBestListings } from '../lib/inventory.js';
 
 const router = express.Router();
 const PER_PAGE = 100;
@@ -19,10 +22,10 @@ function syncT(locale, key, vars) {
 
 const syncStateStore = createUserStateStore((_userId, locale = 'es') => ({
   locale,
-  status: 'idle',
+  status: SYNC_STATUS.IDLE,
   current: 0,
   total: 0,
-  phase: 'idle',
+  phase: SYNC_PHASE.IDLE,
   message: syncT(locale, 'backend.sync.idle'),
   startedAt: null,
   finishedAt: null,
@@ -115,7 +118,7 @@ async function runSync({ userId, logId, discogs, locale }) {
 
   setSyncState(userId, {
     locale,
-    phase: 'downloading',
+    phase: SYNC_PHASE.DOWNLOADING,
     total: totalItems,
     current: 0,
     message: syncT(locale, 'backend.sync.downloading', { items: totalItems, pages: totalPages })
@@ -141,15 +144,15 @@ async function runSync({ userId, logId, discogs, locale }) {
   try {
     const value = await discogs.getCollectionValue();
     if (value?.maximum) {
-      setSettingForUser(userId, 'collection_value', value.maximum);
+      setSettingForUser(userId, SETTING_KEYS.COLLECTION_VALUE, value.maximum);
     } else if (value?.median) {
-      setSettingForUser(userId, 'collection_value', value.median);
+      setSettingForUser(userId, SETTING_KEYS.COLLECTION_VALUE, value.median);
     }
   } catch (error) {
     console.error('[sync] failed to fetch collection value:', error.message);
   }
 
-  setSettingForUser(userId, 'last_collection_sync_at', new Date().toISOString());
+  setSettingForUser(userId, SETTING_KEYS.LAST_SYNC_AT, new Date().toISOString());
 
   db.prepare(`
     UPDATE sync_log
@@ -164,8 +167,8 @@ async function runSync({ userId, logId, discogs, locale }) {
   ).get(userId).count;
 
   setSyncState(userId, {
-    status: 'completed',
-    phase: 'ready',
+    status: SYNC_STATUS.COMPLETED,
+    phase: SYNC_PHASE.READY,
     current: totalSynced,
     total: totalItems,
     message: syncT(locale, 'backend.sync.completed', { count: totalSynced }),
@@ -178,7 +181,7 @@ async function runSync({ userId, logId, discogs, locale }) {
         : syncT(locale, 'backend.sync.completeSet')
     },
     thumbnails: {
-      status: 'idle',
+      status: SYNC_STATUS.IDLE,
       current: 0,
       total: 0,
       message: syncT(locale, 'backend.sync.warmReady')
@@ -189,7 +192,7 @@ async function runSync({ userId, logId, discogs, locale }) {
     console.error('[sync] inventory sync failed:', error.message);
     setSyncState(userId, {
       inventory: {
-        status: 'failed',
+        status: SYNC_STATUS.FAILED,
         message: syncT(locale, 'backend.sync.inventoryFail', { error: error.message })
       }
     });
@@ -198,7 +201,7 @@ async function runSync({ userId, logId, discogs, locale }) {
   warmupThumbnails(userId).catch((error) => {
     setSyncState(userId, {
       thumbnails: {
-        status: 'failed',
+        status: SYNC_STATUS.FAILED,
         current: 0,
         total: 0,
         message: syncT(locale, 'backend.sync.thumbFail', { error: error.message })
@@ -227,37 +230,7 @@ async function syncInventory({ userId, discogs }) {
       allListings.map((listing) => listing.price?.currency).filter(Boolean)
     );
 
-    // Build a map of release_id -> best listing (prefer "For Sale" over "Draft", lowest price)
-    const listingMap = new Map();
-    for (const listing of allListings) {
-      const releaseId = listing.release?.id;
-      if (!releaseId) continue;
-
-      const originalCurrency = (listing.price?.currency || DEFAULT_CURRENCY).toUpperCase();
-      const originalPrice = listing.price?.value != null ? Number(listing.price.value) : null;
-      const priceEur = originalPrice == null
-        ? null
-        : convertAmountWithRates(originalPrice, originalCurrency, DEFAULT_CURRENCY, exchangeSnapshot.rates);
-
-      const entry = {
-        status: listing.status || 'For Sale',
-        price: originalPrice,
-        currency: originalPrice == null ? null : originalCurrency,
-        priceEur,
-      };
-
-      const existing = listingMap.get(releaseId);
-      if (!existing) {
-        listingMap.set(releaseId, entry);
-      } else {
-        // Prefer "For Sale" over "Draft"; among same status, prefer lower price
-        const statusRank = (s) => (s === 'For Sale' ? 0 : 1);
-        if (statusRank(entry.status) < statusRank(existing.status) ||
-            (entry.status === existing.status && entry.priceEur != null && (existing.priceEur == null || entry.priceEur < existing.priceEur))) {
-          listingMap.set(releaseId, entry);
-        }
-      }
-    }
+    const listingMap = selectBestListings(allListings, exchangeSnapshot.rates);
 
     const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ?, listing_currency = ?, listing_price_eur = ? WHERE user_id = ? AND release_id = ?');
     const updateTx = db.transaction(() => {
@@ -294,7 +267,7 @@ async function warmupThumbnails(userId) {
     if (!rows.length) {
       setSyncState(userId, {
         thumbnails: {
-          status: 'idle',
+          status: SYNC_STATUS.IDLE,
           current: 0,
           total: 0,
           message: syncT(locale, 'backend.sync.noCovers')
@@ -305,7 +278,7 @@ async function warmupThumbnails(userId) {
 
     setSyncState(userId, {
       thumbnails: {
-        status: 'running',
+        status: SYNC_STATUS.RUNNING,
         current: 0,
         total: rows.length,
         message: syncT(locale, 'backend.sync.thumbPreparing', { current: 0, total: rows.length })
@@ -324,7 +297,7 @@ async function warmupThumbnails(userId) {
       processed += 1;
       setSyncState(userId, {
         thumbnails: {
-          status: 'running',
+          status: SYNC_STATUS.RUNNING,
           current: processed,
           total: rows.length,
           message: syncT(locale, 'backend.sync.thumbPreparing', { current: processed, total: rows.length })
@@ -334,7 +307,7 @@ async function warmupThumbnails(userId) {
 
     setSyncState(userId, {
       thumbnails: {
-        status: 'completed',
+        status: SYNC_STATUS.COMPLETED,
         current: rows.length,
         total: rows.length,
         message: syncT(locale, 'backend.sync.thumbDone')
@@ -361,14 +334,14 @@ async function runEnrichAll({ userId, discogs }) {
 
     if (!totalPending) {
       setSyncState(userId, {
-        enrichment: { status: 'idle', pending: 0, current: 0, total: 0, message: syncT(locale, 'backend.sync.completeSet') }
+        enrichment: { status: SYNC_STATUS.IDLE, pending: 0, current: 0, total: 0, message: syncT(locale, 'backend.sync.completeSet') }
       });
       return;
     }
 
     let processed = 0;
     setSyncState(userId, {
-      enrichment: { status: 'running', pending: totalPending, current: 0, total: totalPending, message: syncT(locale, 'backend.sync.enrichProgress', { current: 0, total: totalPending }) }
+      enrichment: { status: SYNC_STATUS.RUNNING, pending: totalPending, current: 0, total: totalPending, message: syncT(locale, 'backend.sync.enrichProgress', { current: 0, total: totalPending }) }
     });
 
     for (let offset = 0; offset < pendingRows.length && enrichRunning.has(userId); offset += ENRICH_BATCH_SIZE) {
@@ -403,7 +376,7 @@ async function runEnrichAll({ userId, discogs }) {
         const remaining = totalPending - processed;
         setSyncState(userId, {
           enrichment: {
-            status: 'running',
+            status: SYNC_STATUS.RUNNING,
             pending: remaining,
             current: processed,
             total: totalPending,
@@ -417,7 +390,7 @@ async function runEnrichAll({ userId, discogs }) {
 
     setSyncState(userId, {
       enrichment: {
-        status: 'completed',
+        status: SYNC_STATUS.COMPLETED,
         pending: finalPending,
         current: processed,
         total: totalPending,
@@ -429,7 +402,7 @@ async function runEnrichAll({ userId, discogs }) {
   } catch (error) {
     console.error('[enrich] fatal error:', error.message);
     setSyncState(userId, {
-      enrichment: { status: 'failed', pending: 0, current: 0, total: 0, message: error.message }
+      enrichment: { status: SYNC_STATUS.FAILED, pending: 0, current: 0, total: 0, message: error.message }
     });
   } finally {
     enrichRunning.delete(userId);
@@ -440,7 +413,7 @@ router.post('/', async (req, res) => {
   const userId = req.session.userId;
   const state = getSyncState(userId, req.locale);
 
-  if (state.status === 'running') {
+  if (state.status === SYNC_STATUS.RUNNING) {
     return res.status(409).json({ error: req.t('backend.sync.active') });
   }
 
@@ -453,10 +426,10 @@ router.post('/', async (req, res) => {
 
     setSyncState(userId, {
       locale: req.locale,
-      status: 'running',
+      status: SYNC_STATUS.RUNNING,
       current: 0,
       total: 0,
-      phase: 'initializing',
+      phase: SYNC_PHASE.INITIALIZING,
       message: req.t('backend.sync.initializing'),
       startedAt: new Date().toISOString(),
       finishedAt: null,
@@ -476,8 +449,8 @@ router.post('/', async (req, res) => {
       `).run(logId, userId);
 
       setSyncState(userId, {
-        status: 'failed',
-        phase: 'error',
+        status: SYNC_STATUS.FAILED,
+        phase: SYNC_PHASE.ERROR,
         message: error.message,
         finishedAt: new Date().toISOString()
       });

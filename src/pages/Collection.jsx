@@ -14,15 +14,8 @@ import { formatNumber } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
 import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from '../../shared/currency';
-
-const DEFAULT_FILTERS = {
-  search: '',
-  genre: '',
-  style: '',
-  decade: '',
-  format: '',
-  label: ''
-};
+import { COLLECTION_FILTER_KEYS, DEFAULT_FILTERS } from '../../shared/collectionFilters';
+import { PREFERENCE_KEYS } from '../../shared/preferences';
 
 const CURRENCY_LABELS = {
   EUR: 'EUR · €',
@@ -31,14 +24,9 @@ const CURRENCY_LABELS = {
 };
 
 function getFiltersFromSearchParams(searchParams) {
-  return {
-    search: searchParams.get('search') || '',
-    genre: searchParams.get('genre') || '',
-    style: searchParams.get('style') || '',
-    decade: searchParams.get('decade') || '',
-    format: searchParams.get('format') || '',
-    label: searchParams.get('label') || ''
-  };
+  return Object.fromEntries(
+    COLLECTION_FILTER_KEYS.map((key) => [key, searchParams.get(key) || ''])
+  );
 }
 
 function Collection() {
@@ -80,7 +68,7 @@ function Collection() {
   }
 
   useEffect(() => {
-    api.getPreference('collection_visible_columns').then(({ value }) => {
+    api.getPreference(PREFERENCE_KEYS.COLLECTION_VISIBLE_COLUMNS).then(({ value }) => {
       if (value) {
         try {
           const parsed = JSON.parse(value);
@@ -154,7 +142,7 @@ function Collection() {
         : [...prev, columnId];
       clearTimeout(saveColumnsTimer.current);
       saveColumnsTimer.current = setTimeout(() => {
-        api.setPreference('collection_visible_columns', JSON.stringify(next)).catch(() => {});
+        api.setPreference(PREFERENCE_KEYS.COLLECTION_VISIBLE_COLUMNS, JSON.stringify(next)).catch(() => {});
       }, 500);
 
       // If the currently sorted column is being hidden, reset sort to artist

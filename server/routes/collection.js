@@ -1,6 +1,9 @@
 import express from 'express';
 import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseJson, stringifyJson, withCoverUrls } from '../db.js';
 import { pickName } from '../../shared/discogs.js';
+import { RELEASE_BASE_FIELDS } from '../../shared/release.js';
+import { isValidSortColumn } from '../../shared/releaseSort.js';
+import { PREFERENCE_KEYS } from '../../shared/preferences.js';
 import { buildCollectionWhere } from '../lib/collectionFilters.js';
 import { resolveNotesFieldId, upsertNote } from '../lib/discogsNotes.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
@@ -10,36 +13,10 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-const BASE_FIELDS = `
-  id,
-  user_id,
-  release_id,
-  instance_id,
-  title,
-  artist,
-  year,
-  genres,
-  styles,
-  formats,
-  labels,
-  country,
-  cover_url,
-  rating,
-  notes,
-  date_added,
-  estimated_value,
-  listing_status,
-  listing_price,
-  listing_currency,
-  listing_price_eur,
-  tracklist,
-  folder_id,
-  raw_json,
-  synced_at
-`;
+const BASE_FIELDS = RELEASE_BASE_FIELDS;
 
 function getDisplayCurrency(req) {
-  return normalizeCurrency(req.query.currency || getSettingForUser(req.session.userId, 'currency', DEFAULT_CURRENCY));
+  return normalizeCurrency(req.query.currency || getSettingForUser(req.session.userId, PREFERENCE_KEYS.CURRENCY, DEFAULT_CURRENCY));
 }
 
 async function convertHydratedRelease(req, release) {
@@ -136,8 +113,7 @@ router.get('/', async (req, res) => {
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25)));
     const offset = (page - 1) * limit;
-    const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value', 'listing_price_eur']);
-    const sortBy = validSort.has(req.query.sortBy) ? req.query.sortBy : 'artist';
+    const sortBy = isValidSortColumn(req.query.sortBy) ? req.query.sortBy : 'artist';
     const sortOrder = String(req.query.sortOrder || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     const { clause, params } = buildCollectionWhere(req.query, userId);
 
