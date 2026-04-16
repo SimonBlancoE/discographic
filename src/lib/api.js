@@ -22,7 +22,9 @@ async function request(path, options = {}) {
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: 'Error de red' }));
+    // Server normally returns JSON for errors; non-JSON means an upstream
+    // proxy/CDN intercepted with HTML. Surface the HTTP status either way.
+    const payload = await response.json().catch(() => ({}));
     const error = new Error(payload.error || `HTTP ${response.status}`);
     error.status = response.status;
     throw error;
@@ -83,7 +85,7 @@ export const api = {
     const params = new URLSearchParams({ maxSize, ...filters });
     const response = await fetch(`${API_BASE}/media/tapete?${params}`, { credentials: 'include' });
     if (!response.ok) {
-      const payload = await response.json().catch(() => ({ error: 'Error generando tapete' }));
+      const payload = await response.json().catch(() => ({}));
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
     return response.blob();

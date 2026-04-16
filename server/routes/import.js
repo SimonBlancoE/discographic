@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import db, { parseJson, parseNotes, stringifyJson } from '../db.js';
 import { createUserStateStore } from '../lib/userStateStore.js';
 import { resolveNotesFieldId, upsertNote } from '../lib/discogsNotes.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { SYNC_STATUS } from '../../shared/progress.js';
 
@@ -268,113 +269,116 @@ router.get('/template', (req, res) => {
 });
 
 router.post('/preview', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se ha recibido ningun archivo.' });
+  }
+
+  // parseFile / mapColumns throw on malformed input — that's a 400, so wrap
+  // them, not the rest of the handler.
+  let rows;
+  let columnMap;
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No se ha recibido ningun archivo.' });
-    }
-
-    const rows = parseFile(req.file.buffer, req.file.originalname);
-    const columnMap = mapColumns(rows);
-    const { changes, unmatchedRows, errors } = extractChanges(req.session.userId, rows, columnMap);
-
-    if (!changes.length && !errors.length) {
-      return res.json({
-        previewId: null,
-        totalRows: rows.length,
-        matched: rows.length - unmatchedRows.length,
-        withChanges: 0,
-        unmatched: unmatchedRows.length,
-        changes: [],
-        unmatchedRows,
-        errors,
-        message: 'No se han detectado cambios entre el archivo y tu coleccion actual.'
-      });
-    }
-
-    cleanPreviewCache();
-    const previewId = crypto.randomBytes(16).toString('hex');
-    previewCache.set(previewId, {
-      userId: req.session.userId,
-      changes,
-      expiresAt: Date.now() + PREVIEW_TTL_MS
-    });
-
-    return res.json({
-      previewId,
-      totalRows: rows.length,
-      matched: rows.length - unmatchedRows.length,
-      withChanges: changes.length,
-      unmatched: unmatchedRows.length,
-      changes,
-      unmatchedRows,
-      errors
-    });
+    rows = parseFile(req.file.buffer, req.file.originalname);
+    columnMap = mapColumns(rows);
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
-});
 
-router.post('/apply', async (req, res) => {
-  try {
-    const { previewId } = req.body;
-    if (!previewId) {
-      return res.status(400).json({ error: 'Falta el ID de la vista previa.' });
-    }
+  const { changes, unmatchedRows, errors } = extractChanges(req.session.userId, rows, columnMap);
 
-    const cached = previewCache.get(previewId);
-    if (!cached || cached.userId !== req.session.userId || cached.expiresAt < Date.now()) {
-      return res.status(410).json({ error: 'La vista previa ha expirado. Sube el archivo de nuevo.' });
-    }
-
-    const { changes } = cached;
-    previewCache.delete(previewId);
-    const userId = req.session.userId;
-
-    const applyTx = db.transaction(() => {
-      for (const change of changes) {
-        if (change.ratingChanged) {
-          db.prepare('UPDATE releases SET rating = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
-            .run(change.newRating, change.dbId, userId);
-        }
-        if (change.notesChanged) {
-          const current = parseNotes(
-            db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes
-          );
-          const updated = upsertNote(current, resolveNotesFieldId(current), change.newNotes);
-
-          db.prepare('UPDATE releases SET notes = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
-            .run(stringifyJson(updated), change.dbId, userId);
-        }
-      }
+  if (!changes.length && !errors.length) {
+    return res.json({
+      previewId: null,
+      totalRows: rows.length,
+      matched: rows.length - unmatchedRows.length,
+      withChanges: 0,
+      unmatched: unmatchedRows.length,
+      changes: [],
+      unmatchedRows,
+      errors,
+      message: 'No se han detectado cambios entre el archivo y tu coleccion actual.'
     });
-
-    applyTx();
-    res.json({ ok: true, applied: changes.length });
-
-    // Background sync with Discogs
-    let discogs;
-    try {
-      discogs = getDiscogsClientForUser(req);
-    } catch {
-      setImportSyncState(userId, {
-        status: SYNC_STATUS.COMPLETED,
-        current: changes.length,
-        total: changes.length,
-        message: `${changes.length} cambios guardados localmente. No se pudo conectar con Discogs para sincronizar.`
-      });
-      return;
-    }
-
-    syncChangesWithDiscogs({ userId, changes, discogs }).catch((error) => {
-      setImportSyncState(userId, {
-        status: SYNC_STATUS.FAILED,
-        message: `Error sincronizando con Discogs: ${error.message}`
-      });
-    });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
   }
+
+  cleanPreviewCache();
+  const previewId = crypto.randomBytes(16).toString('hex');
+  previewCache.set(previewId, {
+    userId: req.session.userId,
+    changes,
+    expiresAt: Date.now() + PREVIEW_TTL_MS
+  });
+
+  return res.json({
+    previewId,
+    totalRows: rows.length,
+    matched: rows.length - unmatchedRows.length,
+    withChanges: changes.length,
+    unmatched: unmatchedRows.length,
+    changes,
+    unmatchedRows,
+    errors
+  });
 });
+
+router.post('/apply', asyncHandler(async (req, res) => {
+  const { previewId } = req.body;
+  if (!previewId) {
+    return res.status(400).json({ error: 'Falta el ID de la vista previa.' });
+  }
+
+  const cached = previewCache.get(previewId);
+  if (!cached || cached.userId !== req.session.userId || cached.expiresAt < Date.now()) {
+    return res.status(410).json({ error: 'La vista previa ha expirado. Sube el archivo de nuevo.' });
+  }
+
+  const { changes } = cached;
+  previewCache.delete(previewId);
+  const userId = req.session.userId;
+
+  const applyTx = db.transaction(() => {
+    for (const change of changes) {
+      if (change.ratingChanged) {
+        db.prepare('UPDATE releases SET rating = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+          .run(change.newRating, change.dbId, userId);
+      }
+      if (change.notesChanged) {
+        const current = parseNotes(
+          db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes
+        );
+        const updated = upsertNote(current, resolveNotesFieldId(current), change.newNotes);
+
+        db.prepare('UPDATE releases SET notes = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+          .run(stringifyJson(updated), change.dbId, userId);
+      }
+    }
+  });
+
+  applyTx();
+  res.json({ ok: true, applied: changes.length });
+
+  // Background sync with Discogs. If the user has no Discogs token we still
+  // succeeded locally — surface that explicitly to the polling client.
+  let discogs;
+  try {
+    discogs = getDiscogsClientForUser(req);
+  } catch (error) {
+    setImportSyncState(userId, {
+      status: SYNC_STATUS.COMPLETED,
+      current: changes.length,
+      total: changes.length,
+      message: `${changes.length} cambios guardados localmente. No se pudo conectar con Discogs para sincronizar: ${error.message}`
+    });
+    return;
+  }
+
+  syncChangesWithDiscogs({ userId, changes, discogs }).catch((error) => {
+    console.error('[import] background sync error:', error);
+    setImportSyncState(userId, {
+      status: SYNC_STATUS.FAILED,
+      message: `Error sincronizando con Discogs: ${error.message}`
+    });
+  });
+}));
 
 router.get('/status', (req, res) => {
   res.json(getImportSyncState(req.session.userId));

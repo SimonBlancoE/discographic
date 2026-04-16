@@ -45,7 +45,8 @@ function SyncButton({ onSyncComplete, disabled = false }) {
         }
         onSyncCompleteRef.current?.();
       }
-    } catch {
+    } catch (error) {
+      console.warn('[sync] poll failed, retrying:', error);
       if (waitingForCompletion.current) {
         setTimeout(poll, POLL_MS);
       }
@@ -62,7 +63,9 @@ function SyncButton({ onSyncComplete, disabled = false }) {
           setTimeout(poll, POLL_MS);
         }
       }
-    }).catch(() => {});
+    }).catch((error) => {
+      console.warn('[sync] initial status fetch failed:', error);
+    });
 
     return () => {
       disposed.current = true;
@@ -105,7 +108,8 @@ function SyncButton({ onSyncComplete, disabled = false }) {
         }
         onSyncCompleteRef.current?.();
       }
-    } catch {
+    } catch (error) {
+      console.warn('[sync] enrich poll failed, retrying:', error);
       setTimeout(pollEnrich, POLL_MS);
     }
   }, []);
@@ -132,7 +136,9 @@ function SyncButton({ onSyncComplete, disabled = false }) {
       await api.stopEnrich();
       const next = await api.getSyncStatus();
       setStatus(next);
-    } catch {}
+    } catch (error) {
+      toast.error(t('sync.stopError', { error: error.message }));
+    }
   }
 
   return (

@@ -29,7 +29,8 @@ function ImportButton({ disabled = false }) {
       } else {
         setPhase('done');
       }
-    } catch {
+    } catch (error) {
+      console.warn('[import] poll failed, retrying:', error);
       setTimeout(poll, POLL_MS);
     }
   }, []);

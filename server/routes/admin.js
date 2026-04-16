@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import express from 'express';
 import { createUser, deleteUser, getUserById, listUsers, updateUserPasswordHash } from '../db.js';
 import { serializeUser } from '../lib/userView.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -12,7 +13,7 @@ router.get('/users', (req, res) => {
   res.json({ users: listUsers().map(serializeUser) });
 });
 
-router.post('/users', async (req, res) => {
+router.post('/users', asyncHandler(async (req, res) => {
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
 
@@ -24,17 +25,19 @@ router.post('/users', async (req, res) => {
     return res.status(400).json({ error: req.t('backend.admin.passwordLength') });
   }
 
+  const passwordHash = await bcrypt.hash(password, 12);
   try {
-    const passwordHash = await bcrypt.hash(password, 12);
     const user = createUser(username, passwordHash);
     return res.json({ ok: true, user });
   } catch (error) {
+    // The single defended-against case here is the SQLite UNIQUE constraint
+    // on `users.username`. Anything else propagates to the global handler.
     if (error.message?.includes('UNIQUE')) {
       return res.status(409).json({ error: req.t('backend.admin.usernameExists') });
     }
-    return res.status(500).json({ error: error.message });
+    throw error;
   }
-});
+}));
 
 router.delete('/users/:id', (req, res) => {
   const targetId = Number(req.params.id);

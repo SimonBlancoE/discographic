@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import db from '../db.js';
 import { buildCollectionWhere } from '../lib/collectionFilters.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -36,33 +37,27 @@ function isAllowedRemote(url) {
   }
 }
 
-router.get('/proxy-image', async (req, res) => {
+router.get('/proxy-image', asyncHandler(async (req, res) => {
   const target = String(req.query.url || '');
 
   if (!target || !isAllowedRemote(target)) {
     return res.status(400).json({ error: 'URL de imagen no permitida' });
   }
 
-  try {
-    const response = await fetch(target, {
-      headers: {
-        'User-Agent': 'Discographic/1.0'
-      }
-    });
+  const response = await fetch(target, {
+    headers: { 'User-Agent': 'Discographic/1.0' }
+  });
 
-    if (!response.ok) {
-      return res.status(502).json({ error: 'No se pudo obtener la imagen remota' });
-    }
-
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const arrayBuffer = await response.arrayBuffer();
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.send(Buffer.from(arrayBuffer));
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+  if (!response.ok) {
+    return res.status(502).json({ error: 'No se pudo obtener la imagen remota' });
   }
-});
+
+  const contentType = response.headers.get('content-type') || 'image/jpeg';
+  const arrayBuffer = await response.arrayBuffer();
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  return res.send(Buffer.from(arrayBuffer));
+}));
 
 async function ensureDir(path) {
   if (!existsSync(path)) {
@@ -107,7 +102,7 @@ export async function ensureCachedCover({ release, userId, variant }) {
   return cachePath;
 }
 
-router.get('/cover/:id', async (req, res) => {
+router.get('/cover/:id', asyncHandler(async (req, res) => {
   const release = db.prepare(`
     SELECT id, cover_url
     FROM releases
@@ -118,6 +113,8 @@ router.get('/cover/:id', async (req, res) => {
     return res.status(404).json({ error: 'Release no encontrado' });
   }
 
+  // ensureCachedCover throws if the cover URL is missing or unfetchable;
+  // for this endpoint that's a 404, not a 500.
   try {
     const variant = String(req.query.variant || 'wall');
     const cachePath = await ensureCachedCover({
@@ -131,7 +128,7 @@ router.get('/cover/:id', async (req, res) => {
   } catch (error) {
     return res.status(404).json({ error: error.message });
   }
-});
+}));
 
 // Server-side gapless poster ("Tapete"): stitches all covers via sharp.composite().
 function computeOptimalTileSize(numItems, canvasWidth, canvasHeight) {
@@ -148,7 +145,7 @@ function computeOptimalTileSize(numItems, canvasWidth, canvasHeight) {
   return Math.max(r, l);
 }
 
-router.get('/tapete', async (req, res) => {
+router.get('/tapete', asyncHandler(async (req, res) => {
   const userId = req.session.userId;
   const maxSize = Math.min(10000, Math.max(1000, Number(req.query.maxSize || 7200)));
 
@@ -168,75 +165,72 @@ router.get('/tapete', async (req, res) => {
     return res.status(404).json({ error: 'No hay portadas en la coleccion' });
   }
 
-  try {
-    const rawTileSize = Math.floor(computeOptimalTileSize(releases.length, maxSize, maxSize));
+  const rawTileSize = Math.floor(computeOptimalTileSize(releases.length, maxSize, maxSize));
 
-    // Pick the best cached variant for this tile size so we never upscale
-    // beyond the source resolution. If the packing wants very large tiles
-    // (few items), use a higher-res variant.
-    let variant = 'tapete'; // 220px
-    if (rawTileSize > VARIANTS.wall.width) {
-      variant = 'detail'; // 720px
-    } else if (rawTileSize > VARIANTS.tapete.width) {
-      variant = 'wall'; // 320px
-    }
-
-    const variantMaxPx = VARIANTS[variant].width;
-    const tileSize = Math.min(rawTileSize, variantMaxPx);
-
-    const cols = Math.max(1, Math.floor(maxSize / tileSize));
-    const rows = Math.ceil(releases.length / cols);
-    const canvasWidth = cols * tileSize;
-    const canvasHeight = rows * tileSize;
-
-    const tiles = [];
-    for (const release of releases) {
-      try {
-        const cachePath = await ensureCachedCover({ release, userId, variant });
-        tiles.push(cachePath);
-      } catch {
-        tiles.push(null);
-      }
-    }
-
-    const compositeInputs = [];
-    for (let i = 0; i < tiles.length; i++) {
-      if (!tiles[i]) continue;
-
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const x = col * tileSize;
-      const y = row * tileSize;
-
-      compositeInputs.push({
-        input: await sharp(tiles[i])
-          .resize({ width: tileSize, height: tileSize, fit: 'cover' })
-          .toBuffer(),
-        left: x,
-        top: y
-      });
-    }
-
-    const result = await sharp({
-      create: {
-        width: canvasWidth,
-        height: canvasHeight,
-        channels: 3,
-        background: { r: 3, g: 7, b: 18 }
-      }
-    })
-      .composite(compositeInputs)
-      .jpeg({ quality: 96, mozjpeg: true })
-      .toBuffer();
-
-    res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Content-Disposition', `attachment; filename="discographic-mat-${new Date().toISOString().slice(0, 10)}.jpg"`);
-    res.setHeader('Cache-Control', 'no-cache');
-    return res.send(result);
-  } catch (error) {
-    console.error('[tapete] error:', error.message);
-    return res.status(500).json({ error: `No se pudo generar el tapete: ${error.message}` });
+  // Pick the best cached variant for this tile size so we never upscale
+  // beyond the source resolution. If the packing wants very large tiles
+  // (few items), use a higher-res variant.
+  let variant = 'tapete'; // 220px
+  if (rawTileSize > VARIANTS.wall.width) {
+    variant = 'detail'; // 720px
+  } else if (rawTileSize > VARIANTS.tapete.width) {
+    variant = 'wall'; // 320px
   }
-});
+
+  const variantMaxPx = VARIANTS[variant].width;
+  const tileSize = Math.min(rawTileSize, variantMaxPx);
+
+  const cols = Math.max(1, Math.floor(maxSize / tileSize));
+  const rows = Math.ceil(releases.length / cols);
+  const canvasWidth = cols * tileSize;
+  const canvasHeight = rows * tileSize;
+
+  // Per-release: a missing cover means a hole in the mosaic, not a failure.
+  const tiles = [];
+  for (const release of releases) {
+    try {
+      const cachePath = await ensureCachedCover({ release, userId, variant });
+      tiles.push(cachePath);
+    } catch (error) {
+      console.warn('[tapete] cover unavailable:', release.id, error.message);
+      tiles.push(null);
+    }
+  }
+
+  const compositeInputs = [];
+  for (let i = 0; i < tiles.length; i++) {
+    if (!tiles[i]) continue;
+
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = col * tileSize;
+    const y = row * tileSize;
+
+    compositeInputs.push({
+      input: await sharp(tiles[i])
+        .resize({ width: tileSize, height: tileSize, fit: 'cover' })
+        .toBuffer(),
+      left: x,
+      top: y
+    });
+  }
+
+  const result = await sharp({
+    create: {
+      width: canvasWidth,
+      height: canvasHeight,
+      channels: 3,
+      background: { r: 3, g: 7, b: 18 }
+    }
+  })
+    .composite(compositeInputs)
+    .jpeg({ quality: 96, mozjpeg: true })
+    .toBuffer();
+
+  res.setHeader('Content-Type', 'image/jpeg');
+  res.setHeader('Content-Disposition', `attachment; filename="discographic-mat-${new Date().toISOString().slice(0, 10)}.jpg"`);
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.send(result);
+}));
 
 export default router;
