@@ -1,12 +1,13 @@
+import { LOCALE_STORAGE_KEY, DEFAULT_LOCALE } from '../../shared/i18n.js';
+
 const API_BASE = '/api';
-const LOCALE_STORAGE_KEY = 'discographic-locale';
 
 function getLocaleHeader() {
   if (typeof window === 'undefined') {
-    return 'es';
+    return DEFAULT_LOCALE;
   }
 
-  return window.localStorage.getItem(LOCALE_STORAGE_KEY) || window.navigator.language || 'es';
+  return window.localStorage.getItem(LOCALE_STORAGE_KEY) || window.navigator.language || DEFAULT_LOCALE;
 }
 
 async function request(path, options = {}) {
