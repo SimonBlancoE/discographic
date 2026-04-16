@@ -107,6 +107,33 @@ export function parseJson(value, fallback = []) {
   }
 }
 
+// Shape-narrowing parsers for the JSON-string columns on the releases table.
+// Each guarantees the array shape its consumers expect even if the row was
+// hand-edited or imported from an older schema; a malformed value collapses
+// to [] rather than crashing the consumer's .find / .map.
+
+function parseStringArray(value) {
+  const parsed = parseJson(value, []);
+  return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+}
+
+function parseEntityArray(value) {
+  const parsed = parseJson(value, []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+export const parseGenres = parseStringArray;
+export const parseStyles = parseStringArray;
+export const parseFormats = parseEntityArray;
+export const parseLabels = parseEntityArray;
+export const parseTracklist = parseEntityArray;
+
+export function parseNotes(value) {
+  const parsed = parseJson(value, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((entry) => entry && typeof entry === 'object' && 'value' in entry);
+}
+
 export function stringifyJson(value, fallback = []) {
   return JSON.stringify(value ?? fallback);
 }
@@ -134,14 +161,14 @@ export function hydrateRelease(release) {
   }
 
   const hydrated = { ...release };
-  hydrated.genres = parseJson(release.genres, []);
-  hydrated.styles = parseJson(release.styles, []);
-  hydrated.formats = parseJson(release.formats, []);
-  hydrated.labels = parseJson(release.labels, []);
-  hydrated.notes = parseJson(release.notes, []);
-  hydrated.tracklist = parseJson(release.tracklist, []);
+  hydrated.genres = parseGenres(release.genres);
+  hydrated.styles = parseStyles(release.styles);
+  hydrated.formats = parseFormats(release.formats);
+  hydrated.labels = parseLabels(release.labels);
+  hydrated.notes = parseNotes(release.notes);
+  hydrated.tracklist = parseTracklist(release.tracklist);
   hydrated.raw_json = release.raw_json ? parseJson(release.raw_json, {}) : null;
-  hydrated.notes_text = hydrated.notes.map((item) => item?.value).filter(Boolean).join(' | ');
+  hydrated.notes_text = hydrated.notes.map((item) => item.value).filter(Boolean).join(' | ');
   return hydrated;
 }
 
@@ -160,12 +187,25 @@ export function getSettingForUser(userId, key, fallback = null) {
   return row ? row.value : fallback;
 }
 
+// Stores a primitive (string/number/boolean) as a string. Use setSettingJson
+// for object/array values — String({...}) silently writes "[object Object]".
 export function setSettingForUser(userId, key, value) {
+  if (value !== null && typeof value === 'object') {
+    throw new Error(`setSettingForUser('${key}') refuses object values; use setSettingJson`);
+  }
   db.prepare(`
     INSERT INTO settings (user_id, key, value)
     VALUES (?, ?, ?)
     ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value
   `).run(userId, key, String(value));
+}
+
+export function setSettingJson(userId, key, value) {
+  db.prepare(`
+    INSERT INTO settings (user_id, key, value)
+    VALUES (?, ?, ?)
+    ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value
+  `).run(userId, key, JSON.stringify(value));
 }
 
 export function getUserById(id) {

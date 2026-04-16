@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
-import db, { parseJson, stringifyJson } from '../db.js';
+import db, { parseJson, parseNotes, stringifyJson } from '../db.js';
 import { createUserStateStore } from '../lib/userStateStore.js';
 import { resolveNotesFieldId, upsertNote } from '../lib/discogsNotes.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
@@ -134,7 +134,7 @@ function extractChanges(userId, rows, columnMap) {
       continue;
     }
 
-    const currentNotes = parseJson(release.notes, []);
+    const currentNotes = parseNotes(release.notes);
     const currentNotesText = currentNotes.map((n) => n?.value).filter(Boolean).join(' | ');
     const change = {
       dbId: release.id,
@@ -220,7 +220,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
       }
 
       if (change.notesChanged) {
-        const currentNotes = parseJson(release.notes, []);
+        const currentNotes = parseNotes(release.notes);
         await discogs.updateField({
           ...base,
           fieldId: resolveNotesFieldId(currentNotes),
@@ -337,9 +337,8 @@ router.post('/apply', async (req, res) => {
             .run(change.newRating, change.dbId, userId);
         }
         if (change.notesChanged) {
-          const current = parseJson(
-            db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes,
-            []
+          const current = parseNotes(
+            db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes
           );
           const updated = upsertNote(current, resolveNotesFieldId(current), change.newNotes);
 
