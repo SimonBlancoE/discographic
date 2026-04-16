@@ -27,7 +27,9 @@ function latestRate(result) {
     .at(-1)?.[1] ?? null;
 }
 
-function normalizeRateCurrency(value, fallback = DEFAULT_CURRENCY) {
+// Bypasses the SUPPORTED_CURRENCIES allowlist so Discogs-supplied currency
+// codes (any 3-letter ISO) round-trip through the ECB lookup intact.
+function normalizeAnyCurrency(value, fallback = DEFAULT_CURRENCY) {
   const normalized = String(value || '').trim().toUpperCase();
   return normalized || fallback;
 }
@@ -36,7 +38,7 @@ export async function getExchangeSnapshot(extraCurrencies = []) {
   const requiredCurrencies = [...new Set([
     ...SUPPORTED_CURRENCIES,
     ...extraCurrencies
-      .map((currency) => normalizeRateCurrency(currency))
+      .map((currency) => normalizeAnyCurrency(currency))
       .filter((c) => /^[A-Z]{3}$/.test(c))
   ])]
     .filter((currency) => currency !== DEFAULT_CURRENCY);
@@ -98,8 +100,8 @@ export function convertAmountWithRates(amount, fromCurrency, toCurrency, rates) 
     return null;
   }
 
-  const source = normalizeRateCurrency(fromCurrency);
-  const target = normalizeRateCurrency(toCurrency);
+  const source = normalizeAnyCurrency(fromCurrency);
+  const target = normalizeAnyCurrency(toCurrency);
   const numeric = Number(amount);
 
   if (!Number.isFinite(numeric)) {

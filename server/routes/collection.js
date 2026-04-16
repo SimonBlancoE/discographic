@@ -1,5 +1,8 @@
 import express from 'express';
-import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseJson, stringifyJson } from '../db.js';
+import db, { getSettingForUser, hydrateRelease, normalizeNotes, parseJson, stringifyJson, withCoverUrls } from '../db.js';
+import { pickName } from '../../shared/discogs.js';
+import { buildCollectionWhere } from '../lib/collectionFilters.js';
+import { resolveNotesFieldId, upsertNote } from '../lib/discogsNotes.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertReleasePrices, normalizeCurrency } from '../services/exchangeRates.js';
 
@@ -43,50 +46,6 @@ async function convertHydratedRelease(req, release) {
   return convertReleasePrices(hydrateRelease(release), getDisplayCurrency(req));
 }
 
-function buildCollectionWhere(query, userId) {
-  const { search = '', genre = '', style = '', decade = '', format = '', label = '' } = query;
-  const clauses = ['user_id = ?'];
-  const params = [userId];
-
-  if (search) {
-    clauses.push('(artist LIKE ? OR title LIKE ?)');
-    params.push(`%${search}%`, `%${search}%`);
-  }
-
-  if (genre) {
-    clauses.push('genres LIKE ?');
-    params.push(`%${genre}%`);
-  }
-
-  if (style) {
-    clauses.push('styles LIKE ?');
-    params.push(`%${style}%`);
-  }
-
-  if (decade) {
-    const start = Number(decade);
-    if (Number.isFinite(start)) {
-      clauses.push('year >= ? AND year < ?');
-      params.push(start, start + 10);
-    }
-  }
-
-  if (format) {
-    clauses.push('formats LIKE ?');
-    params.push(`%${format}%`);
-  }
-
-  if (label) {
-    clauses.push('labels LIKE ?');
-    params.push(`%${label}%`);
-  }
-
-  return {
-    clause: `WHERE ${clauses.join(' AND ')}`,
-    params
-  };
-}
-
 function getFilterOptions(userId) {
   const releases = db.prepare('SELECT genres, styles, formats, labels, year FROM releases WHERE user_id = ?').all(userId);
   const genres = new Set();
@@ -103,11 +62,11 @@ function getFilterOptions(userId) {
       if (style) styles.add(style);
     }
     for (const format of parseJson(release.formats, [])) {
-      const name = format?.name || format;
+      const name = pickName(format);
       if (name) formats.add(name);
     }
     for (const label of parseJson(release.labels, [])) {
-      const name = label?.name || label;
+      const name = pickName(label);
       if (name) labels.add(name);
     }
     if (release.year) {
@@ -224,12 +183,7 @@ router.get('/random', async (req, res) => {
 
     const converted = await convertHydratedRelease(req, release);
 
-    return res.json({
-      ...converted,
-      detail_cover_url: `/api/media/cover/${release.id}?variant=detail`,
-      wall_cover_url: `/api/media/cover/${release.id}?variant=wall`,
-      poster_cover_url: `/api/media/cover/${release.id}?variant=poster`
-    });
+    return res.json(withCoverUrls(converted));
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -242,15 +196,12 @@ router.get('/covers', (req, res) => {
       FROM releases
       WHERE user_id = ?
       ORDER BY date_added DESC, artist ASC, title ASC
-    `).all(req.session.userId).map((release) => ({
+    `).all(req.session.userId).map((release) => withCoverUrls({
       ...release,
       genres: parseJson(release.genres, []),
       styles: parseJson(release.styles, []),
       formats: parseJson(release.formats, []),
-      labels: parseJson(release.labels, []),
-      detail_cover_url: `/api/media/cover/${release.id}?variant=detail`,
-      wall_cover_url: `/api/media/cover/${release.id}?variant=wall`,
-      poster_cover_url: `/api/media/cover/${release.id}?variant=poster`
+      labels: parseJson(release.labels, [])
     }));
 
     return res.json({ releases, filters: getFilterOptions(req.session.userId) });
@@ -268,12 +219,7 @@ router.get('/:id', async (req, res) => {
     }
 
     const hydrated = await enrichReleaseIfNeeded(req, release);
-    return res.json({
-      ...hydrated,
-      detail_cover_url: `/api/media/cover/${hydrated.id}?variant=detail`,
-      wall_cover_url: `/api/media/cover/${hydrated.id}?variant=wall`,
-      poster_cover_url: `/api/media/cover/${hydrated.id}?variant=poster`
-    });
+    return res.json(withCoverUrls(hydrated));
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -308,15 +254,7 @@ router.put('/:id', async (req, res) => {
 
     if (req.body.notes !== undefined) {
       const incomingText = String(req.body.notes || '').trim();
-
-      // Find the "Notes" field (typically field_id 3 in Discogs).
-      // If the release already has structured notes, update the last text field.
-      // Otherwise create a simple entry for field 3.
-      const notesFieldId = currentNotes.find((n) => n.field_id === 3)
-        ? 3
-        : currentNotes.length > 0
-          ? currentNotes[currentNotes.length - 1].field_id || 3
-          : 3;
+      const notesFieldId = resolveNotesFieldId(currentNotes);
 
       await discogs.updateField({
         ...base,
@@ -324,13 +262,7 @@ router.put('/:id', async (req, res) => {
         value: incomingText
       });
 
-      nextNotes = currentNotes.map((n) =>
-        n.field_id === notesFieldId ? { ...n, value: incomingText } : n
-      );
-
-      if (!currentNotes.some((n) => n.field_id === notesFieldId)) {
-        nextNotes = [...currentNotes, { field_id: notesFieldId, value: incomingText }];
-      }
+      nextNotes = upsertNote(currentNotes, notesFieldId, incomingText);
     }
 
     db.prepare(`
@@ -343,12 +275,7 @@ router.put('/:id', async (req, res) => {
 
     const updated = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(req.params.id, req.session.userId);
     const converted = await convertHydratedRelease(req, updated);
-    return res.json({
-      ...converted,
-      detail_cover_url: `/api/media/cover/${updated.id}?variant=detail`,
-      wall_cover_url: `/api/media/cover/${updated.id}?variant=wall`,
-      poster_cover_url: `/api/media/cover/${updated.id}?variant=poster`
-    });
+    return res.json(withCoverUrls(converted));
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

@@ -1,5 +1,6 @@
 import express from 'express';
 import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
+import { createUserStateStore } from '../lib/userStateStore.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { ensureCachedCover } from './media.js';
 import { translate } from '../../shared/i18n.js';
@@ -9,7 +10,6 @@ import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows }
 const router = express.Router();
 const PER_PAGE = 100;
 const ENRICH_BATCH_SIZE = 30;
-const syncStates = new Map();
 
 router.use(requireAuth);
 
@@ -17,32 +17,22 @@ function syncT(locale, key, vars) {
   return translate(locale || 'es', key, vars);
 }
 
-function getSyncState(userId, locale = 'es') {
-  if (!syncStates.has(userId)) {
-    syncStates.set(userId, {
-      locale,
-      status: 'idle',
-      current: 0,
-      total: 0,
-      phase: 'idle',
-      message: syncT(locale, 'backend.sync.idle'),
-      startedAt: null,
-      finishedAt: null,
-      recordsSynced: 0,
-      enrichment: null,
-      thumbnails: null
-    });
-  }
+const syncStateStore = createUserStateStore((_userId, locale = 'es') => ({
+  locale,
+  status: 'idle',
+  current: 0,
+  total: 0,
+  phase: 'idle',
+  message: syncT(locale, 'backend.sync.idle'),
+  startedAt: null,
+  finishedAt: null,
+  recordsSynced: 0,
+  enrichment: null,
+  thumbnails: null
+}));
 
-  return syncStates.get(userId);
-}
-
-function setSyncState(userId, patch) {
-  syncStates.set(userId, {
-    ...getSyncState(userId),
-    ...patch
-  });
-}
+const getSyncState = (userId, locale = 'es') => syncStateStore.get(userId, locale);
+const setSyncState = (userId, patch) => syncStateStore.patch(userId, patch);
 
 function mapCollectionItem(item) {
   const info = item.basic_information || {};

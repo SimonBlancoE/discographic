@@ -3,6 +3,8 @@ import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import db, { parseJson, stringifyJson } from '../db.js';
+import { createUserStateStore } from '../lib/userStateStore.js';
+import { resolveNotesFieldId, upsertNote } from '../lib/discogsNotes.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -14,8 +16,12 @@ router.use(requireAuth);
 const previewCache = new Map();
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
-// In-memory import sync state per user
-const importSyncStates = new Map();
+const importSyncStateStore = createUserStateStore(() => ({
+  status: 'idle',
+  current: 0,
+  total: 0,
+  message: 'Sin importacion activa'
+}));
 
 function cleanPreviewCache() {
   const now = Date.now();
@@ -182,21 +188,8 @@ function extractChanges(userId, rows, columnMap) {
   return { changes, unmatchedRows, errors };
 }
 
-function getImportSyncState(userId) {
-  if (!importSyncStates.has(userId)) {
-    importSyncStates.set(userId, {
-      status: 'idle',
-      current: 0,
-      total: 0,
-      message: 'Sin importacion activa'
-    });
-  }
-  return importSyncStates.get(userId);
-}
-
-function setImportSyncState(userId, patch) {
-  importSyncStates.set(userId, { ...getImportSyncState(userId), ...patch });
-}
+const getImportSyncState = (userId) => importSyncStateStore.get(userId);
+const setImportSyncState = (userId, patch) => importSyncStateStore.patch(userId, patch);
 
 async function syncChangesWithDiscogs({ userId, changes, discogs }) {
   setImportSyncState(userId, {
@@ -227,12 +220,9 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
 
       if (change.notesChanged) {
         const currentNotes = parseJson(release.notes, []);
-        const notesFieldId = currentNotes.find((n) => n.field_id === 3) ? 3
-          : currentNotes.length > 0 ? (currentNotes[currentNotes.length - 1].field_id || 3) : 3;
-
         await discogs.updateField({
           ...base,
-          fieldId: notesFieldId,
+          fieldId: resolveNotesFieldId(currentNotes),
           value: change.newNotes
         });
       }
@@ -350,13 +340,7 @@ router.post('/apply', async (req, res) => {
             db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes,
             []
           );
-          const fieldId = current.find((n) => n.field_id === 3) ? 3
-            : current.length > 0 ? (current[current.length - 1].field_id || 3) : 3;
-
-          let updated = current.map((n) => n.field_id === fieldId ? { ...n, value: change.newNotes } : n);
-          if (!current.some((n) => n.field_id === fieldId)) {
-            updated = [...current, { field_id: fieldId, value: change.newNotes }];
-          }
+          const updated = upsertNote(current, resolveNotesFieldId(current), change.newNotes);
 
           db.prepare('UPDATE releases SET notes = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
             .run(stringifyJson(updated), change.dbId, userId);

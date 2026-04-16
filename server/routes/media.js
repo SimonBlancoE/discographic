@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
 import db from '../db.js';
+import { buildCollectionWhere } from '../lib/collectionFilters.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -150,28 +151,16 @@ function computeOptimalTileSize(numItems, canvasWidth, canvasHeight) {
 router.get('/tapete', async (req, res) => {
   const userId = req.session.userId;
   const maxSize = Math.min(10000, Math.max(1000, Number(req.query.maxSize || 7200)));
-  const { search = '', genre = '', style = '', decade = '', format = '', label = '' } = req.query;
 
-  const clauses = ["user_id = ?", "cover_url IS NOT NULL", "cover_url != ''"];
-  const params = [userId];
-
-  if (search) {
-    clauses.push('(artist LIKE ? OR title LIKE ?)');
-    params.push(`%${search}%`, `%${search}%`);
-  }
-  if (genre) { clauses.push('genres LIKE ?'); params.push(`%${genre}%`); }
-  if (style) { clauses.push('styles LIKE ?'); params.push(`%${style}%`); }
-  if (decade) {
-    const start = Number(decade);
-    if (Number.isFinite(start)) { clauses.push('year >= ? AND year < ?'); params.push(start, start + 10); }
-  }
-  if (format) { clauses.push('formats LIKE ?'); params.push(`%${format}%`); }
-  if (label) { clauses.push('labels LIKE ?'); params.push(`%${label}%`); }
+  const { clause, params } = buildCollectionWhere(req.query, userId, [
+    'cover_url IS NOT NULL',
+    "cover_url != ''"
+  ]);
 
   const releases = db.prepare(`
     SELECT id, cover_url
     FROM releases
-    WHERE ${clauses.join(' AND ')}
+    ${clause}
     ORDER BY date_added DESC, artist ASC, title ASC
   `).all(...params);
 

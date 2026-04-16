@@ -1,8 +1,12 @@
 import { getCurrentLocale } from '../../shared/i18n';
+import { pickName } from '../../shared/discogs';
+
+function intlLocale() {
+  return getCurrentLocale() === 'en' ? 'en-GB' : 'es-ES';
+}
 
 export function formatCurrency(value, currency = 'EUR') {
-  const locale = getCurrentLocale();
-  return new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'es-ES', {
+  return new Intl.NumberFormat(intlLocale(), {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
@@ -15,19 +19,17 @@ export function formatDate(value) {
     return '-';
   }
 
-  const locale = getCurrentLocale();
-  return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'es-ES', {
+  return new Intl.DateTimeFormat(intlLocale(), {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(new Date(value));
 }
 
 export function formatNumber(value) {
-  const locale = getCurrentLocale();
-  return new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'es-ES').format(Number(value || 0));
+  return new Intl.NumberFormat(intlLocale()).format(Number(value || 0));
 }
 
-export function joinNames(list, pick = (item) => item?.name || item) {
+export function joinNames(list, pick = pickName) {
   if (!Array.isArray(list) || !list.length) {
     return '-';
   }

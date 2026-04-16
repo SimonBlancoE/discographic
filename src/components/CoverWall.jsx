@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { formatNumber } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
+import { pickName } from '../../shared/discogs';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -59,14 +60,14 @@ function CoverWall({ releases, filters: availableFilters }) {
       }
 
       if (filters.format) {
-        const formats = (release.formats || []).map((format) => format?.name || format);
+        const formats = (release.formats || []).map(pickName);
         if (!formats.includes(filters.format)) {
           return false;
         }
       }
 
       if (filters.label) {
-        const labels = (release.labels || []).map((label) => label?.name || label);
+        const labels = (release.labels || []).map(pickName);
         if (!labels.includes(filters.label)) {
           return false;
         }
