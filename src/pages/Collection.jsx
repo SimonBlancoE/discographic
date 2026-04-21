@@ -13,16 +13,9 @@ import { DEFAULT_VISIBLE, COLUMNS, MANDATORY } from '../lib/columns';
 import { formatNumber } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
+import { applyOptimisticReleasePatch } from '../lib/releaseEdits';
+import { COLLECTION_FILTER_KEYS, createCollectionFilters, getActiveCollectionFilters } from '../../shared/collectionFilters.js';
 import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from '../../shared/currency';
-
-const DEFAULT_FILTERS = {
-  search: '',
-  genre: '',
-  style: '',
-  decade: '',
-  format: '',
-  label: ''
-};
 
 const CURRENCY_LABELS = {
   EUR: 'EUR · €',
@@ -30,23 +23,12 @@ const CURRENCY_LABELS = {
   GBP: 'GBP · £'
 };
 
-function getFiltersFromSearchParams(searchParams) {
-  return {
-    search: searchParams.get('search') || '',
-    genre: searchParams.get('genre') || '',
-    style: searchParams.get('style') || '',
-    decade: searchParams.get('decade') || '',
-    format: searchParams.get('format') || '',
-    label: searchParams.get('label') || ''
-  };
-}
-
 function Collection() {
-  const { discogsConfigured, currency, setCurrencyPreference } = useAuth();
+  const { accountUnavailable, discogsConfigured, currency, setCurrencyPreference } = useAuth();
   const { t } = useI18n();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [filters, setFilters] = useState(() => getFiltersFromSearchParams(searchParams));
+  const [filters, setFilters] = useState(() => createCollectionFilters(searchParams));
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState('artist');
   const [sortOrder, setSortOrder] = useState('asc');
@@ -97,8 +79,8 @@ function Collection() {
   }, [page, sortBy, sortOrder, displayCurrency]);
 
   useEffect(() => {
-    const nextFilters = getFiltersFromSearchParams(searchParams);
-    const filtersChanged = Object.keys(DEFAULT_FILTERS).some((key) => filters[key] !== nextFilters[key]);
+    const nextFilters = createCollectionFilters(searchParams);
+    const filtersChanged = COLLECTION_FILTER_KEYS.some((key) => filters[key] !== nextFilters[key]);
 
     if (!filtersChanged) {
       return;
@@ -112,15 +94,7 @@ function Collection() {
   const activeFilterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
 
   function syncFilterParams(nextFilters) {
-    const nextParams = new URLSearchParams();
-
-    for (const [key, value] of Object.entries(nextFilters)) {
-      if (value) {
-        nextParams.set(key, value);
-      }
-    }
-
-    setSearchParams(nextParams);
+    setSearchParams(new URLSearchParams(getActiveCollectionFilters(nextFilters)));
   }
 
   function handleFilterChange(key, value) {
@@ -171,28 +145,18 @@ function Collection() {
 
   async function handleUpdate(release, patch) {
     const previous = payload.releases;
-    const nextPatch = patch.notes === undefined
-      ? patch
-      : { ...patch, notes: String(patch.notes || '').trim() };
     const optimistic = previous.map((item) => {
       if (item.id !== release.id) {
         return item;
       }
 
-      const next = { ...item };
-      if (nextPatch.rating !== undefined) {
-        next.rating = nextPatch.rating;
-      }
-      if (nextPatch.notes !== undefined) {
-        next.notes_text = nextPatch.notes;
-        next.notes = nextPatch.notes ? [{ field_id: null, value: nextPatch.notes }] : [];
-      }
-      return next;
+      return applyOptimisticReleasePatch(item, patch).nextRelease;
     });
 
     setPayload((current) => ({ ...current, releases: optimistic }));
 
     try {
+      const { nextPatch } = applyOptimisticReleasePatch(release, patch);
       const updated = await api.updateRelease(release.id, nextPatch);
       setPayload((current) => ({
         ...current,
@@ -241,7 +205,13 @@ function Collection() {
 
       <ImportButton disabled={!discogsConfigured} />
 
-      {!discogsConfigured && (
+      {accountUnavailable ? (
+        <div className="glass-panel p-4 text-sm text-amber-100">
+          {t('collection.accountUnavailable')}
+        </div>
+      ) : null}
+
+      {!discogsConfigured && !accountUnavailable && (
         <div className="glass-panel p-4 text-sm text-slate-300">
           {t('collection.configureAccount')}
         </div>
@@ -256,10 +226,11 @@ function Collection() {
         options={payload.filters}
         onChange={handleFilterChange}
         onReset={() => {
-          setFilters(DEFAULT_FILTERS);
+          const resetFilters = createCollectionFilters();
+          setFilters(resetFilters);
           setPage(1);
-          syncFilterParams(DEFAULT_FILTERS);
-          load(1, DEFAULT_FILTERS, sortBy, sortOrder, displayCurrency);
+          syncFilterParams(resetFilters);
+          load(1, resetFilters, sortBy, sortOrder, displayCurrency);
         }}
       />
 

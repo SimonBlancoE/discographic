@@ -1,7 +1,7 @@
 import express from 'express';
 import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
-import { ensureCachedCover, removeCachedCovers } from './media.js';
+import { ensureCachedCover, removeCachedCovers } from '../services/coverMedia.js';
 import { translate } from '../../shared/i18n.js';
 import { DEFAULT_CURRENCY, convertAmountWithRates, getExchangeSnapshot } from '../services/exchangeRates.js';
 import { pruneUnseenReleases } from '../services/collectionReconcile.js';

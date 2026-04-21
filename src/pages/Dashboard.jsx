@@ -177,7 +177,7 @@ function CoveragePanel({ totals }) {
 }
 
 function Dashboard() {
-  const { discogsConfigured, currency } = useAuth();
+  const { accountUnavailable, discogsConfigured, currency } = useAuth();
   const { locale, t } = useI18n();
   const navigate = useNavigate();
   const toast = useToast();
@@ -195,7 +195,7 @@ function Dashboard() {
   }
 
   async function load() {
-    if (!discogsConfigured) {
+    if (!discogsConfigured || accountUnavailable) {
       setStats(null);
       setLoading(false);
       return;
@@ -223,7 +223,7 @@ function Dashboard() {
 
   useEffect(() => {
     load();
-  }, [discogsConfigured]);
+  }, [discogsConfigured, accountUnavailable]);
 
   useEffect(() => () => {
     if (milestoneTimeoutRef.current) {
@@ -282,6 +282,19 @@ function Dashboard() {
   }, [currency, stats, t]);
 
   const achievements = useMemo(() => buildAchievements(stats, t, locale), [stats, t, locale]);
+
+  if (accountUnavailable) {
+    return (
+      <section className="glass-panel p-8 text-center">
+        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('settings.accountTitle')}</p>
+        <h2 className="mt-3 font-display text-4xl text-white">{t('dashboard.accountUnavailableTitle')}</h2>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-slate-400">
+          {t('dashboard.accountUnavailableBody')}
+        </p>
+        <Link to="/settings" className="primary-button mt-6 inline-flex">{t('dashboard.goSettings')}</Link>
+      </section>
+    );
+  }
 
   if (!discogsConfigured) {
     return (

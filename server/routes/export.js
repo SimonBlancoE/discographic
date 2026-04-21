@@ -4,48 +4,11 @@ import * as XLSX from 'xlsx';
 import db, { hydrateRelease } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
+import { buildReleaseFilterWhere } from '../services/releaseFilters.js';
 
 const router = express.Router();
 
 router.use(requireAuth);
-
-function buildWhere(query, userId) {
-  const clauses = ['user_id = ?'];
-  const params = [userId];
-
-  if (query.search) {
-    clauses.push('(artist LIKE ? OR title LIKE ?)');
-    params.push(`%${query.search}%`, `%${query.search}%`);
-  }
-  if (query.genre) {
-    clauses.push('genres LIKE ?');
-    params.push(`%${query.genre}%`);
-  }
-  if (query.style) {
-    clauses.push('styles LIKE ?');
-    params.push(`%${query.style}%`);
-  }
-  if (query.format) {
-    clauses.push('formats LIKE ?');
-    params.push(`%${query.format}%`);
-  }
-  if (query.label) {
-    clauses.push('labels LIKE ?');
-    params.push(`%${query.label}%`);
-  }
-  if (query.decade) {
-    const start = Number(query.decade);
-    if (Number.isFinite(start)) {
-      clauses.push('year >= ? AND year < ?');
-      params.push(start, start + 10);
-    }
-  }
-
-  return {
-    clause: `WHERE ${clauses.join(' AND ')}`,
-    params
-  };
-}
 
 async function serializeRelease(release, t, currency) {
   const formats = release.formats.map((format) => format?.name || format).join(', ');
@@ -77,7 +40,7 @@ router.get('/', async (req, res) => {
   try {
     const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
     const currency = normalizeCurrency(req.query.currency || DEFAULT_CURRENCY);
-    const { clause, params } = buildWhere(req.query, req.session.userId);
+    const { clause, params } = buildReleaseFilterWhere({ userId: req.session.userId, filters: req.query });
     const rows = db.prepare(`SELECT * FROM releases ${clause} ORDER BY artist ASC, title ASC`).all(...params);
     const payload = await Promise.all(rows.map(hydrateRelease).map((release) => serializeRelease(release, req.t, currency)));
 

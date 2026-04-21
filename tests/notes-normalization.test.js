@@ -8,8 +8,10 @@ import {
   countMeaningfulNoteRows,
   hasMeaningfulNotes,
   normalizeNotes,
+  notesToText,
   parseStoredNotes
 } from '../server/services/notes.js';
+import { replaceNoteText, resolveNoteFieldId } from '../server/services/notes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,6 +41,23 @@ describe('notes normalization', () => {
     expect(hasMeaningfulNotes(parseStoredNotes(rows[0].notes))).toBe(false);
     expect(hasMeaningfulNotes(parseStoredNotes(rows[1].notes))).toBe(false);
     expect(countMeaningfulNoteRows(rows)).toBe(2);
+  });
+
+  it('derives note text and replaces the resolved notes field consistently', () => {
+    const notes = [
+      { field_id: 2, value: 'other field' },
+      { field_id: 3, value: '  old note  ' }
+    ];
+
+    expect(notesToText(notes)).toBe('other field | old note');
+    expect(resolveNoteFieldId(notes)).toBe(3);
+    expect(replaceNoteText(notes, '  new note  ')).toEqual([
+      { field_id: 2, value: 'other field' },
+      { field_id: 3, value: 'new note' }
+    ]);
+    expect(replaceNoteText(notes, '')).toEqual([
+      { field_id: 2, value: 'other field' }
+    ]);
   });
 });
 

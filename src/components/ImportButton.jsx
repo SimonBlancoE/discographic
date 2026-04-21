@@ -9,6 +9,7 @@ import {
 import { useI18n } from '../lib/I18nContext';
 
 const POLL_MS = 2000;
+const MAX_POLL_ERRORS = 3;
 
 function truncate(text, max = 40) {
   if (!text || text.length <= max) return text || '';
@@ -21,23 +22,31 @@ function ImportButton({ disabled = false }) {
   const [phase, setPhase] = useState('idle');
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
+  const [statusError, setStatusError] = useState('');
   const [syncState, setSyncState] = useState(null);
   const fileRef = useRef(null);
   const disposed = useRef(false);
   const pollTimer = useRef(null);
+  const pollFailures = useRef(0);
 
-  function queuePoll() {
+  function clearPollTimer() {
     if (pollTimer.current) {
       clearTimeout(pollTimer.current);
+      pollTimer.current = null;
     }
+  }
+
+  function queuePoll() {
+    clearPollTimer();
     pollTimer.current = setTimeout(poll, POLL_MS);
   }
 
-  // Poll import sync status
   const poll = useCallback(async () => {
     if (disposed.current) return;
     try {
       const status = await api.getImportStatus();
+      pollFailures.current = 0;
+      setStatusError('');
       setSyncState(status);
       if (status.status === 'running') {
         queuePoll();
@@ -48,29 +57,32 @@ function ImportButton({ disabled = false }) {
         return;
       }
       setPhase('result');
-    } catch {
-      queuePoll();
+    } catch (err) {
+      pollFailures.current += 1;
+      if (pollFailures.current < MAX_POLL_ERRORS) {
+        queuePoll();
+        return;
+      }
+
+      setStatusError(t('collection.importStatusError', { error: err.message }));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     disposed.current = false;
     return () => {
       disposed.current = true;
-      if (pollTimer.current) {
-        clearTimeout(pollTimer.current);
-      }
+      clearPollTimer();
     };
   }, []);
 
   function reset() {
-    if (pollTimer.current) {
-      clearTimeout(pollTimer.current);
-      pollTimer.current = null;
-    }
+    clearPollTimer();
+    pollFailures.current = 0;
     setPhase('idle');
     setPreview(null);
     setError('');
+    setStatusError('');
     setSyncState(null);
     if (fileRef.current) fileRef.current.value = '';
   }
@@ -104,6 +116,8 @@ function ImportButton({ disabled = false }) {
     if (!preview?.previewId) return;
     setPhase('applying');
     setError('');
+    setStatusError('');
+    pollFailures.current = 0;
 
     try {
       const result = await api.importApply(preview.previewId);
@@ -118,6 +132,12 @@ function ImportButton({ disabled = false }) {
       setError(err.message);
       setPhase('preview');
     }
+  }
+
+  function retryStatusPoll() {
+    setStatusError('');
+    pollFailures.current = 0;
+    void poll();
   }
 
   const syncProgress = syncState?.total
@@ -279,7 +299,6 @@ function ImportButton({ disabled = false }) {
         </div>
       )}
 
-      {/* ── Syncing with Discogs ── */}
       {phase === 'syncing' && syncState && (
         <div className="glass-panel space-y-3 p-5">
           <div>
@@ -294,6 +313,15 @@ function ImportButton({ disabled = false }) {
           <p className="text-sm text-slate-400">
             {t('collection.canClose')}
           </p>
+
+          {statusError ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100 sm:flex-row sm:items-center sm:justify-between">
+              <p>{statusError}</p>
+              <button type="button" onClick={retryStatusPoll} className="secondary-button">
+                {t('collection.retryStatus')}
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 

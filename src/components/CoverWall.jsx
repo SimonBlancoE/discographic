@@ -7,15 +7,7 @@ import { formatNumber } from '../lib/format';
 import { filterWallReleases } from '../lib/wallGrid';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
-
-const DEFAULT_FILTERS = {
-  search: '',
-  genre: '',
-  style: '',
-  decade: '',
-  format: '',
-  label: ''
-};
+import { createCollectionFilters, getActiveCollectionFilters } from '../../shared/collectionFilters.js';
 
 const EXPORT_SIZE = 86;
 const QUALITY_PRESETS = {
@@ -28,7 +20,7 @@ function CoverWall({ releases, filters: availableFilters }) {
   const { t } = useI18n();
   const toast = useToast();
   const [size, setSize] = useState(110);
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState(() => createCollectionFilters());
   const [showTitles, setShowTitles] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportQuality, setExportQuality] = useState('balanced');
@@ -72,11 +64,7 @@ function CoverWall({ releases, filters: availableFilters }) {
   async function handleTapete() {
     setTapeteGenerating(true);
     try {
-      const activeFilters = {};
-      for (const [key, value] of Object.entries(filters)) {
-        if (value) activeFilters[key] = value;
-      }
-      const blob = await api.fetchTapeteBlob(7200, activeFilters);
+      const blob = await api.fetchTapeteBlob(7200, getActiveCollectionFilters(filters));
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -152,7 +140,7 @@ function CoverWall({ releases, filters: availableFilters }) {
         </label>
       </div>
 
-      <FilterPanel filters={filters} options={availableFilters} onChange={handleFilterChange} onReset={() => setFilters(DEFAULT_FILTERS)} />
+      <FilterPanel filters={filters} options={availableFilters} onChange={handleFilterChange} onReset={() => setFilters(createCollectionFilters())} />
 
       <section className="glass-panel p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">

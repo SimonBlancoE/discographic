@@ -5,7 +5,7 @@ import { useAuth } from '../lib/AuthContext';
 import { useI18n } from '../lib/I18nContext';
 
 function CollectionWall() {
-  const { discogsConfigured } = useAuth();
+  const { accountUnavailable, discogsConfigured } = useAuth();
   const { t } = useI18n();
   const [releases, setReleases] = useState([]);
   const [filters, setFilters] = useState({});
@@ -13,7 +13,7 @@ function CollectionWall() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!discogsConfigured) {
+    if (!discogsConfigured || accountUnavailable) {
       setLoading(false);
       return;
     }
@@ -25,7 +25,11 @@ function CollectionWall() {
       })
       .catch((nextError) => setError(nextError.message))
       .finally(() => setLoading(false));
-  }, [discogsConfigured]);
+  }, [discogsConfigured, accountUnavailable]);
+
+  if (accountUnavailable) {
+    return <div className="glass-panel p-8 text-center text-amber-100">{t('wall.accountUnavailable')}</div>;
+  }
 
   if (!discogsConfigured) {
     return <div className="glass-panel p-8 text-center text-slate-300">{t('wall.configure')}</div>;
