@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import FilterPanel from './FilterPanel';
+import WindowedCoverWallGrid from './WindowedCoverWallGrid';
 import { downloadNodeAsJpeg } from '../lib/exportImage';
 import { api } from '../lib/api';
 import { formatNumber } from '../lib/format';
+import { filterWallReleases } from '../lib/wallGrid';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
 
@@ -33,66 +34,28 @@ function CoverWall({ releases, filters: availableFilters }) {
   const [exportQuality, setExportQuality] = useState('balanced');
   const [exportStage, setExportStage] = useState('');
   const [tapeteGenerating, setTapeteGenerating] = useState(false);
+  const [renderPosterSurface, setRenderPosterSurface] = useState(false);
   const posterRef = useRef(null);
 
-  const filtered = useMemo(() => {
-    const query = filters.search.trim().toLowerCase();
-
-    return releases.filter((release) => {
-      if (query && !`${release.artist} ${release.title}`.toLowerCase().includes(query)) {
-        return false;
-      }
-
-      if (filters.genre && !(release.genres || []).includes(filters.genre)) {
-        return false;
-      }
-
-      if (filters.style && !(release.styles || []).includes(filters.style)) {
-        return false;
-      }
-
-      if (filters.decade) {
-        const start = Number(filters.decade);
-        if (!Number.isFinite(start) || !(release.year >= start && release.year < start + 10)) {
-          return false;
-        }
-      }
-
-      if (filters.format) {
-        const formats = (release.formats || []).map((format) => format?.name || format);
-        if (!formats.includes(filters.format)) {
-          return false;
-        }
-      }
-
-      if (filters.label) {
-        const labels = (release.labels || []).map((label) => label?.name || label);
-        if (!labels.includes(filters.label)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [releases, filters]);
+  const filtered = useMemo(() => filterWallReleases(releases, filters), [releases, filters]);
 
   const exportReleases = filtered;
 
   async function handleExport() {
-    if (!posterRef.current) {
-      return;
-    }
-
     if (!filtered.length) {
       toast.info(t('wall.noCovers'));
       return;
     }
 
     setExporting(true);
+    setRenderPosterSurface(true);
     setExportStage(t('wall.preparingThumbs'));
     try {
       const preset = QUALITY_PRESETS[exportQuality];
-      await new Promise((resolve) => window.setTimeout(resolve, 60));
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+      if (!posterRef.current) {
+        throw new Error(t('wall.noCovers'));
+      }
       setExportStage(t('wall.makingPoster'));
       await downloadNodeAsJpeg(posterRef.current, `discographic-wall-${new Date().toISOString().slice(0, 10)}.jpg`, { quality: preset.quality, pixelRatio: preset.pixelRatio });
       setExportStage(t('wall.downloadingFile'));
@@ -101,6 +64,7 @@ function CoverWall({ releases, filters: availableFilters }) {
       toast.error(t('wall.posterError', { error: error.message }));
     } finally {
       setExporting(false);
+      setRenderPosterSurface(false);
       setExportStage('');
     }
   }
@@ -198,51 +162,39 @@ function CoverWall({ releases, filters: availableFilters }) {
           </span>
         </div>
 
-        <div className="cover-wall-grid" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${size}px, 1fr))` }}>
-          {filtered.map((release) => (
-            <Link key={release.id} to={`/release/${release.id}`} className="cover-wall-card group">
-              <div className="overflow-hidden rounded-[22px] border border-white/10 bg-slate-950/70 shadow-[0_18px_40px_rgba(2,6,23,0.32)]">
-                <div className="aspect-square overflow-hidden bg-slate-900/80">
-                  {release.wall_cover_url || release.cover_url ? (
-                    <img src={release.wall_cover_url || release.cover_url} alt={release.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-4xl">💿</div>
-                  )}
-                </div>
-                {showTitles ? (
-                  <div className="space-y-1 px-3 py-3">
-                    <p className="truncate text-sm font-medium text-slate-100">{release.title}</p>
-                    <p className="truncate text-xs text-slate-400">{release.artist}</p>
-                  </div>
-                ) : null}
-              </div>
-            </Link>
-          ))}
-        </div>
+        <WindowedCoverWallGrid releases={filtered} size={size} showTitles={showTitles} />
       </section>
 
-      <div className="pointer-events-none fixed left-[-100000px] top-0 opacity-0">
-        <section ref={posterRef} className="glass-panel p-5" style={{ width: '1280px' }}>
-          <div className="mb-4 flex items-center justify-between gap-3 text-sm text-slate-400">
-            <span>{t('wall.posterLabel')}</span>
-            <span>{t('wall.coverCount', { count: formatNumber(exportReleases.length) })}</span>
-          </div>
+      {renderPosterSurface ? (
+        <div className="pointer-events-none fixed left-[-100000px] top-0 opacity-0">
+          <section ref={posterRef} className="glass-panel p-5" style={{ width: '1280px' }}>
+            <div className="mb-4 flex items-center justify-between gap-3 text-sm text-slate-400">
+              <span>{t('wall.posterLabel')}</span>
+              <span>{t('wall.coverCount', { count: formatNumber(exportReleases.length) })}</span>
+            </div>
 
-          <div className="cover-wall-grid" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${EXPORT_SIZE}px, 1fr))` }}>
-            {exportReleases.map((release) => (
-              <div key={release.id} className="overflow-hidden rounded-[18px] border border-white/10 bg-slate-950/70">
-                <div className="aspect-square overflow-hidden bg-slate-900/80">
-                  {release.poster_cover_url || release.wall_cover_url || release.cover_url ? (
-                    <img src={release.poster_cover_url || release.wall_cover_url || release.cover_url} alt={release.title} className="h-full w-full object-cover" loading="eager" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-3xl">💿</div>
-                  )}
+            <div className="cover-wall-grid" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${EXPORT_SIZE}px, 1fr))` }}>
+              {exportReleases.map((release) => (
+                <div key={release.id} className="overflow-hidden rounded-[18px] border border-white/10 bg-slate-950/70">
+                  <div className="aspect-square overflow-hidden bg-slate-900/80">
+                    {release.poster_cover_url || release.wall_cover_url || release.cover_url ? (
+                      <img
+                        src={release.poster_cover_url || release.wall_cover_url || release.cover_url}
+                        alt={release.title}
+                        className="h-full w-full object-cover"
+                        loading="eager"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-3xl">💿</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {tapeteGenerating ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
