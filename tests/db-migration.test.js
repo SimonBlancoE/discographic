@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const testDbPath = join(__dirname, '.test-migration.db');
 
-describe('listing columns migration', () => {
+describe('releases table schema migrations', () => {
   let db;
 
   beforeAll(() => {
@@ -39,12 +39,13 @@ describe('listing columns migration', () => {
     if (existsSync(testDbPath)) unlinkSync(testDbPath);
   });
 
-  it('table initially has no listing columns', () => {
+  it('table initially has no listing columns or sync marker', () => {
     const cols = db.prepare('PRAGMA table_info(releases)').all().map(c => c.name);
     expect(cols).not.toContain('listing_status');
     expect(cols).not.toContain('listing_price');
     expect(cols).not.toContain('listing_currency');
     expect(cols).not.toContain('listing_price_eur');
+    expect(cols).not.toContain('last_seen_sync_id');
   });
 
   it('migration adds listing columns for status, original currency and EUR value', () => {
@@ -90,13 +91,32 @@ describe('listing columns migration', () => {
     expect(cols).toContain('listing_price_eur');
   });
 
+  it('migration adds last_seen_sync_id marker for reconciliation', () => {
+    const hasCols = (col) => db.prepare('PRAGMA table_info(releases)').all().some(c => c.name === col);
+    if (!hasCols('last_seen_sync_id')) {
+      db.exec('ALTER TABLE releases ADD COLUMN last_seen_sync_id INTEGER DEFAULT NULL');
+    }
+    const cols = db.prepare('PRAGMA table_info(releases)').all().map(c => c.name);
+    expect(cols).toContain('last_seen_sync_id');
+  });
+
+  it('last_seen_sync_id migration is idempotent', () => {
+    const hasCols = (col) => db.prepare('PRAGMA table_info(releases)').all().some(c => c.name === col);
+    if (!hasCols('last_seen_sync_id')) {
+      db.exec('ALTER TABLE releases ADD COLUMN last_seen_sync_id INTEGER DEFAULT NULL');
+    }
+    const cols = db.prepare('PRAGMA table_info(releases)').all().map(c => c.name);
+    expect(cols).toContain('last_seen_sync_id');
+  });
+
   it('listing columns default to NULL for existing rows', () => {
     db.prepare(`INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (1, 100, 200, 'Test', 'Artist')`).run();
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE release_id = 100').get();
+    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur, last_seen_sync_id FROM releases WHERE release_id = 100').get();
     expect(row.listing_status).toBeNull();
     expect(row.listing_price).toBeNull();
     expect(row.listing_currency).toBeNull();
     expect(row.listing_price_eur).toBeNull();
+    expect(row.last_seen_sync_id).toBeNull();
   });
 
   it('listing_status stores text values', () => {

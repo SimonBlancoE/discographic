@@ -75,6 +75,7 @@ function createBaseTables() {
       listing_price REAL DEFAULT NULL,
       listing_currency TEXT DEFAULT NULL,
       listing_price_eur REAL DEFAULT NULL,
+      last_seen_sync_id INTEGER DEFAULT NULL,
       tracklist TEXT,
       folder_id INTEGER DEFAULT 0,
       raw_json TEXT,
@@ -207,6 +208,7 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_releases_user_value ON releases(user_id, estimated_value);
     CREATE INDEX IF NOT EXISTS idx_releases_user_release ON releases(user_id, release_id);
     CREATE INDEX IF NOT EXISTS idx_releases_user_listing_price_eur ON releases(user_id, listing_price_eur);
+    CREATE INDEX IF NOT EXISTS idx_releases_user_last_seen_sync ON releases(user_id, last_seen_sync_id);
     CREATE INDEX IF NOT EXISTS idx_sync_log_user_started ON sync_log(user_id, started_at);
   `);
 }
@@ -238,12 +240,19 @@ function migrateListingColumns() {
   }
 }
 
+function migrateLastSeenSyncId() {
+  if (!hasColumn('releases', 'last_seen_sync_id')) {
+    db.exec('ALTER TABLE releases ADD COLUMN last_seen_sync_id INTEGER DEFAULT NULL');
+  }
+}
+
 createBaseTables();
 migrateReleases();
 migrateSyncLog();
 migrateSettings();
 migrateUsersRole();
 migrateListingColumns();
+migrateLastSeenSyncId();
 createIndexes();
 
 export function parseJson(value, fallback = []) {

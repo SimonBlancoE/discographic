@@ -1,9 +1,10 @@
 import express from 'express';
 import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
-import { ensureCachedCover } from './media.js';
+import { ensureCachedCover, removeCachedCovers } from './media.js';
 import { translate } from '../../shared/i18n.js';
 import { DEFAULT_CURRENCY, convertAmountWithRates, getExchangeSnapshot } from '../services/exchangeRates.js';
+import { pruneUnseenReleases } from '../services/collectionReconcile.js';
 import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows } from '../services/enrichmentQueue.js';
 
 const router = express.Router();
@@ -69,9 +70,9 @@ function mapCollectionItem(item) {
 const upsertStmt = db.prepare(`
   INSERT INTO releases (
     user_id, release_id, instance_id, title, artist, year, genres, styles, formats,
-    labels, country, cover_url, rating, notes, date_added, estimated_value,
+    labels, country, cover_url, rating, notes, date_added, estimated_value, last_seen_sync_id,
     tracklist, folder_id, raw_json, synced_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   ON CONFLICT(user_id, instance_id) DO UPDATE SET
     release_id = excluded.release_id,
     title = excluded.title,
@@ -86,12 +87,13 @@ const upsertStmt = db.prepare(`
     rating = excluded.rating,
     notes = excluded.notes,
     date_added = excluded.date_added,
+    last_seen_sync_id = excluded.last_seen_sync_id,
     folder_id = excluded.folder_id,
     raw_json = excluded.raw_json,
     synced_at = CURRENT_TIMESTAMP
 `);
 
-const upsertBatch = db.transaction((userId, items) => {
+const upsertBatch = db.transaction((userId, syncId, items) => {
   for (const item of items) {
     const mapped = mapCollectionItem(item);
     upsertStmt.run(
@@ -111,6 +113,7 @@ const upsertBatch = db.transaction((userId, items) => {
       mapped.notes,
       mapped.date_added,
       null,
+      syncId,
       '[]',
       mapped.folder_id,
       mapped.raw_json
@@ -138,13 +141,23 @@ async function runSync({ userId, logId, discogs, locale }) {
     const releases = payload.releases || [];
 
     if (releases.length > 0) {
-      upsertBatch(userId, releases);
+      upsertBatch(userId, logId, releases);
       totalSynced += releases.length;
     }
 
     setSyncState(userId, {
       current: totalSynced,
       message: syncT(locale, 'backend.sync.page', { page, pages: totalPages, count: totalSynced })
+    });
+  }
+
+  // Reconciliation assumes this is a successful full collection sync.
+  // If sync is ever made partial/incremental in the future, do not prune
+  // unseen rows here unless the run can still prove complete coverage.
+  const removedReleaseIds = pruneUnseenReleases(db, userId, logId);
+  if (removedReleaseIds.length) {
+    await removeCachedCovers({ userId, releaseIds: removedReleaseIds }).catch((error) => {
+      console.log('[sync] cache cleanup failed:', error.message);
     });
   }
 

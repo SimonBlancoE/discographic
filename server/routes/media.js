@@ -1,6 +1,6 @@
 import express from 'express';
 import { existsSync, mkdirSync } from 'fs';
-import { access, writeFile } from 'fs/promises';
+import { access, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
@@ -104,6 +104,28 @@ export async function ensureCachedCover({ release, userId, variant, t = null }) 
 
   await writeFile(cachePath, resized);
   return cachePath;
+}
+
+export async function removeCachedCovers({ userId, releaseIds }) {
+  if (!releaseIds?.length) {
+    return;
+  }
+
+  const userDir = join(coversDir, String(userId));
+  const variants = Object.keys(VARIANTS);
+
+  await Promise.all(releaseIds.flatMap((releaseId) =>
+    variants.map(async (variant) => {
+      const cachePath = join(userDir, `${releaseId}-${variant}.jpg`);
+      try {
+        await unlink(cachePath);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    })
+  ));
 }
 
 router.get('/cover/:id', async (req, res) => {
