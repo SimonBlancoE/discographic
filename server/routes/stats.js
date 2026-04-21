@@ -2,6 +2,7 @@ import express from 'express';
 import db, { getSettingForUser, parseJson } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
+import { countMeaningfulNoteRows } from '../services/notes.js';
 
 const router = express.Router();
 
@@ -32,11 +33,13 @@ router.get('/', async (req, res) => {
     const displayCurrency = normalizeCurrency(req.query.currency || getSettingForUser(userId, 'currency', DEFAULT_CURRENCY));
     const totalRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ?').get(userId).count;
     const ratedRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND rating > 0').get(userId).count;
-    const notesRecords = db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM releases
-      WHERE user_id = ? AND notes IS NOT NULL AND notes != '[]'
-    `).get(userId).count;
+    const notesRecords = countMeaningfulNoteRows(
+      db.prepare(`
+        SELECT notes
+        FROM releases
+        WHERE user_id = ? AND notes IS NOT NULL AND notes != ''
+      `).all(userId)
+    );
     const pricedRecords = db.prepare(`
       SELECT COUNT(*) AS count
       FROM releases

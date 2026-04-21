@@ -46,14 +46,18 @@ function ReleaseDetail() {
 
   async function updateRelease(patch) {
     const previous = release;
-    const optimistic = { ...release, ...patch };
-    if (patch.notes !== undefined) {
-      optimistic.notes_text = patch.notes;
+    const nextPatch = patch.notes === undefined
+      ? patch
+      : { ...patch, notes: String(patch.notes || '').trim() };
+    const optimistic = { ...release, ...nextPatch };
+    if (nextPatch.notes !== undefined) {
+      optimistic.notes_text = nextPatch.notes;
+      optimistic.notes = nextPatch.notes ? [{ field_id: null, value: nextPatch.notes }] : [];
     }
     setRelease(optimistic);
 
     try {
-      const updated = await api.updateRelease(id, patch);
+      const updated = await api.updateRelease(id, nextPatch);
       setRelease(updated);
     } catch (error) {
       setRelease(previous);

@@ -21,6 +21,10 @@ function buildWhere(query, userId) {
     clauses.push('genres LIKE ?');
     params.push(`%${query.genre}%`);
   }
+  if (query.style) {
+    clauses.push('styles LIKE ?');
+    params.push(`%${query.style}%`);
+  }
   if (query.format) {
     clauses.push('formats LIKE ?');
     params.push(`%${query.format}%`);

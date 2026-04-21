@@ -21,6 +21,9 @@ const BACKEND_IMPORT_KEYS = [
   'backend.import.idle',
   'backend.import.syncing',
   'backend.import.completed',
+  'backend.import.partial',
+  'backend.import.failedAll',
+  'backend.import.interrupted',
   'backend.import.templateSheetName',
   'backend.import.templateArtistSample',
   'backend.import.templateTitleSample',
@@ -30,7 +33,21 @@ const BACKEND_IMPORT_KEYS = [
   'backend.import.previewIdRequired',
   'backend.import.previewExpired',
   'backend.import.localOnlyCompleted',
+  'backend.import.releaseMissing',
+  'backend.import.unknownSyncError',
   'backend.import.syncFailed'
+];
+
+const COLLECTION_IMPORT_RESULT_KEYS = [
+  'collection.importCompletedTitle',
+  'collection.importPartialTitle',
+  'collection.importLocalOnlyTitle',
+  'collection.importFailedTitle',
+  'collection.importPartialHelp',
+  'collection.importLocalOnlyHelp',
+  'collection.importFailedHelp',
+  'collection.importFailuresTitle',
+  'collection.importMoreFailures'
 ];
 
 const BACKEND_MEDIA_KEYS = [
@@ -114,6 +131,13 @@ describe('i18n keys for import/media/client fallbacks', () => {
 
   it('all backend import keys exist in English locale', () => {
     for (const key of BACKEND_IMPORT_KEYS) {
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('all collection import result keys exist in both locales', () => {
+    for (const key of COLLECTION_IMPORT_RESULT_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
       expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
     }
   });
