@@ -28,7 +28,7 @@ const cookieSecure = process.env.COOKIE_SECURE === 'true';
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
-  req.locale = resolveLocale(req.headers['accept-language']);
+  req.locale = resolveLocale(req.query?.locale || req.headers['accept-language']);
   req.t = (key, vars) => translate(req.locale, key, vars);
   next();
 });
