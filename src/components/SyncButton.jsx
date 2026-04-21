@@ -4,15 +4,22 @@ import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
 
 const POLL_MS = 2000;
+const MAX_POLL_ERRORS = 3;
 
 function SyncButton({ onSyncComplete, disabled = false }) {
   const { t } = useI18n();
   const toast = useToast();
   const [status, setStatus] = useState(null);
+  const [syncStatusError, setSyncStatusError] = useState('');
+  const [enrichStatusError, setEnrichStatusError] = useState('');
   const waitingForCompletion = useRef(false);
   const disposed = useRef(false);
   const syncToastShown = useRef(false);
   const enrichToastShown = useRef(false);
+  const syncPollTimer = useRef(null);
+  const enrichPollTimer = useRef(null);
+  const syncPollFailures = useRef(0);
+  const enrichPollFailures = useRef(0);
   const syncing = status?.status === 'running';
   const pendingValues = status?.enrichment?.pending || 0;
   const thumbsRunning = status?.thumbnails?.status === 'running';
@@ -27,16 +34,35 @@ function SyncButton({ onSyncComplete, disabled = false }) {
     onSyncCompleteRef.current = onSyncComplete;
   }, [onSyncComplete]);
 
+  function clearTimer(timerRef) {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  function queueSyncPoll() {
+    clearTimer(syncPollTimer);
+    syncPollTimer.current = setTimeout(poll, POLL_MS);
+  }
+
+  function queueEnrichPoll() {
+    clearTimer(enrichPollTimer);
+    enrichPollTimer.current = setTimeout(pollEnrich, POLL_MS);
+  }
+
   const poll = useCallback(async () => {
     if (disposed.current) return;
     try {
       const next = await api.getSyncStatus();
       if (disposed.current) return;
+      syncPollFailures.current = 0;
+      setSyncStatusError('');
       setStatus(next);
 
       if (next.status === 'running') {
         waitingForCompletion.current = true;
-        setTimeout(poll, POLL_MS);
+        queueSyncPoll();
       } else if (next.status === 'completed' && waitingForCompletion.current) {
         waitingForCompletion.current = false;
         if (!syncToastShown.current) {
@@ -45,38 +71,53 @@ function SyncButton({ onSyncComplete, disabled = false }) {
         }
         onSyncCompleteRef.current?.();
       }
-    } catch {
+    } catch (error) {
       if (waitingForCompletion.current) {
-        setTimeout(poll, POLL_MS);
+        syncPollFailures.current += 1;
+        if (syncPollFailures.current < MAX_POLL_ERRORS) {
+          queueSyncPoll();
+          return;
+        }
+
+        setSyncStatusError(t('sync.statusError', { error: error.message }));
       }
     }
-  }, []);
+  }, [t, toast]);
 
   useEffect(() => {
     disposed.current = false;
     api.getSyncStatus().then((s) => {
       if (!disposed.current) {
+        setSyncStatusError('');
         setStatus(s);
         if (s.status === 'running') {
           waitingForCompletion.current = true;
-          setTimeout(poll, POLL_MS);
+          queueSyncPoll();
         }
       }
-    }).catch(() => {});
+    }).catch((error) => {
+      if (!disposed.current) {
+        setSyncStatusError(t('sync.statusError', { error: error.message }));
+      }
+    });
 
     return () => {
       disposed.current = true;
+      clearTimer(syncPollTimer);
+      clearTimer(enrichPollTimer);
     };
-  }, [poll]);
+  }, [poll, t]);
 
   async function handleSync() {
     try {
       await api.startSync();
       syncToastShown.current = false;
+      syncPollFailures.current = 0;
+      setSyncStatusError('');
       waitingForCompletion.current = true;
       const next = await api.getSyncStatus();
       setStatus(next);
-      setTimeout(poll, POLL_MS);
+      queueSyncPoll();
     } catch (error) {
       toast.error(t('sync.startError', { error: error.message }));
     }
@@ -95,9 +136,11 @@ function SyncButton({ onSyncComplete, disabled = false }) {
     try {
       const next = await api.getSyncStatus();
       if (disposed.current) return;
+      enrichPollFailures.current = 0;
+      setEnrichStatusError('');
       setStatus(next);
       if (next.enrichment?.status === 'running') {
-        setTimeout(pollEnrich, POLL_MS);
+        queueEnrichPoll();
       } else if (next.enrichment?.status === 'completed') {
         if (!enrichToastShown.current) {
           enrichToastShown.current = true;
@@ -105,16 +148,21 @@ function SyncButton({ onSyncComplete, disabled = false }) {
         }
         onSyncCompleteRef.current?.();
       }
-    } catch {
-      setTimeout(pollEnrich, POLL_MS);
-    }
-  }, []);
+    } catch (error) {
+      enrichPollFailures.current += 1;
+      if (enrichPollFailures.current < MAX_POLL_ERRORS) {
+        queueEnrichPoll();
+        return;
+      }
 
-  // If we mount while enrichment is running, start polling
+      setEnrichStatusError(t('sync.statusError', { error: error.message }));
+    }
+  }, [t, toast]);
+
   useEffect(() => {
     if (enrichRunning) {
-      const timer = setTimeout(pollEnrich, POLL_MS);
-      return () => clearTimeout(timer);
+      queueEnrichPoll();
+      return () => clearTimer(enrichPollTimer);
     }
   }, [enrichRunning, pollEnrich]);
 
@@ -122,7 +170,9 @@ function SyncButton({ onSyncComplete, disabled = false }) {
     try {
       await api.enrichValues();
       enrichToastShown.current = false;
-      setTimeout(pollEnrich, POLL_MS);
+      enrichPollFailures.current = 0;
+      setEnrichStatusError('');
+      queueEnrichPoll();
     } catch (error) {
       toast.error(t('sync.enrichStartError', { error: error.message }));
     }
@@ -131,9 +181,26 @@ function SyncButton({ onSyncComplete, disabled = false }) {
   async function handleStopEnrich() {
     try {
       await api.stopEnrich();
+      clearTimer(enrichPollTimer);
+      enrichPollFailures.current = 0;
+      setEnrichStatusError('');
       const next = await api.getSyncStatus();
       setStatus(next);
-    } catch {}
+    } catch (error) {
+      toast.error(t('sync.stopError', { error: error.message }));
+    }
+  }
+
+  function retrySyncStatus() {
+    syncPollFailures.current = 0;
+    setSyncStatusError('');
+    void poll();
+  }
+
+  function retryEnrichStatus() {
+    enrichPollFailures.current = 0;
+    setEnrichStatusError('');
+    void pollEnrich();
   }
 
   return (
@@ -156,6 +223,15 @@ function SyncButton({ onSyncComplete, disabled = false }) {
         <span>{t(`sync.phase.${status?.phase || 'idle'}`)}</span>
         <span>{status?.current || 0} / {status?.total || 0}</span>
       </div>
+
+      {syncStatusError ? (
+        <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <p>{syncStatusError}</p>
+          <button type="button" onClick={retrySyncStatus} className="secondary-button self-start">
+            {t('sync.retryStatus')}
+          </button>
+        </div>
+      ) : null}
 
       {(pendingValues > 0 || enrichRunning) && !syncing && (
         <div className="mt-3 space-y-2 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
@@ -180,6 +256,14 @@ function SyncButton({ onSyncComplete, disabled = false }) {
               <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-500" style={{ width: `${enrichProgress}%` }} />
             </div>
           )}
+          {enrichStatusError ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+              <p>{enrichStatusError}</p>
+              <button type="button" onClick={retryEnrichStatus} className="secondary-button self-start">
+                {t('sync.retryStatus')}
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 

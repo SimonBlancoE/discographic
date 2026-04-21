@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { cleanupStoredNotes, normalizeNotes, parseStoredNotes } from './services/notes.js';
+import { cleanupStoredNotes, normalizeNotes, notesToText, parseStoredNotes } from './services/notes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -288,7 +288,7 @@ export function hydrateRelease(release) {
   hydrated.notes = normalizeNotes(parseStoredNotes(release.notes));
   hydrated.tracklist = parseJson(release.tracklist, []);
   hydrated.raw_json = release.raw_json ? parseJson(release.raw_json, {}) : null;
-  hydrated.notes_text = hydrated.notes.map((item) => item?.value).filter(Boolean).join(' | ');
+  hydrated.notes_text = notesToText(hydrated.notes);
   return hydrated;
 }
 

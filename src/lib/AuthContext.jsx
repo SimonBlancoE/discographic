@@ -9,7 +9,23 @@ export function AuthProvider({ children }) {
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
   const [user, setUser] = useState(null);
   const [discogsConfigured, setDiscogsConfigured] = useState(false);
+  const [accountUnavailable, setAccountUnavailable] = useState(false);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
+
+  async function refreshAccountState() {
+    try {
+      const account = await api.getAccount();
+      setDiscogsConfigured(Boolean(account.tokenConfigured));
+      setCurrency(account.currency || DEFAULT_CURRENCY);
+      setAccountUnavailable(false);
+      return account;
+    } catch (error) {
+      setDiscogsConfigured(false);
+      setCurrency(DEFAULT_CURRENCY);
+      setAccountUnavailable(true);
+      throw error;
+    }
+  }
 
   async function refresh() {
     setLoading(true);
@@ -19,16 +35,17 @@ export function AuthProvider({ children }) {
       setUser(status.user || null);
 
       if (status.loggedIn) {
-        const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
-        setDiscogsConfigured(Boolean(account.tokenConfigured));
-        setCurrency(account.currency || DEFAULT_CURRENCY);
+        await refreshAccountState().catch(() => null);
       } else {
         setDiscogsConfigured(false);
+        setAccountUnavailable(false);
         setCurrency(DEFAULT_CURRENCY);
       }
     } catch {
       setUser(null);
       setDiscogsConfigured(false);
+      setAccountUnavailable(false);
+      setCurrency(DEFAULT_CURRENCY);
     } finally {
       setLoading(false);
     }
@@ -45,15 +62,14 @@ export function AuthProvider({ children }) {
     loggedIn: Boolean(user),
     isAdmin: user?.role === 'admin',
     discogsConfigured,
+    accountUnavailable,
     currency,
     async login(username, password) {
       const result = await api.login({ username, password });
       setNeedsBootstrap(false);
       setUser(result.user);
       setLoading(false);
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
-      setDiscogsConfigured(Boolean(account.tokenConfigured));
-      setCurrency(account.currency || DEFAULT_CURRENCY);
+      await refreshAccountState().catch(() => null);
       return result;
     },
     async bootstrap(username, password) {
@@ -62,6 +78,7 @@ export function AuthProvider({ children }) {
       setUser(result.user);
       setLoading(false);
       setDiscogsConfigured(false);
+      setAccountUnavailable(false);
       return result;
     },
     async logout() {
@@ -69,10 +86,7 @@ export function AuthProvider({ children }) {
       await refresh();
     },
     async refreshAccount() {
-      const account = await api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }));
-      setDiscogsConfigured(Boolean(account.tokenConfigured));
-      setCurrency(account.currency || DEFAULT_CURRENCY);
-      return account;
+      return refreshAccountState();
     },
     async setCurrencyPreference(nextCurrency) {
       await api.setPreference('currency', nextCurrency);
@@ -80,7 +94,7 @@ export function AuthProvider({ children }) {
       return nextCurrency;
     },
     refresh
-  }), [loading, needsBootstrap, user, discogsConfigured, currency]);
+  }), [loading, needsBootstrap, user, discogsConfigured, accountUnavailable, currency]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

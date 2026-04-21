@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
-import db, { normalizeNotes, parseJson, stringifyJson } from '../db.js';
+import db, { stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import {
   buildImportFailure,
@@ -12,6 +12,7 @@ import {
   summarizeImportSyncResult,
   summarizeInterruptedImportSync
 } from '../services/importSync.js';
+import { notesToText, parseStoredNotes, replaceNoteText, resolveNoteFieldId } from '../services/notes.js';
 import { translate } from '../../shared/i18n.js';
 
 const router = express.Router();
@@ -54,8 +55,6 @@ const ID_COLUMNS = new Map([
   ['instance', 'instance_id'],
   ['instanceid', 'instance_id'],
 ]);
-
-const EDITABLE_COLUMNS = new Set(['rating', 'notas', 'notes']);
 
 function parseFile(buffer, filename, t) {
   const ext = (filename || '').toLowerCase().split('.').pop();
@@ -144,8 +143,8 @@ function extractChanges(userId, rows, columnMap, t) {
       continue;
     }
 
-    const currentNotes = normalizeNotes(parseJson(release.notes, []));
-    const currentNotesText = currentNotes.map((n) => n?.value).filter(Boolean).join(' | ');
+    const currentNotes = parseStoredNotes(release.notes);
+    const currentNotesText = notesToText(currentNotes);
     const change = {
       dbId: release.id,
       releaseId: release.release_id,
@@ -260,9 +259,8 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
       }
 
       if (change.notesChanged) {
-        const currentNotes = normalizeNotes(parseJson(release.notes, []));
-        const notesFieldId = currentNotes.find((n) => n.field_id === 3) ? 3
-          : currentNotes.length > 0 ? (currentNotes[currentNotes.length - 1].field_id || 3) : 3;
+        const currentNotes = parseStoredNotes(release.notes);
+        const notesFieldId = resolveNoteFieldId(currentNotes);
 
         try {
           await discogs.updateField({
@@ -408,17 +406,11 @@ router.post('/apply', async (req, res) => {
             .run(change.newRating, change.dbId, userId);
         }
         if (change.notesChanged) {
-          const current = normalizeNotes(parseJson(
-            db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes,
-            []
-          ));
-          const fieldId = current.find((n) => n.field_id === 3) ? 3
-            : current.length > 0 ? (current[current.length - 1].field_id || 3) : 3;
-
-          let updated = current.filter((n) => n.field_id !== fieldId);
-          if (change.newNotes) {
-            updated = normalizeNotes([...updated, { field_id: fieldId, value: change.newNotes }]);
-          }
+          const current = parseStoredNotes(
+            db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes
+          );
+          const fieldId = resolveNoteFieldId(current);
+          const updated = replaceNoteText(current, change.newNotes, fieldId);
 
           db.prepare('UPDATE releases SET notes = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
             .run(stringifyJson(updated), change.dbId, userId);

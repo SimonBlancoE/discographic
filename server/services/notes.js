@@ -1,3 +1,5 @@
+const DEFAULT_NOTES_FIELD_ID = 3;
+
 function normalizeNoteEntry(entry) {
   if (entry == null) {
     return null;
@@ -56,6 +58,35 @@ export function parseStoredNotes(value) {
 
 export function hasMeaningfulNotes(notes) {
   return normalizeNotes(notes).length > 0;
+}
+
+export function notesToText(notes) {
+  return normalizeNotes(notes).map((item) => item?.value).filter(Boolean).join(' | ');
+}
+
+export function resolveNoteFieldId(notes, fallback = DEFAULT_NOTES_FIELD_ID) {
+  const normalized = normalizeNotes(notes);
+
+  if (normalized.some((note) => note.field_id === DEFAULT_NOTES_FIELD_ID)) {
+    return DEFAULT_NOTES_FIELD_ID;
+  }
+
+  return normalized[normalized.length - 1]?.field_id ?? fallback;
+}
+
+export function replaceNoteText(notes, nextText, fieldId = resolveNoteFieldId(notes)) {
+  const normalized = normalizeNotes(notes);
+  const trimmed = String(nextText || '').trim();
+  const nextNotes = normalized.filter((note) => note.field_id !== fieldId);
+
+  if (!trimmed) {
+    return nextNotes;
+  }
+
+  return normalizeNotes([
+    ...nextNotes,
+    { field_id: fieldId, value: trimmed }
+  ]);
 }
 
 export function countMeaningfulNoteRows(rows) {

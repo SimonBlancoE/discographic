@@ -8,6 +8,7 @@ import { useAuth } from '../lib/AuthContext';
 import { formatCurrency, formatDate, joinNames } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
+import { applyOptimisticReleasePatch } from '../lib/releaseEdits';
 
 function MetaItem({ label, value }) {
   return (
@@ -46,15 +47,8 @@ function ReleaseDetail() {
 
   async function updateRelease(patch) {
     const previous = release;
-    const nextPatch = patch.notes === undefined
-      ? patch
-      : { ...patch, notes: String(patch.notes || '').trim() };
-    const optimistic = { ...release, ...nextPatch };
-    if (nextPatch.notes !== undefined) {
-      optimistic.notes_text = nextPatch.notes;
-      optimistic.notes = nextPatch.notes ? [{ field_id: null, value: nextPatch.notes }] : [];
-    }
-    setRelease(optimistic);
+    const { nextPatch, nextRelease } = applyOptimisticReleasePatch(release, patch);
+    setRelease(nextRelease);
 
     try {
       const updated = await api.updateRelease(id, nextPatch);
