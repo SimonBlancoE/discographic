@@ -10,6 +10,44 @@ const EXPORT_KEYS = [
   'export.listingPrice', 'export.tracks', 'export.sheetName'
 ];
 
+const BACKEND_IMPORT_KEYS = [
+  'backend.import.fileType',
+  'backend.import.noSheets',
+  'backend.import.noRows',
+  'backend.import.idColumnRequired',
+  'backend.import.editableColumnRequired',
+  'backend.import.unmatched',
+  'backend.import.invalidRating',
+  'backend.import.idle',
+  'backend.import.syncing',
+  'backend.import.completed',
+  'backend.import.templateSheetName',
+  'backend.import.templateArtistSample',
+  'backend.import.templateTitleSample',
+  'backend.import.templateNotesSample',
+  'backend.import.fileRequired',
+  'backend.import.noChangesDetected',
+  'backend.import.previewIdRequired',
+  'backend.import.previewExpired',
+  'backend.import.localOnlyCompleted',
+  'backend.import.syncFailed'
+];
+
+const BACKEND_MEDIA_KEYS = [
+  'backend.media.urlNotAllowed',
+  'backend.media.remoteFetchFailed',
+  'backend.media.coverUnavailable',
+  'backend.media.coverDownloadFailed',
+  'backend.media.releaseNotFound',
+  'backend.media.noCovers',
+  'backend.media.tapeteFailed'
+];
+
+const CLIENT_KEYS = [
+  'client.networkError',
+  'client.tapeteError'
+];
+
 describe('i18n keys for table columns', () => {
   it('all column i18n keys exist in Spanish locale', () => {
     for (const col of COLUMNS) {
@@ -64,5 +102,40 @@ describe('i18n keys for export headers', () => {
     expect(messages.en['export.minPrice']).toBe('Min. price');
     expect(messages.es['export.sheetName']).toBe('Colección');
     expect(messages.en['export.sheetName']).toBe('Collection');
+  });
+});
+
+describe('i18n keys for import/media/client fallbacks', () => {
+  it('all backend import keys exist in Spanish locale', () => {
+    for (const key of BACKEND_IMPORT_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('all backend import keys exist in English locale', () => {
+    for (const key of BACKEND_IMPORT_KEYS) {
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('all backend media keys exist in both locales', () => {
+    for (const key of BACKEND_MEDIA_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('all client fallback keys exist in both locales', () => {
+    for (const key of CLIENT_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('localizes import template labels and sample copy', () => {
+    expect(messages.es['backend.import.templateSheetName']).toBe('Importar');
+    expect(messages.en['backend.import.templateSheetName']).toBe('Import');
+    expect(messages.es['backend.import.templateNotesSample']).toContain('2024');
+    expect(messages.en['backend.import.templateNotesSample']).toContain('2024');
   });
 });

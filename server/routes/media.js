@@ -39,7 +39,7 @@ router.get('/proxy-image', async (req, res) => {
   const target = String(req.query.url || '');
 
   if (!target || !isAllowedRemote(target)) {
-    return res.status(400).json({ error: 'URL de imagen no permitida' });
+    return res.status(400).json({ error: req.t('backend.media.urlNotAllowed') });
   }
 
   try {
@@ -50,7 +50,7 @@ router.get('/proxy-image', async (req, res) => {
     });
 
     if (!response.ok) {
-      return res.status(502).json({ error: 'No se pudo obtener la imagen remota' });
+      return res.status(502).json({ error: req.t('backend.media.remoteFetchFailed') });
     }
 
     const contentType = response.headers.get('content-type') || 'image/jpeg';
@@ -69,7 +69,7 @@ async function ensureDir(path) {
   }
 }
 
-export async function ensureCachedCover({ release, userId, variant }) {
+export async function ensureCachedCover({ release, userId, variant, t = null }) {
   const variantConfig = VARIANTS[variant] || VARIANTS.wall;
   const userDir = join(coversDir, String(userId));
   await ensureDir(userDir);
@@ -83,7 +83,7 @@ export async function ensureCachedCover({ release, userId, variant }) {
   }
 
   if (!release.cover_url || !isAllowedRemote(release.cover_url)) {
-    throw new Error('Cover image is not available');
+    throw new Error(t ? t('backend.media.coverUnavailable') : 'Cover image is not available');
   }
 
   const response = await fetch(release.cover_url, {
@@ -93,7 +93,7 @@ export async function ensureCachedCover({ release, userId, variant }) {
   });
 
   if (!response.ok) {
-    throw new Error('Could not download cover image');
+    throw new Error(t ? t('backend.media.coverDownloadFailed') : 'Could not download cover image');
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
@@ -114,7 +114,7 @@ router.get('/cover/:id', async (req, res) => {
   `).get(req.params.id, req.session.userId);
 
   if (!release) {
-    return res.status(404).json({ error: 'Release no encontrado' });
+    return res.status(404).json({ error: req.t('backend.media.releaseNotFound') });
   }
 
   try {
@@ -122,7 +122,8 @@ router.get('/cover/:id', async (req, res) => {
     const cachePath = await ensureCachedCover({
       release,
       userId: req.session.userId,
-      variant
+      variant,
+      t: req.t
     });
 
     res.setHeader('Cache-Control', 'public, max-age=604800');
@@ -180,7 +181,7 @@ router.get('/tapete', async (req, res) => {
   `).all(...params);
 
   if (!releases.length) {
-    return res.status(404).json({ error: 'No hay portadas en la coleccion' });
+    return res.status(404).json({ error: req.t('backend.media.noCovers') });
   }
 
   try {
@@ -253,7 +254,7 @@ router.get('/tapete', async (req, res) => {
     return res.send(result);
   } catch (error) {
     console.log('[tapete] error:', error.message);
-    return res.status(500).json({ error: `No se pudo generar el tapete: ${error.message}` });
+    return res.status(500).json({ error: req.t('backend.media.tapeteFailed', { error: error.message }) });
   }
 });
 

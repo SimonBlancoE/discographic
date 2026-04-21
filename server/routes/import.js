@@ -4,6 +4,7 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import db, { parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
+import { translate } from '../../shared/i18n.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -28,6 +29,10 @@ function cleanPreviewCache() {
   }
 }
 
+function importT(locale, key, vars) {
+  return translate(locale || 'es', key, vars);
+}
+
 function normalizeHeader(header) {
   return String(header || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -44,23 +49,23 @@ const ID_COLUMNS = new Map([
 
 const EDITABLE_COLUMNS = new Set(['rating', 'notas', 'notes']);
 
-function parseFile(buffer, filename) {
+function parseFile(buffer, filename, t) {
   const ext = (filename || '').toLowerCase().split('.').pop();
   if (ext !== 'xlsx' && ext !== 'csv') {
-    throw new Error('File must be .xlsx or .csv. Other formats are not supported.');
+    throw new Error(t('backend.import.fileType'));
   }
 
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
-  if (!sheetName) throw new Error('The file does not contain any sheets.');
+  if (!sheetName) throw new Error(t('backend.import.noSheets'));
 
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
-  if (!rows.length) throw new Error('The file does not contain any data rows.');
+  if (!rows.length) throw new Error(t('backend.import.noRows'));
 
   return rows;
 }
 
-function mapColumns(rows) {
+function mapColumns(rows, t) {
   const headers = Object.keys(rows[0]);
   const columnMap = {};
   let hasId = false;
@@ -82,11 +87,11 @@ function mapColumns(rows) {
   }
 
   if (!hasId) {
-    throw new Error('No identification column found (ID, Release_Discogs, or Instance). Make sure your file has at least one of these columns.');
+    throw new Error(t('backend.import.idColumnRequired'));
   }
 
   if (!hasEditable) {
-    throw new Error('No editable columns found (Rating or Notes). Add at least one of these columns to your file.');
+    throw new Error(t('backend.import.editableColumnRequired'));
   }
 
   return columnMap;
@@ -111,7 +116,7 @@ function findRelease(userId, row, columnMap) {
   return null;
 }
 
-function extractChanges(userId, rows, columnMap) {
+function extractChanges(userId, rows, columnMap, t) {
   const changes = [];
   const unmatchedRows = [];
   const errors = [];
@@ -127,7 +132,7 @@ function extractChanges(userId, rows, columnMap) {
         .map(([h]) => row[h])
         .filter(Boolean)
         .join('/');
-      unmatchedRows.push({ row: rowNum, identifier, reason: 'No encontrado en tu coleccion' });
+      unmatchedRows.push({ row: rowNum, identifier, reason: t('backend.import.unmatched') });
       continue;
     }
 
@@ -156,7 +161,7 @@ function extractChanges(userId, rows, columnMap) {
         if (rawValue === '' || rawValue === null || rawValue === undefined) continue;
         const numRating = Number(rawValue);
         if (!Number.isFinite(numRating) || numRating < 0 || numRating > 5) {
-          errors.push({ row: rowNum, column: 'Rating', value: String(rawValue), reason: 'El rating debe estar entre 0 y 5' });
+          errors.push({ row: rowNum, column: t('collection.rating'), value: String(rawValue), reason: t('backend.import.invalidRating') });
           continue;
         }
         const rounded = Math.round(numRating);
@@ -190,28 +195,30 @@ function extractChanges(userId, rows, columnMap) {
 // Background sync with Discogs
 // ---------------------------------------------------------------------------
 
-function getImportSyncState(userId) {
+function getImportSyncState(userId, locale = 'es') {
   if (!importSyncStates.has(userId)) {
     importSyncStates.set(userId, {
+      locale,
       status: 'idle',
       current: 0,
       total: 0,
-      message: 'Sin importacion activa'
+      message: importT(locale, 'backend.import.idle')
     });
   }
   return importSyncStates.get(userId);
 }
 
 function setImportSyncState(userId, patch) {
-  importSyncStates.set(userId, { ...getImportSyncState(userId), ...patch });
+  importSyncStates.set(userId, { ...getImportSyncState(userId, patch.locale), ...patch });
 }
 
-async function syncChangesWithDiscogs({ userId, changes, discogs }) {
+async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
   setImportSyncState(userId, {
+    locale,
     status: 'running',
     current: 0,
     total: changes.length,
-    message: `Sincronizando 0/${changes.length} con Discogs...`
+    message: importT(locale, 'backend.import.syncing', { current: 0, total: changes.length })
   });
 
   let synced = 0;
@@ -251,7 +258,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
     synced += 1;
     setImportSyncState(userId, {
       current: synced,
-      message: `Sincronizando ${synced}/${changes.length} con Discogs...`
+      message: importT(locale, 'backend.import.syncing', { current: synced, total: changes.length })
     });
   }
 
@@ -259,7 +266,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
     status: 'completed',
     current: synced,
     total: changes.length,
-    message: `${synced} cambios sincronizados con Discogs correctamente.`
+    message: importT(locale, 'backend.import.completed', { count: synced })
   });
 }
 
@@ -270,17 +277,17 @@ async function syncChangesWithDiscogs({ userId, changes, discogs }) {
 router.get('/template', (req, res) => {
   const data = [
     {
-      ID: 12231071,
-      Artista: 'Yes (ejemplo)',
-      Titulo: 'The Steven Wilson Remixes (ejemplo)',
-      Rating: 5,
-      Notas: 'Edicion limitada, comprado en 2024'
+      [req.t('export.id')]: 12231071,
+      [req.t('collection.artist')]: req.t('backend.import.templateArtistSample'),
+      [req.t('collection.titleColumn')]: req.t('backend.import.templateTitleSample'),
+      [req.t('collection.rating')]: 5,
+      [req.t('collection.notes')]: req.t('backend.import.templateNotesSample')
     }
   ];
 
   const sheet = XLSX.utils.json_to_sheet(data);
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, 'Importar');
+  XLSX.utils.book_append_sheet(workbook, sheet, req.t('backend.import.templateSheetName'));
   const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -291,12 +298,12 @@ router.get('/template', (req, res) => {
 router.post('/preview', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No se ha recibido ningun archivo.' });
+      return res.status(400).json({ error: req.t('backend.import.fileRequired') });
     }
 
-    const rows = parseFile(req.file.buffer, req.file.originalname);
-    const columnMap = mapColumns(rows);
-    const { changes, unmatchedRows, errors } = extractChanges(req.session.userId, rows, columnMap);
+    const rows = parseFile(req.file.buffer, req.file.originalname, req.t);
+    const columnMap = mapColumns(rows, req.t);
+    const { changes, unmatchedRows, errors } = extractChanges(req.session.userId, rows, columnMap, req.t);
 
     if (!changes.length && !errors.length) {
       return res.json({
@@ -308,7 +315,7 @@ router.post('/preview', upload.single('file'), (req, res) => {
         changes: [],
         unmatchedRows,
         errors,
-        message: 'No se han detectado cambios entre el archivo y tu coleccion actual.'
+        message: req.t('backend.import.noChangesDetected')
       });
     }
 
@@ -339,12 +346,12 @@ router.post('/apply', async (req, res) => {
   try {
     const { previewId } = req.body;
     if (!previewId) {
-      return res.status(400).json({ error: 'Falta el ID de la vista previa.' });
+      return res.status(400).json({ error: req.t('backend.import.previewIdRequired') });
     }
 
     const cached = previewCache.get(previewId);
     if (!cached || cached.userId !== req.session.userId || cached.expiresAt < Date.now()) {
-      return res.status(410).json({ error: 'La vista previa ha expirado. Sube el archivo de nuevo.' });
+      return res.status(410).json({ error: req.t('backend.import.previewExpired') });
     }
 
     const { changes } = cached;
@@ -386,18 +393,20 @@ router.post('/apply', async (req, res) => {
       discogs = getDiscogsClientForUser(req);
     } catch {
       setImportSyncState(userId, {
+        locale: req.locale,
         status: 'completed',
         current: changes.length,
         total: changes.length,
-        message: `${changes.length} cambios guardados localmente. No se pudo conectar con Discogs para sincronizar.`
+        message: req.t('backend.import.localOnlyCompleted', { count: changes.length })
       });
       return;
     }
 
-    syncChangesWithDiscogs({ userId, changes, discogs }).catch((error) => {
+    syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale }).catch((error) => {
       setImportSyncState(userId, {
         status: 'failed',
-        message: `Error sincronizando con Discogs: ${error.message}`
+        locale: req.locale,
+        message: req.t('backend.import.syncFailed', { error: error.message })
       });
     });
   } catch (error) {
@@ -406,7 +415,7 @@ router.post('/apply', async (req, res) => {
 });
 
 router.get('/status', (req, res) => {
-  res.json(getImportSyncState(req.session.userId));
+  res.json(getImportSyncState(req.session.userId, req.locale));
 });
 
 export default router;

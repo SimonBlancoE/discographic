@@ -1,27 +1,29 @@
+import { LOCALE_STORAGE_KEY, resolveLocale, translate } from '../../shared/i18n.js';
+
 const API_BASE = '/api';
-const LOCALE_STORAGE_KEY = 'discographic-locale';
 
 function getLocaleHeader() {
   if (typeof window === 'undefined') {
     return 'es';
   }
 
-  return window.localStorage.getItem(LOCALE_STORAGE_KEY) || window.navigator.language || 'es';
+  return resolveLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY) || window.navigator.language || 'es');
 }
 
 async function request(path, options = {}) {
+  const locale = getLocaleHeader();
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     ...options,
     headers: {
-      'Accept-Language': getLocaleHeader(),
+      'Accept-Language': locale,
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers
     }
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: 'Error de red' }));
+    const payload = await response.json().catch(() => ({ error: translate(locale, 'client.networkError') }));
     const error = new Error(payload.error || `HTTP ${response.status}`);
     error.status = response.status;
     throw error;
@@ -76,19 +78,28 @@ export const api = {
   importApply: (previewId) => request('/import/apply', { method: 'POST', body: JSON.stringify({ previewId }) }),
   getImportStatus: () => request('/import/status'),
   downloadImportTemplate: () => {
-    window.open(`${API_BASE}/import/template`, '_blank', 'noopener');
+    const locale = getLocaleHeader();
+    const query = new URLSearchParams({ locale }).toString();
+    window.open(`${API_BASE}/import/template?${query}`, '_blank', 'noopener');
   },
   fetchTapeteBlob: async (maxSize = 7200, filters = {}) => {
-    const params = new URLSearchParams({ maxSize, ...filters });
-    const response = await fetch(`${API_BASE}/media/tapete?${params}`, { credentials: 'include' });
+    const locale = getLocaleHeader();
+    const params = new URLSearchParams({ maxSize, locale, ...filters });
+    const response = await fetch(`${API_BASE}/media/tapete?${params}`, {
+      credentials: 'include',
+      headers: {
+        'Accept-Language': locale
+      }
+    });
     if (!response.ok) {
-      const payload = await response.json().catch(() => ({ error: 'Error generando tapete' }));
+      const payload = await response.json().catch(() => ({ error: translate(locale, 'client.tapeteError') }));
       throw new Error(payload.error || `HTTP ${response.status}`);
     }
     return response.blob();
   },
   exportCollection: (format, params = {}) => {
-    const query = new URLSearchParams({ format, ...params }).toString();
+    const locale = getLocaleHeader();
+    const query = new URLSearchParams({ format, locale, ...params }).toString();
     window.open(`${API_BASE}/export?${query}`, '_blank', 'noopener');
   }
 };
