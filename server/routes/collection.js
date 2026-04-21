@@ -305,7 +305,7 @@ router.put('/:id', async (req, res) => {
     }
 
     // --- Notes (custom fields) ---
-    const currentNotes = parseJson(release.notes, []);
+    const currentNotes = normalizeNotes(parseJson(release.notes, []));
     let nextNotes = currentNotes;
 
     if (req.body.notes !== undefined) {
@@ -326,12 +326,12 @@ router.put('/:id', async (req, res) => {
         value: incomingText
       });
 
-      nextNotes = currentNotes.map((n) =>
-        n.field_id === notesFieldId ? { ...n, value: incomingText } : n
-      );
-
-      if (!currentNotes.some((n) => n.field_id === notesFieldId)) {
-        nextNotes = [...currentNotes, { field_id: notesFieldId, value: incomingText }];
+      nextNotes = currentNotes.filter((n) => n.field_id !== notesFieldId);
+      if (incomingText) {
+        nextNotes = normalizeNotes([
+          ...nextNotes,
+          { field_id: notesFieldId, value: incomingText }
+        ]);
       }
     }
 

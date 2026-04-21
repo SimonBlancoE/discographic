@@ -50,6 +50,44 @@ const baseRelease = {
   tracklist: [{ position: 'A1', title: 'Track 1' }],
 };
 
+function buildWhere(query, userId) {
+  const clauses = ['user_id = ?'];
+  const params = [userId];
+
+  if (query.search) {
+    clauses.push('(artist LIKE ? OR title LIKE ?)');
+    params.push(`%${query.search}%`, `%${query.search}%`);
+  }
+  if (query.genre) {
+    clauses.push('genres LIKE ?');
+    params.push(`%${query.genre}%`);
+  }
+  if (query.style) {
+    clauses.push('styles LIKE ?');
+    params.push(`%${query.style}%`);
+  }
+  if (query.format) {
+    clauses.push('formats LIKE ?');
+    params.push(`%${query.format}%`);
+  }
+  if (query.label) {
+    clauses.push('labels LIKE ?');
+    params.push(`%${query.label}%`);
+  }
+  if (query.decade) {
+    const start = Number(query.decade);
+    if (Number.isFinite(start)) {
+      clauses.push('year >= ? AND year < ?');
+      params.push(start, start + 10);
+    }
+  }
+
+  return {
+    clause: `WHERE ${clauses.join(' AND ')}`,
+    params
+  };
+}
+
 describe('Export serialization — Spanish locale', () => {
   const t = (key, vars) => translate('es', key, vars);
 
@@ -115,5 +153,42 @@ describe('Export serialization — edge cases', () => {
   it('price 0 is preserved (not empty string)', () => {
     const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale', listing_price_eur: 0 }, t, 'EUR');
     expect(result['Mi precio']).toBe(0);
+  });
+});
+
+describe('Export filtering parity', () => {
+  it('includes style in the export WHERE clause', () => {
+    const result = buildWhere({ style: 'Techno' }, 7);
+    expect(result.clause).toContain('styles LIKE ?');
+    expect(result.params).toEqual([7, '%Techno%']);
+  });
+
+  it('supports style together with the rest of the collection filters', () => {
+    const result = buildWhere({
+      search: 'Jeff',
+      genre: 'Electronic',
+      style: 'Detroit Techno',
+      format: 'Vinyl',
+      label: 'Tresor',
+      decade: '1990'
+    }, 5);
+
+    expect(result.clause).toContain('(artist LIKE ? OR title LIKE ?)');
+    expect(result.clause).toContain('genres LIKE ?');
+    expect(result.clause).toContain('styles LIKE ?');
+    expect(result.clause).toContain('formats LIKE ?');
+    expect(result.clause).toContain('labels LIKE ?');
+    expect(result.clause).toContain('year >= ? AND year < ?');
+    expect(result.params).toEqual([
+      5,
+      '%Jeff%',
+      '%Jeff%',
+      '%Electronic%',
+      '%Detroit Techno%',
+      '%Vinyl%',
+      '%Tresor%',
+      1990,
+      2000
+    ]);
   });
 });

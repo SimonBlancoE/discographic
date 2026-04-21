@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import {
+  getImportResultHelpKey,
+  getImportResultTitleKey,
+  getImportResultTone,
+  isTerminalImportStatus
+} from '../lib/importSync';
 import { useI18n } from '../lib/I18nContext';
 
 const POLL_MS = 2000;
@@ -11,13 +17,21 @@ function truncate(text, max = 40) {
 
 function ImportButton({ disabled = false }) {
   const { t } = useI18n();
-  // idle | loading | preview | applying | syncing | done | error
+  // idle | loading | preview | applying | syncing | result
   const [phase, setPhase] = useState('idle');
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [syncState, setSyncState] = useState(null);
   const fileRef = useRef(null);
   const disposed = useRef(false);
+  const pollTimer = useRef(null);
+
+  function queuePoll() {
+    if (pollTimer.current) {
+      clearTimeout(pollTimer.current);
+    }
+    pollTimer.current = setTimeout(poll, POLL_MS);
+  }
 
   // Poll import sync status
   const poll = useCallback(async () => {
@@ -26,21 +40,34 @@ function ImportButton({ disabled = false }) {
       const status = await api.getImportStatus();
       setSyncState(status);
       if (status.status === 'running') {
-        setTimeout(poll, POLL_MS);
-      } else {
-        setPhase('done');
+        queuePoll();
+        return;
       }
+      if (status.status === 'idle') {
+        queuePoll();
+        return;
+      }
+      setPhase('result');
     } catch {
-      setTimeout(poll, POLL_MS);
+      queuePoll();
     }
   }, []);
 
   useEffect(() => {
     disposed.current = false;
-    return () => { disposed.current = true; };
+    return () => {
+      disposed.current = true;
+      if (pollTimer.current) {
+        clearTimeout(pollTimer.current);
+      }
+    };
   }, []);
 
   function reset() {
+    if (pollTimer.current) {
+      clearTimeout(pollTimer.current);
+      pollTimer.current = null;
+    }
     setPhase('idle');
     setPreview(null);
     setError('');
@@ -79,9 +106,14 @@ function ImportButton({ disabled = false }) {
     setError('');
 
     try {
-      await api.importApply(preview.previewId);
-      setPhase('syncing');
-      setTimeout(poll, POLL_MS);
+      const result = await api.importApply(preview.previewId);
+      setSyncState(result.syncState || null);
+      if (isTerminalImportStatus(result.syncState?.status)) {
+        setPhase('result');
+      } else {
+        setPhase('syncing');
+        queuePoll();
+      }
     } catch (err) {
       setError(err.message);
       setPhase('preview');
@@ -91,6 +123,18 @@ function ImportButton({ disabled = false }) {
   const syncProgress = syncState?.total
     ? Math.min(100, Math.round((syncState.current / syncState.total) * 100))
     : 0;
+  const resultTone = getImportResultTone(syncState?.status);
+  const resultTitleKey = getImportResultTitleKey(syncState?.status);
+  const resultHelpKey = getImportResultHelpKey(syncState?.status);
+  const visibleFailures = (syncState?.failures || []).slice(0, 5);
+  const remainingFailures = Math.max(0, (syncState?.failures?.length || 0) - visibleFailures.length);
+  const resultBoxClass = resultTone === 'success'
+    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'
+    : resultTone === 'warning'
+      ? 'border-amber-400/30 bg-amber-500/10 text-amber-100'
+      : resultTone === 'error'
+        ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
+        : 'border-white/10 bg-white/5 text-slate-100';
 
   return (
     <div className="space-y-4">
@@ -253,12 +297,35 @@ function ImportButton({ disabled = false }) {
         </div>
       )}
 
-      {/* ── Done ── */}
-      {phase === 'done' && (
+      {/* ── Result ── */}
+      {phase === 'result' && syncState && (
         <div className="glass-panel space-y-3 p-5">
-          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            {syncState?.message || t('collection.done')}
+          <div className={`rounded-2xl border px-4 py-3 text-sm ${resultBoxClass}`}>
+            <p className="font-medium">{t(resultTitleKey)}</p>
+            <p className="mt-1">{syncState.message || t('collection.done')}</p>
           </div>
+
+          {resultHelpKey ? (
+            <p className="text-sm text-slate-300">{t(resultHelpKey)}</p>
+          ) : null}
+
+          {visibleFailures.length > 0 && (
+            <div className="rounded-2xl border border-rose-400/20 bg-rose-500/5 p-4">
+              <p className="text-sm font-medium text-rose-100">{t('collection.importFailuresTitle')}</p>
+              <div className="mt-3 space-y-2">
+                {visibleFailures.map((failure) => (
+                  <div key={`${failure.dbId}-${failure.releaseId}-${failure.instanceId}`} className="rounded-xl border border-white/5 bg-slate-950/50 px-3 py-2 text-sm text-slate-200">
+                    <p className="font-medium text-slate-100">{failure.artist} - {failure.title}</p>
+                    <p className="mt-1 text-slate-300">{failure.reason}</p>
+                  </div>
+                ))}
+              </div>
+              {remainingFailures > 0 ? (
+                <p className="mt-3 text-sm text-slate-400">{t('collection.importMoreFailures', { count: remainingFailures })}</p>
+              ) : null}
+            </div>
+          )}
+
           <button type="button" onClick={reset} className="secondary-button">
             {t('collection.close')}
           </button>

@@ -171,18 +171,21 @@ function Collection() {
 
   async function handleUpdate(release, patch) {
     const previous = payload.releases;
+    const nextPatch = patch.notes === undefined
+      ? patch
+      : { ...patch, notes: String(patch.notes || '').trim() };
     const optimistic = previous.map((item) => {
       if (item.id !== release.id) {
         return item;
       }
 
       const next = { ...item };
-      if (patch.rating !== undefined) {
-        next.rating = patch.rating;
+      if (nextPatch.rating !== undefined) {
+        next.rating = nextPatch.rating;
       }
-      if (patch.notes !== undefined) {
-        next.notes_text = patch.notes;
-        next.notes = patch.notes ? [{ field_id: null, value: patch.notes }] : [];
+      if (nextPatch.notes !== undefined) {
+        next.notes_text = nextPatch.notes;
+        next.notes = nextPatch.notes ? [{ field_id: null, value: nextPatch.notes }] : [];
       }
       return next;
     });
@@ -190,7 +193,7 @@ function Collection() {
     setPayload((current) => ({ ...current, releases: optimistic }));
 
     try {
-      const updated = await api.updateRelease(release.id, patch);
+      const updated = await api.updateRelease(release.id, nextPatch);
       setPayload((current) => ({
         ...current,
         releases: current.releases.map((item) => (item.id === updated.id ? updated : item))

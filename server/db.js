@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { cleanupStoredNotes, normalizeNotes, parseStoredNotes } from './services/notes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -254,6 +255,7 @@ migrateUsersRole();
 migrateListingColumns();
 migrateLastSeenSyncId();
 createIndexes();
+cleanupStoredNotes(db);
 
 export function parseJson(value, fallback = []) {
   if (!value) {
@@ -271,22 +273,7 @@ export function stringifyJson(value, fallback = []) {
   return JSON.stringify(value ?? fallback);
 }
 
-export function normalizeNotes(notes) {
-  if (!notes) {
-    return [];
-  }
-
-  if (Array.isArray(notes)) {
-    return notes;
-  }
-
-  if (typeof notes === 'string') {
-    const trimmed = notes.trim();
-    return trimmed ? [{ field_id: null, value: trimmed }] : [];
-  }
-
-  return [];
-}
+export { normalizeNotes };
 
 export function hydrateRelease(release) {
   if (!release) {
@@ -298,7 +285,7 @@ export function hydrateRelease(release) {
   hydrated.styles = parseJson(release.styles, []);
   hydrated.formats = parseJson(release.formats, []);
   hydrated.labels = parseJson(release.labels, []);
-  hydrated.notes = parseJson(release.notes, []);
+  hydrated.notes = normalizeNotes(parseStoredNotes(release.notes));
   hydrated.tracklist = parseJson(release.tracklist, []);
   hydrated.raw_json = release.raw_json ? parseJson(release.raw_json, {}) : null;
   hydrated.notes_text = hydrated.notes.map((item) => item?.value).filter(Boolean).join(' | ');

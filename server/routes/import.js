@@ -2,8 +2,16 @@ import crypto from 'crypto';
 import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
-import db, { parseJson, stringifyJson } from '../db.js';
+import db, { normalizeNotes, parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
+import {
+  buildImportFailure,
+  createIdleImportSyncState,
+  createLocalOnlyImportSyncState,
+  createRunningImportSyncState,
+  summarizeImportSyncResult,
+  summarizeInterruptedImportSync
+} from '../services/importSync.js';
 import { translate } from '../../shared/i18n.js';
 
 const router = express.Router();
@@ -136,7 +144,7 @@ function extractChanges(userId, rows, columnMap, t) {
       continue;
     }
 
-    const currentNotes = parseJson(release.notes, []);
+    const currentNotes = normalizeNotes(parseJson(release.notes, []));
     const currentNotesText = currentNotes.map((n) => n?.value).filter(Boolean).join(' | ');
     const change = {
       dbId: release.id,
@@ -197,13 +205,10 @@ function extractChanges(userId, rows, columnMap, t) {
 
 function getImportSyncState(userId, locale = 'es') {
   if (!importSyncStates.has(userId)) {
-    importSyncStates.set(userId, {
+    importSyncStates.set(userId, createIdleImportSyncState({
       locale,
-      status: 'idle',
-      current: 0,
-      total: 0,
-      message: importT(locale, 'backend.import.idle')
-    });
+      t: (key, vars) => importT(locale, key, vars)
+    }));
   }
   return importSyncStates.get(userId);
 }
@@ -213,61 +218,98 @@ function setImportSyncState(userId, patch) {
 }
 
 async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
-  setImportSyncState(userId, {
-    locale,
-    status: 'running',
-    current: 0,
-    total: changes.length,
-    message: importT(locale, 'backend.import.syncing', { current: 0, total: changes.length })
-  });
-
+  const t = (key, vars) => importT(locale, key, vars);
+  let processed = 0;
   let synced = 0;
-  for (const change of changes) {
-    const release = db.prepare(
-      'SELECT folder_id, release_id, instance_id, notes FROM releases WHERE id = ? AND user_id = ?'
-    ).get(change.dbId, userId);
+  const failures = [];
 
-    if (!release) continue;
+  try {
+    for (const change of changes) {
+      const release = db.prepare(
+        'SELECT folder_id, release_id, instance_id, notes FROM releases WHERE id = ? AND user_id = ?'
+      ).get(change.dbId, userId);
 
-    const base = {
-      folderId: release.folder_id || 0,
-      releaseId: release.release_id,
-      instanceId: release.instance_id
-    };
+      if (!release) {
+        failures.push(buildImportFailure(change, t('backend.import.releaseMissing')));
+        processed += 1;
+        setImportSyncState(userId, createRunningImportSyncState({
+          locale,
+          current: processed,
+          total: changes.length,
+          synced,
+          failures,
+          t
+        }));
+        continue;
+      }
 
-    try {
+      const base = {
+        folderId: release.folder_id || 0,
+        releaseId: release.release_id,
+        instanceId: release.instance_id
+      };
+
+      const itemErrors = [];
+
       if (change.ratingChanged) {
-        await discogs.updateRating({ ...base, rating: change.newRating });
+        try {
+          await discogs.updateRating({ ...base, rating: change.newRating });
+        } catch (error) {
+          itemErrors.push(`${t('collection.rating')}: ${error?.message || t('backend.import.unknownSyncError')}`);
+        }
       }
 
       if (change.notesChanged) {
-        const currentNotes = parseJson(release.notes, []);
+        const currentNotes = normalizeNotes(parseJson(release.notes, []));
         const notesFieldId = currentNotes.find((n) => n.field_id === 3) ? 3
           : currentNotes.length > 0 ? (currentNotes[currentNotes.length - 1].field_id || 3) : 3;
 
-        await discogs.updateField({
-          ...base,
-          fieldId: notesFieldId,
-          value: change.newNotes
-        });
+        try {
+          await discogs.updateField({
+            ...base,
+            fieldId: notesFieldId,
+            value: change.newNotes
+          });
+        } catch (error) {
+          itemErrors.push(`${t('collection.notes')}: ${error?.message || t('backend.import.unknownSyncError')}`);
+        }
       }
-    } catch (error) {
-      console.log('[import-sync] error:', change.releaseId, error.message);
+
+      if (itemErrors.length) {
+        failures.push(buildImportFailure(change, itemErrors.join(' | ')));
+      } else {
+        synced += 1;
+      }
+
+      processed += 1;
+      setImportSyncState(userId, createRunningImportSyncState({
+        locale,
+        current: processed,
+        total: changes.length,
+        synced,
+        failures,
+        t
+      }));
     }
 
-    synced += 1;
-    setImportSyncState(userId, {
-      current: synced,
-      message: importT(locale, 'backend.import.syncing', { current: synced, total: changes.length })
-    });
+    setImportSyncState(userId, summarizeImportSyncResult({
+      locale,
+      total: changes.length,
+      synced,
+      failures,
+      t
+    }));
+  } catch (error) {
+    setImportSyncState(userId, summarizeInterruptedImportSync({
+      locale,
+      total: changes.length,
+      processed,
+      synced,
+      failures,
+      error,
+      t
+    }));
   }
-
-  setImportSyncState(userId, {
-    status: 'completed',
-    current: synced,
-    total: changes.length,
-    message: importT(locale, 'backend.import.completed', { count: synced })
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -366,16 +408,16 @@ router.post('/apply', async (req, res) => {
             .run(change.newRating, change.dbId, userId);
         }
         if (change.notesChanged) {
-          const current = parseJson(
+          const current = normalizeNotes(parseJson(
             db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes,
             []
-          );
+          ));
           const fieldId = current.find((n) => n.field_id === 3) ? 3
             : current.length > 0 ? (current[current.length - 1].field_id || 3) : 3;
 
-          let updated = current.map((n) => n.field_id === fieldId ? { ...n, value: change.newNotes } : n);
-          if (!current.some((n) => n.field_id === fieldId)) {
-            updated = [...current, { field_id: fieldId, value: change.newNotes }];
+          let updated = current.filter((n) => n.field_id !== fieldId);
+          if (change.newNotes) {
+            updated = normalizeNotes([...updated, { field_id: fieldId, value: change.newNotes }]);
           }
 
           db.prepare('UPDATE releases SET notes = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
@@ -385,30 +427,32 @@ router.post('/apply', async (req, res) => {
     });
 
     applyTx();
-    res.json({ ok: true, applied: changes.length });
-
-    // Background sync with Discogs
     let discogs;
     try {
       discogs = getDiscogsClientForUser(req);
     } catch {
-      setImportSyncState(userId, {
+      const syncState = createLocalOnlyImportSyncState({
         locale: req.locale,
-        status: 'completed',
-        current: changes.length,
         total: changes.length,
-        message: req.t('backend.import.localOnlyCompleted', { count: changes.length })
+        t: req.t
       });
-      return;
+      setImportSyncState(userId, syncState);
+      return res.json({ ok: true, applied: changes.length, syncState });
     }
 
-    syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale }).catch((error) => {
-      setImportSyncState(userId, {
-        status: 'failed',
-        locale: req.locale,
-        message: req.t('backend.import.syncFailed', { error: error.message })
-      });
+    const syncState = createRunningImportSyncState({
+      locale: req.locale,
+      current: 0,
+      total: changes.length,
+      synced: 0,
+      failures: [],
+      t: req.t
     });
+    setImportSyncState(userId, syncState);
+    res.json({ ok: true, applied: changes.length, syncState });
+
+    // Background sync with Discogs
+    void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
