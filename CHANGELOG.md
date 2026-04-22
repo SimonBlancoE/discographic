@@ -7,6 +7,16 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.2.2] - 2026-04-22
+
+Patch visual para el carrusel del panel informativo.
+
+### Corregido
+
+- **Asomaba el siguiente slide por la derecha** — el padding que aplique al viewport en 0.2.1 desplazaba el track respecto al area recortada por `overflow: hidden`, dejando visible parte del slide siguiente en el margen derecho. Padding movido a cada slide con `box-sizing: border-box`. El viewport vuelve a ser un contenedor puro de overflow.
+
+[0.2.2]: https://github.com/SimonBlancoE/discographic/compare/v0.2.1...v0.2.2
+
 ## [0.2.1] - 2026-04-22
 
 Patch con correcciones al carrusel del dashboard y al logo animado del panel superior.

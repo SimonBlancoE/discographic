@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.2.2] - 2026-04-22
+
+Visual patch for the feature carousel.
+
+### Fixed
+
+- **Next slide bled through on the right edge** — the viewport padding introduced in 0.2.1 pushed the track off the area clipped by `overflow: hidden`, leaving part of the adjacent slide visible on the right. Padding moved into each slide with `box-sizing: border-box`. The viewport is now a pure overflow container again.
+
+[0.2.2]: https://github.com/SimonBlancoE/discographic/compare/v0.2.1...v0.2.2
+
 ## [0.2.1] - 2026-04-22
 
 Patch with fixes to the dashboard feature carousel and the header logo badge.
