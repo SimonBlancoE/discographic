@@ -3,6 +3,8 @@ import { existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { cleanupStoredNotes, normalizeNotes, notesToText, parseStoredNotes } from './services/notes.js';
+import { parseJson, stringifyJson } from './services/jsonStorage.js';
+import { migrateMarketplaceStatus } from './services/dbMigrations.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -72,6 +74,7 @@ function createBaseTables() {
       notes TEXT,
       date_added TEXT,
       estimated_value REAL,
+      marketplace_status TEXT DEFAULT 'pending',
       listing_status TEXT DEFAULT NULL,
       listing_price REAL DEFAULT NULL,
       listing_currency TEXT DEFAULT NULL,
@@ -207,6 +210,7 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_releases_user_year ON releases(user_id, year);
     CREATE INDEX IF NOT EXISTS idx_releases_user_date_added ON releases(user_id, date_added);
     CREATE INDEX IF NOT EXISTS idx_releases_user_value ON releases(user_id, estimated_value);
+    CREATE INDEX IF NOT EXISTS idx_releases_user_marketplace_status ON releases(user_id, marketplace_status);
     CREATE INDEX IF NOT EXISTS idx_releases_user_release ON releases(user_id, release_id);
     CREATE INDEX IF NOT EXISTS idx_releases_user_listing_price_eur ON releases(user_id, listing_price_eur);
     CREATE INDEX IF NOT EXISTS idx_releases_user_last_seen_sync ON releases(user_id, last_seen_sync_id);
@@ -254,26 +258,11 @@ migrateSettings();
 migrateUsersRole();
 migrateListingColumns();
 migrateLastSeenSyncId();
+migrateMarketplaceStatus(db);
 createIndexes();
 cleanupStoredNotes(db);
 
-export function parseJson(value, fallback = []) {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
-export function stringifyJson(value, fallback = []) {
-  return JSON.stringify(value ?? fallback);
-}
-
-export { normalizeNotes };
+export { normalizeNotes, parseJson, stringifyJson };
 
 export function hydrateRelease(release) {
   if (!release) {

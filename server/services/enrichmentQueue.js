@@ -1,4 +1,10 @@
-export const ENRICH_CONDITION = "estimated_value IS NULL";
+import { RETRYABLE_MARKETPLACE_STATUSES } from './marketplaceValue.js';
+
+const quotedStatuses = RETRYABLE_MARKETPLACE_STATUSES
+  .map((status) => `'${status}'`)
+  .join(', ');
+
+export const ENRICH_CONDITION = `marketplace_status IN (${quotedStatuses})`;
 
 export function getPendingEnrichmentCount(database, userId) {
   return database.prepare(

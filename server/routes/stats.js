@@ -3,6 +3,7 @@ import db, { getSettingForUser, parseJson } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 import { countMeaningfulNoteRows } from '../services/notes.js';
+import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
 
 const router = express.Router();
 
@@ -112,7 +113,7 @@ router.get('/', async (req, res) => {
       LIMIT 1
     `).get(userId);
 
-    res.json({
+    res.json(normalizeDashboardStats({
       totals: {
         total_records: totalRecords,
         total_value: await convertAmount(totalValueEur, DEFAULT_CURRENCY, displayCurrency),
@@ -133,7 +134,7 @@ router.get('/', async (req, res) => {
       artists,
       lastSync,
       displayCurrency
-    });
+    }));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

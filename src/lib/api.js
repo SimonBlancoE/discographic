@@ -1,4 +1,5 @@
 import { LOCALE_STORAGE_KEY, resolveLocale, translate } from '../../shared/i18n.js';
+import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
 
 const API_BASE = '/api';
 
@@ -52,7 +53,7 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify({ value })
   }),
-  getStats: () => request('/stats'),
+  getStats: async () => normalizeDashboardStats(await request('/stats')),
   getCollection: (params = {}) => request(`/collection?${new URLSearchParams(params).toString()}`),
   getCollectionCovers: () => request('/collection/covers'),
   getRandomRelease: () => request('/collection/random'),
@@ -65,7 +66,6 @@ export const api = {
   enrichValues: () => request('/sync/enrich', { method: 'POST' }),
   stopEnrich: () => request('/sync/enrich/stop', { method: 'POST' }),
   getSyncStatus: () => request('/sync/status'),
-  getValue: () => request('/value'),
   listUsers: () => request('/admin/users'),
   createUser: (payload) => request('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),

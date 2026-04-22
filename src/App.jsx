@@ -7,28 +7,25 @@ import ReleaseDetail from './pages/ReleaseDetail';
 import Settings from './pages/Settings';
 import Setup from './pages/Setup';
 import { useAuth } from './lib/AuthContext';
+import { DashboardStatsProvider, useDashboardStats } from './lib/DashboardStatsContext';
 import { useI18n } from './lib/I18nContext';
+import VinylBadge from './components/VinylBadge';
 
-function AppLayout() {
+function AppLayoutFrame() {
   const { user, logout } = useAuth();
   const { locale, setLocale, t } = useI18n();
+  const { badgeGenres } = useDashboardStats();
 
   return (
     <div className="min-h-screen bg-app text-slate-100">
       <div className="app-shell mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-10 pt-6 sm:px-6 lg:px-8">
         <header className="glass-panel mb-8 flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <Link to="/" className="brand-lockup inline-flex items-center gap-3 text-slate-50 no-underline">
-              <span className="vinyl-badge" aria-hidden="true">
-                <span className="vinyl-record">
-                  <span className="vinyl-record__ring vinyl-record__ring--outer" />
-                  <span className="vinyl-record__ring vinyl-record__ring--inner" />
-                  <span className="vinyl-record__label" />
-                </span>
-              </span>
+            <Link to="/" className="brand-lockup inline-flex items-center gap-5 text-slate-50 no-underline">
+              <VinylBadge genres={badgeGenres} />
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-brand-200">{t('app.tagline')}</p>
-                <h1 className="font-display text-3xl font-semibold tracking-wide">{t('app.name')}</h1>
+                <p className="text-[11px] uppercase tracking-[0.38em] text-brand-200">{t('app.tagline')}</p>
+                <h1 className="font-display text-4xl font-semibold tracking-wide">{t('app.name')}</h1>
               </div>
             </Link>
           </div>
@@ -65,6 +62,14 @@ function AppLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+function AppLayout() {
+  return (
+    <DashboardStatsProvider>
+      <AppLayoutFrame />
+    </DashboardStatsProvider>
   );
 }
 

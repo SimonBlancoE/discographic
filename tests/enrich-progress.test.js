@@ -4,6 +4,7 @@ import { existsSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows } from '../server/services/enrichmentQueue.js';
+import { MARKETPLACE_STATUS } from '../server/services/marketplaceValue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +22,7 @@ describe('enrichment progress queue', () => {
         user_id INTEGER,
         release_id INTEGER NOT NULL,
         estimated_value REAL,
+        marketplace_status TEXT,
         country TEXT,
         tracklist TEXT,
         date_added TEXT,
@@ -28,8 +30,9 @@ describe('enrichment progress queue', () => {
       )
     `);
 
-    db.prepare(`INSERT INTO releases (user_id, release_id, estimated_value, country, tracklist, date_added) VALUES (1, 101, NULL, NULL, '[]', '2026-04-01')`).run();
-    db.prepare(`INSERT INTO releases (user_id, release_id, estimated_value, country, tracklist, date_added) VALUES (1, 102, NULL, NULL, '[]', '2026-04-02')`).run();
+    db.prepare(`INSERT INTO releases (user_id, release_id, estimated_value, marketplace_status, country, tracklist, date_added) VALUES (1, 101, NULL, ?, NULL, '[]', '2026-04-01')`).run(MARKETPLACE_STATUS.PENDING);
+    db.prepare(`INSERT INTO releases (user_id, release_id, estimated_value, marketplace_status, country, tracklist, date_added) VALUES (1, 102, NULL, ?, NULL, '[]', '2026-04-02')`).run(MARKETPLACE_STATUS.FAILED);
+    db.prepare(`INSERT INTO releases (user_id, release_id, estimated_value, marketplace_status, country, tracklist, date_added) VALUES (1, 103, NULL, ?, NULL, '[]', '2026-04-03')`).run(MARKETPLACE_STATUS.UNAVAILABLE);
   });
 
   afterAll(() => {
@@ -43,6 +46,7 @@ describe('enrichment progress queue', () => {
 
     expect(initialCount).toBe(2);
     expect(workset).toHaveLength(2);
+    expect(workset.map((row) => row.release_id)).toEqual([102, 101]);
   });
 
   it('enriched rows are no longer pending even when country is still null', () => {
@@ -53,10 +57,11 @@ describe('enrichment progress queue', () => {
       db.prepare(`
         UPDATE releases
         SET estimated_value = 10,
+            marketplace_status = ?,
             country = COALESCE(?, country),
             tracklist = '[{"position":"A1","title":"Track"}]'
         WHERE id = ?
-      `).run(null, row.id);
+      `).run(MARKETPLACE_STATUS.READY, null, row.id);
 
       processed += 1;
     }
@@ -68,5 +73,13 @@ describe('enrichment progress queue', () => {
 
     const stillPending = db.prepare(`SELECT COUNT(*) AS count FROM releases WHERE user_id = 1 AND (${ENRICH_CONDITION})`).get().count;
     expect(stillPending).toBe(0);
+  });
+
+  it('unavailable rows stay out of the retry queue', () => {
+    const unavailable = db.prepare('SELECT marketplace_status FROM releases WHERE release_id = 103').get();
+    const pending = getPendingEnrichmentRows(db, 1).map((row) => row.release_id);
+
+    expect(unavailable.marketplace_status).toBe(MARKETPLACE_STATUS.UNAVAILABLE);
+    expect(pending).not.toContain(103);
   });
 });

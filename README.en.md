@@ -28,6 +28,9 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 
 </div>
 
+> [!NOTE]
+> **v0.2.0 is out** — dashboard and cover wall performance, sync reconciliation, localized imports, and a broad shared-module refactor. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
+
 ## What is it?
 
 Discographic is a self-hosted web app for browsing and managing your Discogs collection in a way that actually feels useful day to day.
