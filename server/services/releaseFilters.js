@@ -1,5 +1,5 @@
-import { parseJson } from '../db.js';
 import { createCollectionFilters } from '../../shared/collectionFilters.js';
+import { parseJson } from './jsonStorage.js';
 
 export function buildReleaseFilterWhere({ userId, filters = {}, baseClauses = [] }) {
   const { search, genre, style, decade, format, label } = createCollectionFilters(filters);

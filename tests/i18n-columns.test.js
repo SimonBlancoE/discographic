@@ -65,6 +65,34 @@ const CLIENT_KEYS = [
   'client.tapeteError'
 ];
 
+const VISUAL_I18N_KEYS = [
+  'app.badgeLabel',
+  'dashboard.feature.nextUp',
+  'dashboard.feature.previous',
+  'dashboard.feature.next',
+  'dashboard.feature.goTo',
+  'dashboard.feature.charts.kicker',
+  'dashboard.feature.charts.title',
+  'dashboard.feature.charts.sub',
+  'dashboard.feature.charts.where',
+  'dashboard.feature.random.kicker',
+  'dashboard.feature.random.title',
+  'dashboard.feature.random.sub',
+  'dashboard.feature.random.where',
+  'dashboard.feature.curate.kicker',
+  'dashboard.feature.curate.title',
+  'dashboard.feature.curate.sub',
+  'dashboard.feature.curate.where',
+  'dashboard.feature.wall.kicker',
+  'dashboard.feature.wall.title',
+  'dashboard.feature.wall.sub',
+  'dashboard.feature.wall.where',
+  'dashboard.feature.export.kicker',
+  'dashboard.feature.export.title',
+  'dashboard.feature.export.sub',
+  'dashboard.feature.export.where'
+];
+
 describe('i18n keys for table columns', () => {
   it('all column i18n keys exist in Spanish locale', () => {
     for (const col of COLUMNS) {
@@ -161,5 +189,12 @@ describe('i18n keys for import/media/client fallbacks', () => {
     expect(messages.en['backend.import.templateSheetName']).toBe('Import');
     expect(messages.es['backend.import.templateNotesSample']).toContain('2024');
     expect(messages.en['backend.import.templateNotesSample']).toContain('2024');
+  });
+
+  it('has visual hero and badge keys in both locales', () => {
+    for (const key of VISUAL_I18N_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
   });
 });

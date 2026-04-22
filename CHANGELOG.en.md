@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.2.0] - 2026-04-22
+
+Release focused on dashboard and wall performance, sync robustness, import and
+media localization, plus a broad refactor that lifts shared logic into reusable
+modules.
+
+### Added
+
+- **Dashboard Hero Carousel** — animated feature carousel with autoplay, pointer
+  and keyboard navigation, and `prefers-reduced-motion` support.
+- **VinylBadge** — spinning badge surfacing the collection's top genres,
+  animation paused under `prefers-reduced-motion`.
+- **DashboardStatsContext** — shared provider that centralizes dashboard stats
+  loading and removes duplicate fetches across consumers.
+- **Stats contract** — `shared/contracts/dashboardStats.js` normalizes backend
+  payloads into a stable shape for the frontend.
+- **Cover wall virtualization** — `WindowedCoverWallGrid` renders only visible
+  rows; large collections scroll without jank.
+- **Post-sync reconciliation** — full syncs prune release rows that no longer
+  exist in the user's collection and clean up cached covers for them.
+- **Import and media fallback localization** — import messages and cover
+  fallback strings now honor the user's locale.
+- **Shared notes service** — `server/services/notes.js` unifies note
+  normalization, serialization, and cleanup across sync, import, and export.
+- **Cover media service** — `server/services/coverMedia.js` centralizes cover
+  caching, variants (wall/poster), and cleanup.
+- **Shared release filters** — `server/services/releaseFilters.js` and
+  `shared/collectionFilters.js` consolidate filters used by stats, collection,
+  and export.
+- **Import sync** — `server/services/importSync.js` + `src/lib/importSync.js`
+  push imported notes and ratings back to Discogs with progress state.
+- **Typed contracts under `shared/contracts/`** — first step toward an explicit
+  frontend/backend contract surface.
+- **Tests** — new coverage for collection filters, reconciliation, cover media,
+  export parity, import progress, notes normalization, wall metrics, stats
+  contract, badge genres, marketplace_status migration, and marketplace value
+  fetch. Total: 217 tests.
+
+### Fixed
+
+- **`marketplace_status` migration re-running every boot** — backfill now runs
+  only when the column is first added, preserving existing statuses on re-runs.
+- **Silent marketplace fetch errors** — `fetchMarketplaceValue` now logs
+  `releaseId` and `error.message` before returning `FAILED`.
+- **Unnecessary re-renders in dashboard consumers** — `refresh` wrapped in
+  `useCallback`, `badgeGenres` memoized, and `getDashboardBadgeGenres` reduced
+  to a pure slice with no re-normalization.
+- **Export/import parity** — notes and derived fields round-trip without losing
+  metadata.
+- **Import notes sync** — imported notes now sync back to Discogs correctly.
+
+### Changed
+
+- **Shared helper refactor** — collection, cover, and filter helpers no longer
+  duplicated across routes and services.
+- **Dashboard.jsx** — consumes the shared context instead of managing its own
+  stats fetch.
+- **Enrichment condition** — centralized in `server/services/enrichmentQueue.js`
+  with `MARKETPLACE_STATUS` constants for explicit state.
+
+### Removed
+
+- **Unused components** — `CompletionRing`, `StatSparkline`, `CountryChart`,
+  `useAnimatedNumber` hook, and the unused `/api/value` route.
+
+[0.2.0]: https://github.com/SimonBlancoE/discographic/compare/v0.1.0...v0.2.0
+
 ## [0.1.0] - 2026-04-10
 
 First tagged release. Discographic is a self-hosted Discogs collection manager

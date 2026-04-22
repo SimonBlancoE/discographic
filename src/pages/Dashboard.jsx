@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ConfettiBurst from '../components/ConfettiBurst';
 import AchievementsPanel from '../components/AchievementsPanel';
+import HeroCarousel from '../components/HeroCarousel';
 import { DashboardSkeleton } from '../components/LoadingSkeletons';
 import RandomReleaseCard from '../components/RandomReleaseCard';
 import StylesChart from '../components/charts/StylesChart';
@@ -12,9 +13,9 @@ import GrowthChart from '../components/charts/GrowthChart';
 import LabelChart from '../components/charts/LabelChart';
 import SyncButton from '../components/SyncButton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { api } from '../lib/api';
 import { buildAchievements } from '../lib/achievements';
 import { useAuth } from '../lib/AuthContext';
+import { useDashboardStats } from '../lib/DashboardStatsContext';
 import { formatCurrency, formatDate, formatNumber } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
@@ -63,10 +64,7 @@ function HeroPanel({ stats }) {
       <div className="relative z-10 flex h-full flex-col justify-between gap-8">
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('dashboard.heroEyebrow')}</p>
-          <h2 className="mt-3 font-display text-4xl text-white sm:text-5xl">{t('dashboard.heroTitle')}</h2>
-          <p className="mt-4 max-w-2xl text-base text-slate-300">
-            {t('dashboard.heroSubtitle')}
-          </p>
+          <HeroCarousel />
         </div>
 
         <div className="flex flex-wrap gap-3 text-sm text-slate-300">
@@ -181,10 +179,10 @@ function Dashboard() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
   const toast = useToast();
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { stats, loading, error, refresh } = useDashboardStats();
   const [milestoneLabel, setMilestoneLabel] = useState('');
   const milestoneTimeoutRef = useRef(null);
+  const shownErrorRef = useRef('');
 
   function openCollectionFilter(key, value) {
     if (!value) {
@@ -194,42 +192,40 @@ function Dashboard() {
     navigate(`/collection?${new URLSearchParams({ [key]: value }).toString()}`);
   }
 
-  async function load() {
-    if (!discogsConfigured || accountUnavailable) {
-      setStats(null);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const payload = await api.getStats();
-      setStats(payload);
-
-      const total = payload?.totals?.total_records || 0;
-      const milestone = getMilestone(total);
-      const milestoneKey = milestone ? `discographic-milestone-${milestone}` : '';
-
-      if (milestone && !window.sessionStorage.getItem(milestoneKey)) {
-        window.sessionStorage.setItem(milestoneKey, '1');
-        setMilestoneLabel(t('dashboard.milestone', { count: formatNumber(milestone) }));
-      }
-    } catch (error) {
-      toast.error(t('dashboard.loadError', { error: error.message }));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, [discogsConfigured, accountUnavailable]);
-
   useEffect(() => () => {
     if (milestoneTimeoutRef.current) {
       window.clearTimeout(milestoneTimeoutRef.current);
     }
   }, []);
+
+  useEffect(() => {
+    if (!stats) {
+      return;
+    }
+
+    const total = stats.totals.total_records || 0;
+    const milestone = getMilestone(total);
+    const milestoneKey = milestone ? `discographic-milestone-${milestone}` : '';
+
+    if (milestone && !window.sessionStorage.getItem(milestoneKey)) {
+      window.sessionStorage.setItem(milestoneKey, '1');
+      setMilestoneLabel(t('dashboard.milestone', { count: formatNumber(milestone) }));
+    }
+  }, [stats, t]);
+
+  useEffect(() => {
+    if (!error) {
+      shownErrorRef.current = '';
+      return;
+    }
+
+    if (shownErrorRef.current === error.message) {
+      return;
+    }
+
+    shownErrorRef.current = error.message;
+    toast.error(t('dashboard.loadError', { error: error.message }));
+  }, [error, t, toast]);
 
   useEffect(() => {
     if (!milestoneLabel) {
@@ -324,7 +320,7 @@ function Dashboard() {
       <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <HeroPanel stats={stats} />
 
-        <SyncButton onSyncComplete={load} disabled={!discogsConfigured} />
+        <SyncButton onSyncComplete={refresh} disabled={!discogsConfigured} />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

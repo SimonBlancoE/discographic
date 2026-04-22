@@ -1,11 +1,12 @@
 import express from 'express';
-import db, { normalizeNotes, setSettingForUser, stringifyJson } from '../db.js';
+import db, { normalizeNotes, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { ensureCachedCover, removeCachedCovers } from '../services/coverMedia.js';
 import { translate } from '../../shared/i18n.js';
 import { DEFAULT_CURRENCY, convertAmountWithRates, getExchangeSnapshot } from '../services/exchangeRates.js';
 import { pruneUnseenReleases } from '../services/collectionReconcile.js';
 import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows } from '../services/enrichmentQueue.js';
+import { fetchMarketplaceValue, MARKETPLACE_STATUS } from '../services/marketplaceValue.js';
 
 const router = express.Router();
 const PER_PAGE = 100;
@@ -70,9 +71,9 @@ function mapCollectionItem(item) {
 const upsertStmt = db.prepare(`
   INSERT INTO releases (
     user_id, release_id, instance_id, title, artist, year, genres, styles, formats,
-    labels, country, cover_url, rating, notes, date_added, estimated_value, last_seen_sync_id,
+    labels, country, cover_url, rating, notes, date_added, estimated_value, marketplace_status, last_seen_sync_id,
     tracklist, folder_id, raw_json, synced_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   ON CONFLICT(user_id, instance_id) DO UPDATE SET
     release_id = excluded.release_id,
     title = excluded.title,
@@ -113,6 +114,7 @@ const upsertBatch = db.transaction((userId, syncId, items) => {
       mapped.notes,
       mapped.date_added,
       null,
+      MARKETPLACE_STATUS.PENDING,
       syncId,
       '[]',
       mapped.folder_id,
@@ -160,19 +162,6 @@ async function runSync({ userId, logId, discogs, locale }) {
       console.log('[sync] cache cleanup failed:', error.message);
     });
   }
-
-  try {
-    const value = await discogs.getCollectionValue();
-    if (value?.maximum) {
-      setSettingForUser(userId, 'collection_value', value.maximum);
-    } else if (value?.median) {
-      setSettingForUser(userId, 'collection_value', value.median);
-    }
-  } catch (error) {
-    console.log('[sync] no se pudo obtener el valor de la coleccion:', error.message);
-  }
-
-  setSettingForUser(userId, 'last_collection_sync_at', new Date().toISOString());
 
   db.prepare(`
     UPDATE sync_log
@@ -403,18 +392,19 @@ async function runEnrichAll({ userId, discogs }) {
 
         try {
           const detail = await discogs.getRelease(row.release_id);
-          const stats = await discogs.getMarketplaceStats(row.release_id, DEFAULT_CURRENCY).catch(() => null);
-          const priceEur = stats?.lowest_price?.value ?? 0;
+          const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
 
           db.prepare(`
             UPDATE releases
             SET estimated_value = ?,
+                marketplace_status = ?,
                 country = COALESCE(?, country),
                 tracklist = CASE WHEN tracklist IS NULL OR tracklist = '[]' THEN ? ELSE tracklist END,
                 synced_at = CURRENT_TIMESTAMP
             WHERE id = ? AND user_id = ?
           `).run(
-            priceEur,
+            marketplace.estimatedValue,
+            marketplace.marketplaceStatus,
             detail.country || null,
             stringifyJson(detail.tracklist || []),
             row.id,
@@ -541,7 +531,7 @@ router.post('/enrich/stop', (req, res) => {
 router.get('/status', (req, res) => {
   const state = getSyncState(req.session.userId, req.locale);
   const pending = db.prepare(
-    'SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND estimated_value IS NULL'
+    `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
   ).get(req.session.userId).count;
 
   res.json({

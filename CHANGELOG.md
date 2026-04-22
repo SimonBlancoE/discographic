@@ -7,6 +7,76 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.2.0] - 2026-04-22
+
+Release centrada en rendimiento del dashboard y muro, robustez de sincronizacion,
+localizacion de importaciones y media, y una refactorizacion amplia que mueve
+logica compartida a modulos reutilizables.
+
+### Nuevo
+
+- **Hero Carousel en el dashboard** — carrusel animado de caracteristicas con
+  autoplay, navegacion por puntero, teclado y soporte para `prefers-reduced-motion`.
+- **VinylBadge** — insignia giratoria con generos destacados de la coleccion,
+  animacion pausada bajo `prefers-reduced-motion`.
+- **DashboardStatsContext** — proveedor compartido que centraliza la carga de
+  estadisticas del dashboard y elimina peticiones duplicadas entre consumidores.
+- **Contrato de estadisticas** — `shared/contracts/dashboardStats.js` normaliza
+  payloads del backend en una forma estable para el frontend.
+- **Virtualizacion del muro de portadas** — `WindowedCoverWallGrid` renderiza
+  solo las filas visibles; colecciones grandes desplazan sin cortes.
+- **Reconciliacion post-sync** — los sync completos eliminan filas de releases
+  que ya no existen en la coleccion del usuario, limpiando las portadas en cache
+  asociadas.
+- **Localizacion de importaciones y fallbacks de media** — mensajes de
+  importacion y textos de fallback de portadas respetan el idioma del usuario.
+- **Servicio de notas compartido** — `server/services/notes.js` unifica
+  normalizacion, serializacion y limpieza de notas entre sync, import y export.
+- **Servicio de media de portadas** — `server/services/coverMedia.js`
+  centraliza cache de portadas, variantes (wall/poster) y limpieza.
+- **Filtros de releases compartidos** — `server/services/releaseFilters.js` y
+  `shared/collectionFilters.js` consolidan filtros usados por stats, collection
+  y export.
+- **Sync de importaciones** — `server/services/importSync.js` + `src/lib/importSync.js`
+  envian notas y puntuaciones importadas de vuelta a Discogs con estado.
+- **Contratos tipados en `shared/contracts/`** — primer paso hacia un contrato
+  explicito frontend/backend.
+- **Tests** — cobertura nueva para filtros de coleccion, reconciliacion, media
+  de portadas, parity de export, progreso de import, normalizacion de notas,
+  metricas del muro, contrato de stats, badge de generos, migracion de
+  marketplace_status y fetch de valor de marketplace. Total: 217 tests.
+
+### Corregido
+
+- **Migracion de `marketplace_status` re-ejecutada en cada arranque** — el
+  backfill ahora corre solo cuando la columna se acaba de anadir, preservando
+  estados existentes en re-ejecuciones.
+- **Errores silenciosos en fetch del marketplace** — `fetchMarketplaceValue`
+  registra `releaseId` y `error.message` antes de devolver estado `FAILED`.
+- **Renders innecesarios en consumidores del dashboard** — `refresh` envuelto en
+  `useCallback`, `badgeGenres` memoizado, y `getDashboardBadgeGenres` reducido a
+  un slice puro sin re-normalizar.
+- **Parity entre export e import** — notas y campos derivados viajan de ida y
+  vuelta sin perder metadatos.
+- **Sync de notas en import** — notas importadas se sincronizan de vuelta a
+  Discogs correctamente.
+
+### Cambiado
+
+- **Refactor de helpers compartidos** — colecciones, portadas y filtros dejan de
+  duplicarse entre rutas y servicios.
+- **Dashboard.jsx** — consume el contexto compartido en lugar de gestionar su
+  propio fetch de stats.
+- **Condicion de enriquecimiento** — centralizada en `server/services/enrichmentQueue.js`
+  con constantes de `MARKETPLACE_STATUS` para estado explicito.
+
+### Eliminado
+
+- **Componentes sin uso** — `CompletionRing`, `StatSparkline`, `CountryChart`,
+  hook `useAnimatedNumber` y la ruta `/api/value` sin consumidores.
+
+[0.2.0]: https://github.com/SimonBlancoE/discographic/compare/v0.1.0...v0.2.0
+
 ## [0.1.0] - 2026-04-10
 
 Primera release etiquetada. Discographic es un gestor de colecciones de Discogs
@@ -66,3 +136,4 @@ exportacion/importacion y un dashboard con graficas y logros.
   AuthContext y Collection por la constante compartida `DEFAULT_CURRENCY`.
 
 [0.1.0]: https://github.com/SimonBlancoE/discographic/releases/tag/v0.1.0
+

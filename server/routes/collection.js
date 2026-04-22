@@ -2,6 +2,7 @@ import express from 'express';
 import db, { getSettingForUser, hydrateRelease, parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertReleasePrices, normalizeCurrency } from '../services/exchangeRates.js';
+import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 import { parseStoredNotes, replaceNoteText, resolveNoteFieldId } from '../services/notes.js';
 import { buildReleaseFilterWhere, getCollectionFilterOptions } from '../services/releaseFilters.js';
 
@@ -27,6 +28,7 @@ const BASE_FIELDS = `
   notes,
   date_added,
   estimated_value,
+  marketplace_status,
   listing_status,
   listing_price,
   listing_currency,
@@ -73,8 +75,7 @@ async function enrichReleaseIfNeeded(req, release) {
     return convertHydratedRelease(req, release);
   }
   const detail = await discogs.getRelease(release.release_id);
-  const stats = await discogs.getMarketplaceStats(release.release_id, DEFAULT_CURRENCY).catch(() => null);
-  const priceEur = stats?.lowest_price?.value ?? 0;
+  const marketplace = await fetchMarketplaceValue(discogs, release.release_id, DEFAULT_CURRENCY);
 
   db.prepare(`
     UPDATE releases
@@ -83,6 +84,7 @@ async function enrichReleaseIfNeeded(req, release) {
         country = ?,
         tracklist = ?,
         estimated_value = ?,
+        marketplace_status = ?,
         raw_json = ?,
         synced_at = CURRENT_TIMESTAMP
     WHERE id = ? AND user_id = ?
@@ -91,7 +93,8 @@ async function enrichReleaseIfNeeded(req, release) {
     stringifyJson(detail.styles || []),
     detail.country || release.country || null,
     stringifyJson(detail.tracklist || []),
-    priceEur,
+    marketplace.estimatedValue,
+    marketplace.marketplaceStatus,
     JSON.stringify(detail),
     release.id,
     req.session.userId

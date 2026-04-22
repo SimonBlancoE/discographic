@@ -5,7 +5,6 @@ import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import db from './db.js';
-import { getDiscogsClientForUser, requireAuth } from './middleware/auth.js';
 import accountRouter from './routes/account.js';
 import adminRouter from './routes/admin.js';
 import authRouter from './routes/auth.js';
@@ -68,16 +67,6 @@ app.use('/api/sync', syncRouter);
 app.use('/api/export', exportRouter);
 app.use('/api/import', importRouter);
 app.use('/api/media', mediaRouter);
-
-app.get('/api/value', requireAuth, async (req, res) => {
-  try {
-    const discogs = getDiscogsClientForUser(req);
-    const value = await discogs.getCollectionValue();
-    res.json(value);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 if (existsSync(distPath)) {
   app.use(express.static(distPath));

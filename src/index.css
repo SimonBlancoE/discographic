@@ -180,7 +180,13 @@
     animation-duration: 1.5s;
   }
 
+  .brand-lockup:hover .vinyl-record__caption,
+  .brand-lockup:focus-visible .vinyl-record__caption {
+    opacity: 1;
+  }
+
   .vinyl-badge {
+    position: relative;
     display: inline-flex;
     height: 3.2rem;
     width: 3.2rem;
@@ -193,45 +199,271 @@
   }
 
   .vinyl-record {
-    display: block;
     position: relative;
-    height: 2.35rem;
+    display: block;
     width: 2.35rem;
+    height: 2.35rem;
     border-radius: 999px;
-    background:
-      radial-gradient(circle at center, rgba(15, 23, 42, 0.96) 0 22%, rgba(2, 6, 23, 0.98) 23% 42%, rgba(71, 85, 105, 0.55) 43% 46%, rgba(2, 6, 23, 0.98) 47% 100%);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 10px 20px rgba(2, 6, 23, 0.34);
     animation: vinyl-spin 4.5s linear infinite;
-    animation-play-state: running;
-    transform-origin: center center;
+    transform-origin: center;
     will-change: transform;
   }
 
-  .vinyl-record__ring,
+  .vinyl-record__disc {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: #05060a;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 18px rgba(2, 6, 23, 0.6);
+  }
+
+  .vinyl-record__grooves {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 3px);
+    mask-image: radial-gradient(circle, black 28%, black 94%, transparent 95%);
+    -webkit-mask-image: radial-gradient(circle, black 28%, black 94%, transparent 95%);
+  }
+
+  .vinyl-record__shine {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: conic-gradient(from 45deg, transparent 0deg, rgba(255, 255, 255, 0.12) 30deg, transparent 60deg, transparent 180deg, rgba(255, 255, 255, 0.08) 210deg, transparent 240deg);
+    mix-blend-mode: screen;
+  }
+
   .vinyl-record__label {
     position: absolute;
     inset: 50%;
-    border-radius: 999px;
+    width: 34%;
+    height: 34%;
     transform: translate(-50%, -50%);
+    border-radius: 999px;
+    overflow: hidden;
+    box-shadow: 0 0 0 3px #05060a;
   }
 
-  .vinyl-record__ring--outer {
-    width: 78%;
-    height: 78%;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+  .vinyl-record__swatch {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    opacity: 0;
+    transition: opacity 0.6s ease;
   }
 
-  .vinyl-record__ring--inner {
-    width: 52%;
-    height: 52%;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  .vinyl-record__swatch[data-active='true'] {
+    opacity: 1;
   }
 
-  .vinyl-record__label {
-    width: 28%;
-    height: 28%;
-    background: linear-gradient(135deg, rgba(251, 113, 133, 0.95), rgba(103, 232, 249, 0.82));
-    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.78);
+  .vinyl-record__dust {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    opacity: 0.5;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.22) 0.5px, transparent 1px),
+      radial-gradient(circle at 65% 70%, rgba(255, 255, 255, 0.18) 0.5px, transparent 1px),
+      radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.16) 0.5px, transparent 1px),
+      radial-gradient(circle at 30% 80%, rgba(255, 255, 255, 0.18) 0.5px, transparent 1px);
+  }
+
+  .vinyl-record__caption {
+    position: absolute;
+    bottom: -0.4rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Space Grotesk', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: #fecdd6;
+    background: rgba(2, 6, 23, 0.82);
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(251, 113, 133, 0.35);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+
+  .feature-carousel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 18px;
+    max-width: 640px;
+    user-select: none;
+  }
+
+  .feature-carousel__viewport {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    min-height: 170px;
+  }
+
+  .feature-carousel__track {
+    display: flex;
+    transition: transform 0.55s cubic-bezier(0.22, 0.8, 0.28, 1);
+    will-change: transform;
+  }
+
+  .feature-carousel__slide {
+    flex: 0 0 100%;
+    min-width: 0;
+    padding: 4px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .feature-carousel__kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Grotesk', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #67e8f9;
+    margin: 0;
+  }
+
+  .feature-carousel__kicker::before {
+    content: '';
+    width: 18px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.5;
+  }
+
+  .feature-carousel__title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: #fff;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .feature-carousel__sub {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #cbd5e1;
+    margin: 0;
+    max-width: 50ch;
+  }
+
+  .feature-carousel__where {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.78rem;
+    color: #e2e8f0;
+    width: max-content;
+  }
+
+  .feature-carousel__ticker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .feature-carousel__ticker-pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #67e8f9;
+    box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.2);
+    animation: feature-carousel-pulse 1.8s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  .feature-carousel__ticker-label {
+    font-family: 'Space Grotesk', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+
+  .feature-carousel__ticker-value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.85rem;
+    color: #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .feature-carousel__controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .feature-carousel__dots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .feature-carousel__dot {
+    width: 24px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: background 0.25s, width 0.3s;
+  }
+
+  .feature-carousel__dot[data-active='true'] {
+    background: linear-gradient(90deg, #fb7185, #67e8f9);
+    width: 48px;
+  }
+
+  .feature-carousel__arrows {
+    display: flex;
+    gap: 8px;
+  }
+
+  .feature-carousel__arrow {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #e2e8f0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+  }
+
+  .feature-carousel__arrow:hover {
+    background: rgba(251, 113, 133, 0.16);
+    border-color: rgba(251, 113, 133, 0.4);
+    color: #ffe4ea;
   }
 
   .nav-pill {
@@ -504,6 +736,15 @@
   }
 }
 
+@keyframes feature-carousel-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(103, 232, 249, 0.06);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -515,7 +756,8 @@
   .random-card__record,
   .skeleton-shimmer::after,
   .toast-card,
-  .confetti-piece {
+  .confetti-piece,
+  .feature-carousel__ticker-pulse {
     animation: none !important;
   }
 
@@ -527,7 +769,10 @@
   .coverage-row__fill,
   .primary-button,
   .secondary-button,
-  .nav-pill {
+  .nav-pill,
+  .feature-carousel__track,
+  .feature-carousel__dot,
+  .feature-carousel__arrow {
     transition: none !important;
   }
 }

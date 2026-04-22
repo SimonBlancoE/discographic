@@ -46,6 +46,7 @@ describe('releases table schema migrations', () => {
     expect(cols).not.toContain('listing_currency');
     expect(cols).not.toContain('listing_price_eur');
     expect(cols).not.toContain('last_seen_sync_id');
+    expect(cols).not.toContain('marketplace_status');
   });
 
   it('migration adds listing columns for status, original currency and EUR value', () => {
@@ -100,6 +101,15 @@ describe('releases table schema migrations', () => {
     expect(cols).toContain('last_seen_sync_id');
   });
 
+  it('migration adds marketplace_status for explicit enrichment state', () => {
+    const hasCols = (col) => db.prepare('PRAGMA table_info(releases)').all().some(c => c.name === col);
+    if (!hasCols('marketplace_status')) {
+      db.exec("ALTER TABLE releases ADD COLUMN marketplace_status TEXT DEFAULT 'pending'");
+    }
+    const cols = db.prepare('PRAGMA table_info(releases)').all().map(c => c.name);
+    expect(cols).toContain('marketplace_status');
+  });
+
   it('last_seen_sync_id migration is idempotent', () => {
     const hasCols = (col) => db.prepare('PRAGMA table_info(releases)').all().some(c => c.name === col);
     if (!hasCols('last_seen_sync_id')) {
@@ -111,12 +121,13 @@ describe('releases table schema migrations', () => {
 
   it('listing columns default to NULL for existing rows', () => {
     db.prepare(`INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (1, 100, 200, 'Test', 'Artist')`).run();
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur, last_seen_sync_id FROM releases WHERE release_id = 100').get();
+    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur, last_seen_sync_id, marketplace_status FROM releases WHERE release_id = 100').get();
     expect(row.listing_status).toBeNull();
     expect(row.listing_price).toBeNull();
     expect(row.listing_currency).toBeNull();
     expect(row.listing_price_eur).toBeNull();
     expect(row.last_seen_sync_id).toBeNull();
+    expect(row.marketplace_status).toBe('pending');
   });
 
   it('listing_status stores text values', () => {
