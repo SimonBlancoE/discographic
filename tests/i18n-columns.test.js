@@ -67,7 +67,6 @@ const CLIENT_KEYS = [
 
 const VISUAL_I18N_KEYS = [
   'app.badgeLabel',
-  'dashboard.feature.nextUp',
   'dashboard.feature.previous',
   'dashboard.feature.next',
   'dashboard.feature.goTo',

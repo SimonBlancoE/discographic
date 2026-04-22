@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../lib/I18nContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-const AUTOPLAY_MS = 9000;
+const AUTOPLAY_MS = 14000;
 const FEATURE_KEYS = ['charts', 'random', 'curate', 'wall', 'export'];
 
 function Pin() {
@@ -35,7 +35,7 @@ export default function HeroCarousel() {
   const reducedMotion = useReducedMotion();
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
-  const dragRef = useRef({ startX: 0, active: false });
+  const dragRef = useRef({ startX: 0, active: false, pointerId: null });
   const resumeTimerRef = useRef(null);
 
   const features = FEATURE_KEYS.map((k) => ({
@@ -59,53 +59,59 @@ export default function HeroCarousel() {
 
   const next = () => setIdx((i) => (i + 1) % features.length);
   const prev = () => setIdx((i) => (i - 1 + features.length) % features.length);
+  const goTo = (i) => setIdx(i);
 
   function queueResume() {
     if (resumeTimerRef.current) {
       window.clearTimeout(resumeTimerRef.current);
     }
-    resumeTimerRef.current = window.setTimeout(() => setPaused(false), 3000);
+    resumeTimerRef.current = window.setTimeout(() => setPaused(false), 5000);
   }
 
-  function onPointerDown(event) {
-    dragRef.current = { startX: event.clientX, active: true };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+  function onViewportPointerDown(event) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    dragRef.current = { startX: event.clientX, active: true, pointerId: event.pointerId };
     setPaused(true);
   }
 
-  function finishPointerGesture(event) {
+  function onViewportPointerUp(event) {
     if (!dragRef.current.active) return;
     const dx = event.clientX - dragRef.current.startX;
     dragRef.current.active = false;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
     if (dx < -40) next();
     else if (dx > 40) prev();
     queueResume();
   }
 
-  function cancelPointerGesture(event) {
+  function onViewportPointerCancel() {
     if (!dragRef.current.active) return;
     dragRef.current.active = false;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
     queueResume();
   }
 
-  const nextFeature = features[(idx + 1) % features.length];
+  function onControlClick(fn) {
+    return (event) => {
+      event.stopPropagation();
+      fn();
+      setPaused(true);
+      queueResume();
+    };
+  }
 
   return (
-    <div
-      className="feature-carousel"
-      onPointerDown={onPointerDown}
-      onPointerUp={finishPointerGesture}
-      onPointerCancel={cancelPointerGesture}
-    >
-      <div className="feature-carousel__viewport">
+    <div className="feature-carousel">
+      <div
+        className="feature-carousel__viewport"
+        onPointerDown={onViewportPointerDown}
+        onPointerUp={onViewportPointerUp}
+        onPointerCancel={onViewportPointerCancel}
+      >
         <div
           className="feature-carousel__track"
           style={{ transform: `translateX(-${idx * 100}%)` }}
         >
           {features.map((f, i) => (
-            <div key={i} className="feature-carousel__slide">
+            <div key={FEATURE_KEYS[i]} className="feature-carousel__slide" aria-hidden={i !== idx}>
               <p className="feature-carousel__kicker">{f.kicker}</p>
               <h2 className="feature-carousel__title">{f.title}</h2>
               <p className="feature-carousel__sub">{f.sub}</p>
@@ -115,28 +121,36 @@ export default function HeroCarousel() {
         </div>
       </div>
 
-      <div className="feature-carousel__ticker" aria-live="polite">
-        <span className="feature-carousel__ticker-pulse" />
-        <span className="feature-carousel__ticker-label">{t('dashboard.feature.nextUp')}</span>
-        <span className="feature-carousel__ticker-value">{nextFeature.title}</span>
-      </div>
-
       <div className="feature-carousel__controls">
         <div className="feature-carousel__dots">
           {features.map((_, i) => (
             <button
-              key={i}
+              key={FEATURE_KEYS[i]}
               type="button"
               className="feature-carousel__dot"
               data-active={i === idx}
               aria-label={t('dashboard.feature.goTo', { title: features[i].title })}
-              onClick={() => setIdx(i)}
+              onClick={onControlClick(() => goTo(i))}
             />
           ))}
         </div>
         <div className="feature-carousel__arrows">
-          <button type="button" className="feature-carousel__arrow" aria-label={t('dashboard.feature.previous')} onClick={prev}><ArrowL /></button>
-          <button type="button" className="feature-carousel__arrow" aria-label={t('dashboard.feature.next')} onClick={next}><ArrowR /></button>
+          <button
+            type="button"
+            className="feature-carousel__arrow"
+            aria-label={t('dashboard.feature.previous')}
+            onClick={onControlClick(prev)}
+          >
+            <ArrowL />
+          </button>
+          <button
+            type="button"
+            className="feature-carousel__arrow"
+            aria-label={t('dashboard.feature.next')}
+            onClick={onControlClick(next)}
+          >
+            <ArrowR />
+          </button>
         </div>
       </div>
     </div>

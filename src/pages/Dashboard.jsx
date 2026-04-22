@@ -12,7 +12,6 @@ import GenreChart from '../components/charts/GenreChart';
 import GrowthChart from '../components/charts/GrowthChart';
 import LabelChart from '../components/charts/LabelChart';
 import SyncButton from '../components/SyncButton';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { buildAchievements } from '../lib/achievements';
 import { useAuth } from '../lib/AuthContext';
 import { useDashboardStats } from '../lib/DashboardStatsContext';
@@ -34,33 +33,12 @@ function ratio(value, total) {
 }
 
 function HeroPanel({ stats }) {
-  const { locale, t } = useI18n();
-  const reducedMotion = useReducedMotion();
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
-
-  function handleMove(event) {
-    if (reducedMotion) {
-      return;
-    }
-
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - bounds.left) / bounds.width) - 0.5;
-    const y = ((event.clientY - bounds.top) / bounds.height) - 0.5;
-    setPointer({ x, y });
-  }
-
-  function resetPointer() {
-    setPointer({ x: 0, y: 0 });
-  }
-
-  const chipStyle = (multiplier) => reducedMotion ? undefined : {
-    transform: `translate3d(${pointer.x * multiplier}px, ${pointer.y * multiplier}px, 0)`
-  };
+  const { t } = useI18n();
 
   return (
-    <div className="hero-panel" onMouseMove={handleMove} onMouseLeave={resetPointer}>
-      <span className="hero-orb hero-orb--cyan" style={chipStyle(-18)} />
-      <span className="hero-orb hero-orb--rose" style={chipStyle(24)} />
+    <div className="hero-panel">
+      <span className="hero-orb hero-orb--cyan" />
+      <span className="hero-orb hero-orb--rose" />
       <div className="relative z-10 flex h-full flex-col justify-between gap-8">
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('dashboard.heroEyebrow')}</p>
@@ -68,13 +46,13 @@ function HeroPanel({ stats }) {
         </div>
 
         <div className="flex flex-wrap gap-3 text-sm text-slate-300">
-          <span className="hero-chip rounded-full border border-white/10 bg-white/5 px-4 py-2" style={chipStyle(14)}>
+          <span className="hero-chip rounded-full border border-white/10 bg-white/5 px-4 py-2">
             {t('dashboard.lastSync', { date: formatDate(stats.lastSync?.finished_at) })}
           </span>
-          <span className="hero-chip rounded-full border border-white/10 bg-white/5 px-4 py-2" style={chipStyle(-12)}>
+          <span className="hero-chip rounded-full border border-white/10 bg-white/5 px-4 py-2">
             {t('dashboard.syncedRecords', { count: formatNumber(stats.lastSync?.records_synced || 0) })}
           </span>
-          <span className="hero-chip rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-cyan-100" style={chipStyle(18)}>
+          <span className="hero-chip rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-cyan-100">
             {t('dashboard.mappedStyles', { count: formatNumber(stats.styles.length) })}
           </span>
         </div>
