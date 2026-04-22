@@ -7,6 +7,24 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.2.1] - 2026-04-22
+
+Patch con correcciones al carrusel del dashboard y al logo animado del panel superior.
+
+### Corregido
+
+- **Botones del carrusel no respondian** — el gestor de drag capturaba todo el contenedor e interceptaba los clicks en flechas y puntos. Ahora el pointer solo se escucha en el viewport.
+- **Cambio automatico demasiado rapido** — autoplay de 9s a 14s; tras interacion manual, el autoplay se pausa 5s en vez de 3s.
+- **Traducciones al español** — reescritas en castellano neutro. Fuera jerga de DJ ("maleta", "pick", "cavando", "Spin the Crate", "tapete"). Mismo tratamiento en ingles: textos mas directos.
+- **Movimiento al hacer hover** — eliminado el parallax de chips y orbes del panel hero. Interaccion en hover ahora limitada a un glow suave de borde cian en el viewport, sin desplazar elementos.
+
+### Cambiado
+
+- **Indicador "Siguiente pista" eliminado** — se ha quitado completamente del carrusel.
+- **Logo giratorio del panel superior** — aumentado de 3.2rem a 5.25rem (disco de 2.35rem a 4.2rem). Se mantiene la aceleracion al pasar el raton sobre el logo, pero ya no aparece el nombre del genero.
+
+[0.2.1]: https://github.com/SimonBlancoE/discographic/compare/v0.2.0...v0.2.1
+
 ## [0.2.0] - 2026-04-22
 
 Release centrada en rendimiento del dashboard y muro, robustez de sincronizacion,
