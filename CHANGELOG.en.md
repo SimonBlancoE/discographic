@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.2.1] - 2026-04-22
+
+Patch with fixes to the dashboard feature carousel and the header logo badge.
+
+### Fixed
+
+- **Carousel buttons did not respond** — the drag pointer handler was capturing the whole container and intercepting clicks on arrows and dots. Pointer is now scoped to the viewport only.
+- **Autoplay cycled too fast** — raised from 9s to 14s; manual-interaction resume delay raised from 3s to 5s.
+- **Spanish translations** — rewritten in neutral Castilian Spanish. Dropped DJ jargon ("maleta", "pick", "cavando", "Spin the Crate", "tapete"). English copy trimmed to match: plainer, more direct phrasing.
+- **Hover caused elements to move** — removed the mouse-parallax on hero chips and orbs. Hover interaction is now a subtle cyan border glow on the carousel viewport, with no element movement.
+
+### Changed
+
+- **"Next up" indicator removed** — the ticker is gone entirely.
+- **Header logo badge enlarged** — from 3.2rem to 5.25rem (record disc from 2.35rem to 4.2rem). Hover still accelerates the spin animation, but no longer surfaces the genre caption.
+
+[0.2.1]: https://github.com/SimonBlancoE/discographic/compare/v0.2.0...v0.2.1
+
 ## [0.2.0] - 2026-04-22
 
 Release focused on dashboard and wall performance, sync robustness, import and
