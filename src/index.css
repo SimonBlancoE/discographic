@@ -172,7 +172,7 @@
 
   .hero-chip {
     backdrop-filter: blur(16px);
-    transition: transform 240ms ease-out, border-color 240ms ease-out, background 240ms ease-out;
+    transition: border-color 240ms ease-out, background 240ms ease-out;
   }
 
   .brand-lockup:hover .vinyl-record,
@@ -180,19 +180,14 @@
     animation-duration: 1.5s;
   }
 
-  .brand-lockup:hover .vinyl-record__caption,
-  .brand-lockup:focus-visible .vinyl-record__caption {
-    opacity: 1;
-  }
-
   .vinyl-badge {
     position: relative;
     display: inline-flex;
-    height: 3.2rem;
-    width: 3.2rem;
+    height: 5.25rem;
+    width: 5.25rem;
     align-items: center;
     justify-content: center;
-    border-radius: 1.1rem;
+    border-radius: 1.4rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: linear-gradient(180deg, rgba(251, 113, 133, 0.18), rgba(56, 189, 248, 0.08));
     box-shadow: 0 18px 36px rgba(2, 6, 23, 0.42);
@@ -201,8 +196,8 @@
   .vinyl-record {
     position: relative;
     display: block;
-    width: 2.35rem;
-    height: 2.35rem;
+    width: 4.2rem;
+    height: 4.2rem;
     border-radius: 999px;
     animation: vinyl-spin 4.5s linear infinite;
     transform-origin: center;
@@ -272,22 +267,7 @@
   }
 
   .vinyl-record__caption {
-    position: absolute;
-    bottom: -0.4rem;
-    left: 50%;
-    transform: translateX(-50%);
-    font-family: 'Space Grotesk', monospace;
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    color: #fecdd6;
-    background: rgba(2, 6, 23, 0.82);
-    padding: 2px 7px;
-    border-radius: 999px;
-    border: 1px solid rgba(251, 113, 133, 0.35);
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
+    display: none;
   }
 
   .feature-carousel {
@@ -305,6 +285,16 @@
     overflow: hidden;
     border-radius: 18px;
     min-height: 170px;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .feature-carousel__viewport:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(103, 232, 249, 0.22);
+    box-shadow: 0 0 0 1px rgba(103, 232, 249, 0.1), 0 12px 32px rgba(2, 6, 23, 0.5);
   }
 
   .feature-carousel__track {
@@ -374,43 +364,6 @@
     width: max-content;
   }
 
-  .feature-carousel__ticker {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .feature-carousel__ticker-pulse {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: #67e8f9;
-    box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.2);
-    animation: feature-carousel-pulse 1.8s ease-in-out infinite;
-    flex-shrink: 0;
-  }
-
-  .feature-carousel__ticker-label {
-    font-family: 'Space Grotesk', monospace;
-    font-size: 10px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    flex-shrink: 0;
-  }
-
-  .feature-carousel__ticker-value {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 0.85rem;
-    color: #e2e8f0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 
   .feature-carousel__controls {
     display: flex;
@@ -736,14 +689,6 @@
   }
 }
 
-@keyframes feature-carousel-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.18);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(103, 232, 249, 0.06);
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -756,8 +701,7 @@
   .random-card__record,
   .skeleton-shimmer::after,
   .toast-card,
-  .confetti-piece,
-  .feature-carousel__ticker-pulse {
+  .confetti-piece {
     animation: none !important;
   }
 

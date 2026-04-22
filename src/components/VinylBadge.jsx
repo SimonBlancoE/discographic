@@ -44,7 +44,7 @@ export default function VinylBadge({ playing = true, genres = [] }) {
 
   useEffect(() => {
     if (!playing || reduced) return undefined;
-    const handle = setInterval(() => setIdx((i) => (i + 1) % resolvedGenres.length), 1600);
+    const handle = setInterval(() => setIdx((i) => (i + 1) % resolvedGenres.length), 2200);
     return () => clearInterval(handle);
   }, [playing, reduced, resolvedGenres.length]);
 
@@ -52,13 +52,10 @@ export default function VinylBadge({ playing = true, genres = [] }) {
     setIdx((current) => (current >= resolvedGenres.length ? 0 : current));
   }, [resolvedGenres.length]);
 
-  const caption = resolvedGenres[idx]?.name || DEFAULT_GENRE_NAMES[0];
-
   return (
     <span
       className="vinyl-badge"
-      aria-label={t('app.badgeLabel', { genre: caption })}
-      onMouseEnter={() => reduced && setIdx((i) => (i + 1) % resolvedGenres.length)}
+      aria-label={t('app.badgeLabel')}
     >
       <span className="vinyl-record">
         <span className="vinyl-record__disc" />
@@ -76,7 +73,6 @@ export default function VinylBadge({ playing = true, genres = [] }) {
         </span>
       </span>
       <span className="vinyl-record__dust" aria-hidden="true" />
-      <span className="vinyl-record__caption">{caption}</span>
     </span>
   );
 }
