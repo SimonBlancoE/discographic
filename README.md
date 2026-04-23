@@ -2,11 +2,13 @@
 
 # Discographic
 
-**Centro de mando autohospedado para tu colección de vinilos.**
+**A self-hosted command center for your vinyl collection.**
 
-Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y exporta pósteres u hojas de cálculo desde una sola app que puedes ejecutar en tu ordenador o servidor.
+Sync your Discogs records, explore stats, rate and annotate everything, and export posters or spreadsheets from a single app that runs on your machine or server.
 
-**English version:** [Read in English](./README.en.md)
+**Spanish version:** [Leer en español](./README.es.md)
+
+> `README.md` is the canonical version. Any content change here should be mirrored in `README.es.md` within the same PR.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/get-docker/)
@@ -16,64 +18,64 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 <br />
 <br />
 
-<img src="docs/screenshots/dashboard-hero.webp" alt="Panel principal de Discographic con gráficas y estadísticas de la colección" width="900" />
+<img src="docs/screenshots/dashboard-hero.webp" alt="Discographic dashboard with charts and collection stats" width="900" />
 
 <br />
 <br />
 
-*Pensado para coleccionistas que quieren un panel rápido y personal para su colección de discos*
+*Built for collectors who want a fast, personal dashboard for their record library.*
 
 </div>
 
 > [!NOTE]
-> **v0.2.0 disponible** — rendimiento del dashboard y muro de portadas, reconciliación de sync, importaciones localizadas y refactor amplio de módulos compartidos. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
+> **v0.2.0 is out** - dashboard and cover wall performance, sync reconciliation, localized imports, and a broad shared-module refactor. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
 
-## ¿Qué es?
+## What is it?
 
-Discographic es una aplicación web autohospedada para explorar y gestionar tu colección de Discogs de una forma realmente útil en el día a día.
+Discographic is a self-hosted web app for browsing and managing your Discogs collection in a way that actually feels useful day to day.
 
-En lugar de limitarse a mostrar una lista de lanzamientos, ofrece un panel real, un navegador de colección con búsqueda, un muro visual de portadas, exportaciones, notas, valoraciones y una caché local para que la app siga siendo rápida una vez sincronizada tu biblioteca. Funciona muy bien para una sola persona, pero también tiene sentido para un pequeño grupo de amigos compartiendo la misma instancia.
+Instead of just showing a raw list of releases, it gives you a proper dashboard, a searchable collection browser, a visual cover wall, exports, notes, ratings, and a local cache so the app stays fast once your library is synced. It works well for a solo collector, and it also makes sense for a small group of friends sharing the same instance.
 
-## ¿Por qué usarlo?
+## Why use it?
 
-- **Tus datos se quedan contigo** — todo se cachea localmente en SQLite.
-- **Fácil de ejecutar** — con Docker Compose estás dentro.
-- **Pensado para coleccionistas, no solo CRUD** — gráficas, seguimiento de valor, filtros, notas, exportaciones y generación de pósteres.
-- **Interfaz en español e inglés** — la aplicación es bilingüe.
-- **Listo para varios usuarios** — cada usuario conecta su propia cuenta de Discogs y solo ve su propia colección.
+- **Your data stays with you** - everything is cached locally in SQLite.
+- **Easy to run** - Docker Compose and you're in.
+- **Built for collectors, not just CRUD** - charts, value tracking, filters, notes, exports, poster generation.
+- **Spanish and English UI** - the app is bilingual.
+- **Multi-user ready** - each user connects their own Discogs account and sees only their own collection.
 
-## Vista rápida
+## A quick look
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/screenshots/collection.webp" alt="Navegador de colección con filtros y edición en línea" width="100%" />
-      <p><strong>Navegador de colección</strong><br />Busca, filtra, ordena, puntúa, anota y exporta tus discos.</p>
+      <img src="docs/screenshots/collection.webp" alt="Collection browser with filters and inline editing" width="100%" />
+      <p><strong>Collection browser</strong><br />Search, filter, sort, rate, annotate, and export your records.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/screenshots/wall.webp" alt="Muro de portadas y generador de pósteres" width="100%" />
-      <p><strong>Muro de portadas</strong><br />Convierte tu colección en un muro visual o en un póster de alta resolución.</p>
+      <img src="docs/screenshots/wall.webp" alt="Cover wall and poster generator" width="100%" />
+      <p><strong>Cover wall</strong><br />Turn your collection into a visual wall or high-resolution poster.</p>
     </td>
   </tr>
 </table>
 
-## Qué incluye
+## What you get
 
-- **Panel principal** — totales de la colección, valor estimado, gráficas y vistas tipo leaderboard.
-- **Navegador de colección** — búsqueda, filtros, ordenación, puntuaciones en línea y notas.
-- **Páginas de detalle** — tracklist, metadatos y exportación en PNG.
-- **Muro de portadas** — generación fluida de pósteres hasta 7200px.
-- **Importación / Exportación** — compatibilidad con Excel y CSV.
-- **Logros** — desbloqueables por niveles e insignias ocultas.
-- **Selector aleatorio** — para cuando quieres que la app elija el disco de esta noche.
+- **Dashboard** - collection totals, estimated value, charts, leaderboard views.
+- **Collection browser** - search, filters, sorting, inline ratings, and notes.
+- **Release detail pages** - tracklist, metadata, and PNG export.
+- **Cover wall** - seamless poster generation up to 7200px.
+- **Import / Export** - Excel and CSV support.
+- **Achievements** - tiered unlockables and hidden badges.
+- **Random picker** - for when you want the app to choose tonight's record.
 
-## Inicio rápido
+## Quick start
 
-Si solo quieres ponerla en marcha, este es el camino.
+If you just want to run it, this is the path.
 
-### 1. Arranca con Docker
+### 1. Start with Docker
 
-Necesitas tener [Docker](https://docs.docker.com/get-docker/) instalado.
+You need [Docker](https://docs.docker.com/get-docker/) installed.
 
 ```bash
 git clone https://github.com/SimonBlancoE/discographic.git
@@ -81,7 +83,7 @@ cd discographic
 docker compose up -d
 ```
 
-Después abre **http://localhost:3800** en tu navegador.
+Then open **http://localhost:3800** in your browser.
 
 ### Ephemeral manual test instance
 
@@ -93,8 +95,8 @@ npm run test:instance:start -- --host 127.0.0.1 --port 3801
 
 That command starts a disposable Docker instance with these users already created:
 
-- **Admin** — `admin-demo` / `demo12345`
-- **User** — `user-demo` / `demo12345`
+- **Admin** - `admin-demo` / `demo12345`
+- **User** - `user-demo` / `demo12345`
 
 All data lives in memory only. When you finish testing, destroy everything with:
 
@@ -102,119 +104,119 @@ All data lives in memory only. When you finish testing, destroy everything with:
 npm run test:instance:stop -- --host 127.0.0.1 --port 3801
 ```
 
-### 2. Crea tu primer usuario
+### 2. Create your first user
 
-En el primer arranque, Discographic te pedirá crear una cuenta de administrador.
+On first launch, Discographic will ask you to create an admin account.
 
-### 3. Conecta tu cuenta de Discogs
+### 3. Connect your Discogs account
 
-Después de iniciar sesión:
+After signing in:
 
-1. Abre **Settings**
-2. Introduce tu usuario de Discogs
-3. Pega tu token personal de acceso
-4. Ejecuta **Sync with Discogs**
+1. Open **Settings**
+2. Enter your Discogs username
+3. Paste your personal access token
+4. Run **Sync with Discogs**
 
-### 4. Consigue tu token de Discogs
+### 4. Get your Discogs token
 
-1. Ve a [discogs.com/settings/developers](https://www.discogs.com/settings/developers)
-2. Haz clic en **Generate new token**
-3. Cópialo dentro de Discographic
+1. Go to [discogs.com/settings/developers](https://www.discogs.com/settings/developers)
+2. Click **Generate new token**
+3. Copy it into Discographic
 
-Eso es todo lo que la aplicación necesita para leer tu colección y sincronizar datos como puntuaciones y notas de vuelta a Discogs.
+That's all the app needs to read your collection and sync things like ratings and notes back to Discogs.
 
-### Cómo detenerla o reiniciarla después
+### Stop or restart it later
 
 ```bash
 docker compose down
 docker compose up -d
 ```
 
-Tus datos se conservan en el volumen de Docker.
+Your data stays in the Docker volume.
 
-### Cómo actualizar a una nueva versión
+### Updating to a new version
 
 ```bash
 git pull
 docker compose up -d --build
 ```
 
-Tu base de datos y tus portadas cacheadas se conservan — viven en un volumen de Docker separado de la imagen. Si la nueva versión necesita cambios en la base de datos, se aplican solos al arrancar.
+Your database and cached covers are preserved - they live in a Docker volume separate from the image. If the new version needs changes to the database, they are applied automatically on startup.
 
-## Desarrollo local
+## Local development
 
-Si quieres trabajar en el código en vez de solo ejecutar la aplicación:
+If you want to work on the code instead of just running the app:
 
 ```bash
 npm install
 ```
 
-Necesitas dos terminales:
+You need two terminals:
 
 ```bash
-# Terminal 1 — servidor API
+# Terminal 1 - API server
 npm run server
 
-# Terminal 2 — servidor Vite con hot reload
+# Terminal 2 - Vite dev server with hot reload
 npm run dev
 ```
 
 - Frontend: http://localhost:5173
 - Backend: http://localhost:3800
 
-### Variables de entorno
+### Environment variables
 
-Copia `.env.example` a `.env` si quieres sobrescribir los valores por defecto:
+Copy `.env.example` to `.env` if you want to override the defaults:
 
 ```env
-HOST_IP=127.0.0.1                         # IP de bind de Docker (usa tu IP LAN para exponerlo)
-PORT=3800                                 # Puerto de la API
-SESSION_SECRET=change-this-in-production  # Secreto para firmar cookies
-COOKIE_SECURE=false                       # Ponlo en true detrás de HTTPS
+HOST_IP=127.0.0.1                         # Docker bind IP (use your LAN IP to expose it)
+PORT=3800                                 # API port
+SESSION_SECRET=change-this-in-production  # Cookie signing secret
+COOKIE_SECURE=false                       # Set to true behind HTTPS
 ```
 
-Las credenciales de Discogs **no** se configuran con variables de entorno. Cada usuario las añade dentro de la propia app.
+Discogs credentials are **not** set via environment variables. Each user adds them inside the app.
 
-## Stack técnico
+## Tech stack
 
-| Capa | Tecnología |
+| Layer | Tech |
 |---|---|
 | Frontend | React 18, Vite, Tailwind CSS |
 | Backend | Node.js, Express |
-| Base de datos | SQLite vía better-sqlite3 |
-| Gráficas | Recharts |
-| Procesado de imágenes | Sharp |
-| Empaquetado | Docker multi-stage build |
+| Database | SQLite via better-sqlite3 |
+| Charts | Recharts |
+| Image processing | Sharp |
+| Packaging | Docker multi-stage build |
 
-## Estructura del proyecto
+## Project structure
 
 ```text
-src/          Frontend React (pages, components, hooks, context)
-server/       API Express, SQLite, cliente de Discogs y rutas
-shared/       Utilidades y textos i18n compartidos entre frontend y backend
-public/       Recursos estáticos
-data/         Datos en ejecución — base SQLite y portadas cacheadas (gitignored)
-docs/         Capturas usadas en el README
+src/          React frontend (pages, components, hooks, context)
+server/       Express API, SQLite setup, Discogs client, route handlers
+shared/       i18n strings and utilities shared between frontend and backend
+public/       Static assets
+data/         Runtime data - SQLite DB and cached covers (gitignored)
+docs/         README screenshots
 ```
 
-## Solución de problemas
+## Troubleshooting
 
-**`better-sqlite3` o `sharp` fallan al instalar**
+**`better-sqlite3` or `sharp` fails to install**
 
-Ambos paquetes usan binarios nativos. En Linux puede que necesites `build-essential` y `python3`. En macOS, instala las Xcode command line tools. La imagen Docker evita este problema por completo.
+Both packages use native binaries. On Linux you may need `build-essential` and `python3`. On macOS, install Xcode command line tools. The Docker image avoids this problem entirely.
 
-**El puerto 3800 ya está en uso**
+**Port 3800 is already in use**
 
-Cambia el puerto en `.env` o en `docker-compose.yml`.
+Change the port in `.env` or in `docker-compose.yml`.
 
-**La primera sincronización tarda bastante**
+**First sync takes a while**
 
-Es normal en colecciones grandes. Discogs aplica rate limiting a la API, así que la sincronización inicial puede tardar varios minutos. Las siguientes sincronizaciones son mucho más rápidas.
+That is normal for larger collections. Discogs rate-limits API calls, so the initial sync can take several minutes. Later syncs are much faster.
 
-**Las portadas van lentas la primera vez**
+**Covers are slow the first time**
 
-Las miniaturas se almacenan en caché localmente. La primera generación del muro o del póster es la lenta; después mejora mucho.
+Cover thumbnails are cached locally. The first wall/poster run is the slow one; after that it gets much faster.
 
-## Licencia
+## License
 
 [MIT](LICENSE)
