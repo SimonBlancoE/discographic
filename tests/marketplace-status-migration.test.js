@@ -50,16 +50,27 @@ describe('migrateMarketplaceStatus', () => {
     expect(cols).toContain('marketplace_status');
   });
 
-  it('backfills READY for rows with positive estimated_value on first run', () => {
+  it('backfills PRICED for rows with positive estimated_value on first run', () => {
     insertRow({ release_id: 1, instance_id: 1, estimated_value: 15 });
     insertRow({ release_id: 2, instance_id: 2, estimated_value: 0 });
     insertRow({ release_id: 3, instance_id: 3, estimated_value: null });
     migrateMarketplaceStatus(db);
     const rows = db.prepare('SELECT release_id, marketplace_status, estimated_value FROM releases ORDER BY release_id').all();
-    expect(rows[0].marketplace_status).toBe(MARKETPLACE_STATUS.READY);
+    expect(rows[0].marketplace_status).toBe(MARKETPLACE_STATUS.PRICED);
     expect(rows[1].marketplace_status).toBe(MARKETPLACE_STATUS.PENDING);
     expect(rows[1].estimated_value).toBeNull();
     expect(rows[2].marketplace_status).toBe(MARKETPLACE_STATUS.PENDING);
+  });
+
+  it('converts legacy ready statuses to priced on re-run', () => {
+    insertRow({ release_id: 1, instance_id: 1, estimated_value: 15 });
+    migrateMarketplaceStatus(db);
+    db.prepare("UPDATE releases SET marketplace_status = 'ready' WHERE release_id = 1").run();
+
+    migrateMarketplaceStatus(db);
+
+    const row = db.prepare('SELECT marketplace_status FROM releases WHERE release_id = 1').get();
+    expect(row.marketplace_status).toBe(MARKETPLACE_STATUS.PRICED);
   });
 
   it('preserves existing non-default statuses on re-run', () => {

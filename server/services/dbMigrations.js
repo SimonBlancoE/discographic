@@ -16,6 +16,11 @@ export function migrateMarketplaceStatus(db) {
   }
 
   if (!justAdded) {
+    db.prepare(`
+      UPDATE releases
+      SET marketplace_status = ?
+      WHERE marketplace_status = 'ready'
+    `).run(MARKETPLACE_STATUS.PRICED);
     return;
   }
 
@@ -28,7 +33,7 @@ export function migrateMarketplaceStatus(db) {
       ELSE marketplace_status
     END
   `).run(
-    MARKETPLACE_STATUS.READY,
+    MARKETPLACE_STATUS.PRICED,
     MARKETPLACE_STATUS.PENDING,
     MARKETPLACE_STATUS.PENDING
   );

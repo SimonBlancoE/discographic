@@ -83,7 +83,10 @@ export function normalizeDashboardStats(payload = {}) {
       total_value: asNullableNumber(totals.total_value),
       rated_records: asNumber(totals.rated_records),
       notes_records: asNumber(totals.notes_records),
-      priced_records: asNumber(totals.priced_records)
+      priced_records: asNumber(totals.priced_records),
+      value_pending_records: asNumber(totals.value_pending_records),
+      value_failed_records: asNumber(totals.value_failed_records),
+      value_unavailable_records: asNumber(totals.value_unavailable_records)
     },
     genres: normalizeNamedCountRows(payload.genres),
     decades: normalizeNamedCountRows(payload.decades),

@@ -12,31 +12,54 @@ describe('fetchMarketplaceValue', () => {
     logSpy.mockRestore();
   });
 
-  it('returns READY with parsed price when marketplace returns valid lowest_price', async () => {
+  it('returns PRICED with parsed price when marketplace returns valid lowest_price', async () => {
     const discogs = { getMarketplaceStats: async () => ({ lowest_price: { value: 42.5 } }) };
     const result = await fetchMarketplaceValue(discogs, 123);
-    expect(result.estimatedValue).toBe(42.5);
-    expect(result.marketplaceStatus).toBe(MARKETPLACE_STATUS.READY);
+
+    expect(result).toEqual({
+      estimatedValue: 42.5,
+      marketplaceStatus: MARKETPLACE_STATUS.PRICED,
+      error: null
+    });
   });
 
-  it('returns UNAVAILABLE when lowest_price is null', async () => {
+  it('returns UNAVAILABLE when marketplace stats contain no price', async () => {
     const discogs = { getMarketplaceStats: async () => ({ lowest_price: { value: null } }) };
     const result = await fetchMarketplaceValue(discogs, 123);
-    expect(result.estimatedValue).toBeNull();
-    expect(result.marketplaceStatus).toBe(MARKETPLACE_STATUS.UNAVAILABLE);
+
+    expect(result).toEqual({
+      estimatedValue: null,
+      marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE,
+      error: null
+    });
   });
 
-  it('returns FAILED and logs error.message when discogs throws', async () => {
+  it('returns FAILED and an error message when discogs throws', async () => {
     const discogs = {
       getMarketplaceStats: async () => {
         throw new Error('network blew up');
       }
     };
     const result = await fetchMarketplaceValue(discogs, 456);
-    expect(result.marketplaceStatus).toBe(MARKETPLACE_STATUS.FAILED);
-    expect(result.estimatedValue).toBeNull();
+
+    expect(result).toEqual({
+      estimatedValue: null,
+      marketplaceStatus: MARKETPLACE_STATUS.FAILED,
+      error: 'network blew up'
+    });
     const logged = logSpy.mock.calls.flat().join(' ');
     expect(logged).toContain('network blew up');
     expect(logged).toContain('456');
+  });
+
+  it('returns UNAVAILABLE when marketplace stats are malformed', async () => {
+    const discogs = { getMarketplaceStats: async () => ({ lowest_price: { value: 'not-a-price' } }) };
+    const result = await fetchMarketplaceValue(discogs, 789);
+
+    expect(result).toEqual({
+      estimatedValue: null,
+      marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE,
+      error: null
+    });
   });
 });

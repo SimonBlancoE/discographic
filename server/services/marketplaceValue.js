@@ -2,7 +2,7 @@ import { DEFAULT_CURRENCY } from './exchangeRates.js';
 
 export const MARKETPLACE_STATUS = {
   PENDING: 'pending',
-  READY: 'ready',
+  PRICED: 'priced',
   UNAVAILABLE: 'unavailable',
   FAILED: 'failed'
 };
@@ -21,19 +21,22 @@ export async function fetchMarketplaceValue(discogs, releaseId, currency = DEFAU
     if (!Number.isFinite(estimatedValue)) {
       return {
         estimatedValue: null,
-        marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE
+        marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE,
+        error: null
       };
     }
 
     return {
       estimatedValue,
-      marketplaceStatus: MARKETPLACE_STATUS.READY
+      marketplaceStatus: MARKETPLACE_STATUS.PRICED,
+      error: null
     };
   } catch (error) {
     console.log('[marketplace-value] fetch failed:', releaseId, error.message);
     return {
       estimatedValue: null,
-      marketplaceStatus: MARKETPLACE_STATUS.FAILED
+      marketplaceStatus: MARKETPLACE_STATUS.FAILED,
+      error: error.message
     };
   }
 }

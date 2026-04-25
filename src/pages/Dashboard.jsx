@@ -123,6 +123,9 @@ function CoveragePanel({ totals }) {
   const rated = totals.rated_records || 0;
   const notes = totals.notes_records || 0;
   const priced = totals.priced_records || 0;
+  const pendingValues = totals.value_pending_records || 0;
+  const failedValues = totals.value_failed_records || 0;
+  const unavailableValues = totals.value_unavailable_records || 0;
   const readiness = total ? Math.round(((rated + notes + priced) / (total * 3)) * 100) : 0;
 
   return (
@@ -146,7 +149,12 @@ function CoveragePanel({ totals }) {
       <div className="grid gap-4 xl:grid-cols-3">
         <CoverageMetric label={t('collection.rating')} value={rated} total={total} tone="bg-rose-400/15 text-rose-100" helper={(remaining) => remaining > 0 ? t('dashboard.ratingsMissing', { count: formatNumber(remaining) }) : t('dashboard.ratingsDone')} />
         <CoverageMetric label={t('collection.notes')} value={notes} total={total} tone="bg-cyan-400/15 text-cyan-100" helper={(remaining) => remaining > 0 ? t('dashboard.notesMissing', { count: formatNumber(remaining) }) : t('dashboard.notesDone')} />
-        <CoverageMetric label={t('collection.price')} value={priced} total={total} tone="bg-amber-300/15 text-amber-100" helper={(remaining) => remaining > 0 ? t('dashboard.pricesMissing', { count: formatNumber(remaining) }) : t('dashboard.pricesDone')} />
+        <CoverageMetric label={t('collection.price')} value={priced} total={total} tone="bg-amber-300/15 text-amber-100" helper={(remaining) => remaining > 0 ? t('dashboard.pricesMissing', {
+          count: formatNumber(remaining),
+          pending: formatNumber(pendingValues),
+          failed: formatNumber(failedValues),
+          unavailable: formatNumber(unavailableValues)
+        }) : t('dashboard.pricesDone')} />
       </div>
     </section>
   );
