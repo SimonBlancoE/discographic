@@ -34,6 +34,20 @@ function SortButton({ label, column, sortBy, sortOrder, onSort }) {
   );
 }
 
+function MarketplaceValue({ release, currency, t }) {
+  if (release.marketplace_status === 'priced' && release.estimated_value != null) {
+    return <span className="text-brand-100">{formatCurrency(release.estimated_value, currency)}</span>;
+  }
+
+  const labelKey = {
+    pending: 'collection.pricePending',
+    failed: 'collection.priceFailed',
+    unavailable: 'collection.priceUnavailable'
+  }[release.marketplace_status] || 'collection.priceUnknown';
+
+  return <span className="text-xs text-slate-500">{t(labelKey)}</span>;
+}
+
 const RENDERERS = {
   cover: {
     header: (t) => t('collection.cover'),
@@ -97,7 +111,7 @@ const RENDERERS = {
   },
   price: {
     header: (t, sortProps) => <SortButton label={t('collection.price')} column="estimated_value" {...sortProps} />,
-    cell: (release, { currency }) => <span className="text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value, currency) : '-'}</span>,
+    cell: (release, { currency, t }) => <MarketplaceValue release={release} currency={currency} t={t} />,
   },
   listingStatus: {
     header: (t) => t('collection.listingStatus'),

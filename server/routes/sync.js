@@ -394,6 +394,10 @@ async function runEnrichAll({ userId, discogs }) {
           const detail = await discogs.getRelease(row.release_id);
           const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
 
+          const estimatedValue = marketplace.marketplaceStatus === MARKETPLACE_STATUS.PRICED
+            ? marketplace.estimatedValue
+            : null;
+
           db.prepare(`
             UPDATE releases
             SET estimated_value = ?,
@@ -403,7 +407,7 @@ async function runEnrichAll({ userId, discogs }) {
                 synced_at = CURRENT_TIMESTAMP
             WHERE id = ? AND user_id = ?
           `).run(
-            marketplace.estimatedValue,
+            estimatedValue,
             marketplace.marketplaceStatus,
             detail.country || null,
             stringifyJson(detail.tracklist || []),

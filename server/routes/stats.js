@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 import { countMeaningfulNoteRows } from '../services/notes.js';
 import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
+import { MARKETPLACE_STATUS } from '../services/marketplaceValue.js';
 
 const router = express.Router();
 
@@ -44,13 +45,16 @@ router.get('/', async (req, res) => {
     const pricedRecords = db.prepare(`
       SELECT COUNT(*) AS count
       FROM releases
-      WHERE user_id = ? AND estimated_value IS NOT NULL AND estimated_value > 0
-    `).get(userId).count;
+      WHERE user_id = ? AND marketplace_status = ? AND estimated_value IS NOT NULL AND estimated_value > 0
+    `).get(userId, MARKETPLACE_STATUS.PRICED).count;
+    const valuePendingRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND marketplace_status = ?').get(userId, MARKETPLACE_STATUS.PENDING).count;
+    const valueFailedRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND marketplace_status = ?').get(userId, MARKETPLACE_STATUS.FAILED).count;
+    const valueUnavailableRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND marketplace_status = ?').get(userId, MARKETPLACE_STATUS.UNAVAILABLE).count;
     const totalValueEur = db.prepare(`
       SELECT COALESCE(SUM(estimated_value), 0) AS total
       FROM releases
-      WHERE user_id = ? AND estimated_value IS NOT NULL AND estimated_value > 0
-    `).get(userId).total;
+      WHERE user_id = ? AND marketplace_status = ? AND estimated_value IS NOT NULL AND estimated_value > 0
+    `).get(userId, MARKETPLACE_STATUS.PRICED).total;
 
     const genres = countJsonValues(
       db.prepare('SELECT genres AS value FROM releases WHERE user_id = ? AND genres IS NOT NULL').all(userId),
@@ -91,10 +95,10 @@ router.get('/', async (req, res) => {
     const topValue = db.prepare(`
       SELECT id, release_id, artist, title, year, cover_url, estimated_value
       FROM releases
-      WHERE user_id = ? AND estimated_value IS NOT NULL
+      WHERE user_id = ? AND marketplace_status = ? AND estimated_value IS NOT NULL AND estimated_value > 0
       ORDER BY estimated_value DESC, artist ASC
       LIMIT 10
-    `).all(userId);
+    `).all(userId, MARKETPLACE_STATUS.PRICED);
 
     const artists = db.prepare(`
       SELECT artist, COUNT(*) AS count
@@ -119,7 +123,10 @@ router.get('/', async (req, res) => {
         total_value: await convertAmount(totalValueEur, DEFAULT_CURRENCY, displayCurrency),
         rated_records: ratedRecords,
         notes_records: notesRecords,
-        priced_records: pricedRecords
+        priced_records: pricedRecords,
+        value_pending_records: valuePendingRecords,
+        value_failed_records: valueFailedRecords,
+        value_unavailable_records: valueUnavailableRecords
       },
       genres: genres.slice(0, 12),
       decades,

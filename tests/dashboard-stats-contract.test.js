@@ -9,7 +9,10 @@ describe('dashboard stats contract', () => {
         total_value: null,
         rated_records: 0,
         notes_records: 0,
-        priced_records: 0
+        priced_records: 0,
+        value_pending_records: 0,
+        value_failed_records: 0,
+        value_unavailable_records: 0
       },
       genres: [],
       decades: [],
@@ -31,7 +34,10 @@ describe('dashboard stats contract', () => {
         total_value: '34.5',
         rated_records: '4',
         notes_records: 3,
-        priced_records: '2'
+        priced_records: '2',
+        value_pending_records: '5',
+        value_failed_records: 1,
+        value_unavailable_records: '4'
       },
       genres: [{ name: 'Techno', count: '7' }, { foo: 'bad' }],
       artists: [{ artist: 'Surgeon', count: '2' }, { name: 'bad' }],
@@ -46,7 +52,10 @@ describe('dashboard stats contract', () => {
       total_value: 34.5,
       rated_records: 4,
       notes_records: 3,
-      priced_records: 2
+      priced_records: 2,
+      value_pending_records: 5,
+      value_failed_records: 1,
+      value_unavailable_records: 4
     });
     expect(normalized.genres).toEqual([{ name: 'Techno', count: 7 }]);
     expect(normalized.artists).toEqual([{ artist: 'Surgeon', count: 2 }]);
