@@ -1,4 +1,4 @@
-export const IMPORT_TERMINAL_STATUSES = new Set(['completed', 'partial', 'failed', 'local_only']);
+const IMPORT_TERMINAL_STATUSES = new Set(['completed', 'partial', 'failed', 'local_only']);
 
 const IMPORT_RESULT_META = {
   completed: {

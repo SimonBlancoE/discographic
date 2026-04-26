@@ -10,7 +10,7 @@ const coversDir = join(__dirname, '..', '..', 'data', 'covers');
 const REMOTE_IMAGE_HOSTS = new Set(['i.discogs.com', 'img.discogs.com']);
 const USER_AGENT = 'Discographic/1.0';
 
-export const COVER_VARIANTS = {
+const COVER_VARIANTS = {
   detail: { width: 720, quality: 84 },
   wall: { width: 320, quality: 78 },
   tapete: { width: 220, quality: 88 },

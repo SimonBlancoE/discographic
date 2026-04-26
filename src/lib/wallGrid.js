@@ -1,6 +1,6 @@
 export const WALL_GRID_GAP = 16;
 export const WALL_TITLE_PANEL_HEIGHT = 64;
-export const WALL_OVERSCAN_ROWS = 2;
+const WALL_OVERSCAN_ROWS = 2;
 
 export function filterWallReleases(releases, filters = {}) {
   const query = String(filters.search || '').trim().toLowerCase();

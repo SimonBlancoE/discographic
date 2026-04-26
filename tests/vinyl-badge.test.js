@@ -20,13 +20,13 @@ describe('buildBadgeGenres', () => {
     ]);
   });
 
-  it('falls back to default genres when no usable data exists', () => {
+  it('falls back to neutral swatches when no usable genre data exists', () => {
     expect(buildBadgeGenres([{}, null, '']).map((item) => item.name)).toEqual([
-      'JAZZ',
-      'ELECTRONIC',
-      'ROCK',
-      'SOUL',
-      'AMBIENT'
+      'DISC 1',
+      'DISC 2',
+      'DISC 3',
+      'DISC 4',
+      'DISC 5'
     ]);
   });
 });

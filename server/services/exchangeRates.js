@@ -141,4 +141,4 @@ export async function convertReleasePrices(release, displayCurrency) {
   };
 }
 
-export { SUPPORTED_CURRENCIES, DEFAULT_CURRENCY, normalizeCurrency };
+export { DEFAULT_CURRENCY, normalizeCurrency };

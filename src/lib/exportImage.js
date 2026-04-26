@@ -79,26 +79,30 @@ async function createJpegDataUrl(node, options = {}) {
   }
 }
 
-export async function downloadNodeAsPng(node, filename) {
-  const blob = await createBlob(node);
-  const url = URL.createObjectURL(blob);
+function triggerDownload(href, filename) {
   const link = document.createElement('a');
-  link.href = url;
+  link.href = href;
   link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  try {
+    triggerDownload(url, filename);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function downloadNodeAsPng(node, filename) {
+  downloadBlob(await createBlob(node), filename);
 }
 
 export async function downloadNodeAsJpeg(node, filename, options = {}) {
-  const dataUrl = await createJpegDataUrl(node, options);
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  triggerDownload(await createJpegDataUrl(node, options), filename);
 }
 
 export async function shareNodeAsPng(node, filename, shareTitle) {
@@ -113,13 +117,6 @@ export async function shareNodeAsPng(node, filename, shareTitle) {
     return 'shared';
   }
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, filename);
   return 'downloaded';
 }
