@@ -53,6 +53,24 @@ describe('fetchMarketplaceValue', () => {
     expect(logged).toContain('456');
   });
 
+  it('returns FAILED with a normalized message when discogs throws a non-Error value', async () => {
+    const discogs = {
+      getMarketplaceStats: async () => {
+        throw 'rate limited';
+      }
+    };
+    const result = await fetchMarketplaceValue(discogs, 654);
+
+    expect(result).toEqual({
+      estimatedValue: null,
+      marketplaceStatus: MARKETPLACE_STATUS.FAILED,
+      error: 'rate limited'
+    });
+    const logged = logSpy.mock.calls.flat().join(' ');
+    expect(logged).toContain('rate limited');
+    expect(logged).toContain('654');
+  });
+
   it('returns UNAVAILABLE when marketplace stats are malformed', async () => {
     const discogs = { getMarketplaceStats: async () => ({ lowest_price: { value: 'not-a-price' } }) };
     const result = await fetchMarketplaceValue(discogs, 789);
