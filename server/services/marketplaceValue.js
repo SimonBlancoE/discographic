@@ -1,16 +1,5 @@
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { DEFAULT_CURRENCY } from './exchangeRates.js';
-
-export const MARKETPLACE_STATUS = {
-  PENDING: 'pending',
-  PRICED: 'priced',
-  UNAVAILABLE: 'unavailable',
-  FAILED: 'failed'
-};
-
-export const RETRYABLE_MARKETPLACE_STATUSES = [
-  MARKETPLACE_STATUS.PENDING,
-  MARKETPLACE_STATUS.FAILED
-];
 
 export async function fetchMarketplaceValue(discogs, releaseId, currency = DEFAULT_CURRENCY) {
   try {

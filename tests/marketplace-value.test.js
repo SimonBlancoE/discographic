@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { fetchMarketplaceValue, MARKETPLACE_STATUS } from '../server/services/marketplaceValue.js';
+import { MARKETPLACE_STATUS } from '../shared/contracts/marketplace.js';
+import { fetchMarketplaceValue } from '../server/services/marketplaceValue.js';
 
 describe('fetchMarketplaceValue', () => {
   let logSpy;

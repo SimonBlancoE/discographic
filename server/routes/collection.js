@@ -2,7 +2,8 @@ import express from 'express';
 import db, { getSettingForUser, hydrateRelease, parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertReleasePrices, normalizeCurrency } from '../services/exchangeRates.js';
-import { fetchMarketplaceValue, MARKETPLACE_STATUS } from '../services/marketplaceValue.js';
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
+import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 import { parseStoredNotes, replaceNoteText, resolveNoteFieldId } from '../services/notes.js';
 import { buildReleaseFilterWhere, getCollectionFilterOptions } from '../services/releaseFilters.js';
 
