@@ -451,7 +451,6 @@ async function runEnrichAll({ userId, discogs }) {
   }
 }
 
-// --- Routes ---
 
 router.post('/', async (req, res) => {
   const userId = req.session.userId;
