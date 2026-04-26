@@ -7,6 +7,14 @@ function hasColumn(db, tableName, columnName) {
     .some((column) => column.name === columnName);
 }
 
+function clearLegacyZeroEstimatedValues(db) {
+  db.prepare(`
+    UPDATE releases
+    SET estimated_value = NULL
+    WHERE estimated_value = 0
+  `).run();
+}
+
 export function migrateMarketplaceStatus(db) {
   const justAdded = !hasColumn(db, 'releases', 'marketplace_status');
   if (justAdded) {
@@ -21,6 +29,7 @@ export function migrateMarketplaceStatus(db) {
       SET marketplace_status = ?
       WHERE marketplace_status = 'ready'
     `).run(MARKETPLACE_STATUS.PRICED);
+    clearLegacyZeroEstimatedValues(db);
     return;
   }
 
@@ -38,9 +47,5 @@ export function migrateMarketplaceStatus(db) {
     MARKETPLACE_STATUS.PENDING
   );
 
-  db.prepare(`
-    UPDATE releases
-    SET estimated_value = NULL
-    WHERE estimated_value = 0
-  `).run();
+  clearLegacyZeroEstimatedValues(db);
 }
