@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { getMarketplaceStatusLabelKey, hasPricedMarketplaceValue } from '../../shared/contracts/marketplace.js';
 import { formatCurrency, joinNames } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { COLUMNS } from '../lib/columns';
@@ -35,17 +36,11 @@ function SortButton({ label, column, sortBy, sortOrder, onSort }) {
 }
 
 function MarketplaceValue({ release, currency, t }) {
-  if (release.marketplace_status === 'priced' && release.estimated_value != null) {
+  if (hasPricedMarketplaceValue(release)) {
     return <span className="text-brand-100">{formatCurrency(release.estimated_value, currency)}</span>;
   }
 
-  const labelKey = {
-    pending: 'collection.pricePending',
-    failed: 'collection.priceFailed',
-    unavailable: 'collection.priceUnavailable'
-  }[release.marketplace_status] || 'collection.priceUnknown';
-
-  return <span className="text-xs text-slate-500">{t(labelKey)}</span>;
+  return <span className="text-xs text-slate-500">{t(getMarketplaceStatusLabelKey(release.marketplace_status))}</span>;
 }
 
 const RENDERERS = {
