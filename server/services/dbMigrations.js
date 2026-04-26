@@ -1,4 +1,4 @@
-import { MARKETPLACE_STATUS } from './marketplaceValue.js';
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 
 function hasColumn(db, tableName, columnName) {
   return db

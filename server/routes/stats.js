@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 import { countMeaningfulNoteRows } from '../services/notes.js';
 import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
-import { MARKETPLACE_STATUS } from '../services/marketplaceValue.js';
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 
 const router = express.Router();
 
