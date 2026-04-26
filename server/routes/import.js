@@ -27,9 +27,6 @@ const PREVIEW_TTL_MS = 10 * 60 * 1000;
 // In-memory import sync state per user
 const importSyncStates = new Map();
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function cleanPreviewCache() {
   const now = Date.now();
@@ -198,9 +195,6 @@ function extractChanges(userId, rows, columnMap, t) {
   return { changes, unmatchedRows, errors };
 }
 
-// ---------------------------------------------------------------------------
-// Background sync with Discogs
-// ---------------------------------------------------------------------------
 
 function getImportSyncState(userId, locale = 'es') {
   if (!importSyncStates.has(userId)) {
@@ -310,9 +304,6 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
 
 router.get('/template', (req, res) => {
   const data = [
