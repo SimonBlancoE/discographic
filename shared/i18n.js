@@ -1,6 +1,6 @@
 export const LOCALE_STORAGE_KEY = 'discographic-locale';
-export const DEFAULT_LOCALE = 'es';
-export const SUPPORTED_LOCALES = ['es', 'en'];
+const DEFAULT_LOCALE = 'es';
+const SUPPORTED_LOCALES = ['es', 'en'];
 
 export const messages = {
   es: {
@@ -226,7 +226,7 @@ export const messages = {
     'dashboard.syncedRecords': 'Registros sincronizados: {count}',
     'dashboard.mappedStyles': 'Estilos mapeados: {count}',
     'dashboard.coverageTitle': 'Cobertura de la ficha',
-    'dashboard.coverageSubtitle': 'Hemos rehecho este bloque para que diga algo útil: cuánto de tu colección está realmente documentado y qué te falta para dejarla fina.',
+    'dashboard.coverageSubtitle': 'Consulta cuánto de tu colección está documentado y qué discos aún necesitan valoración, notas o precio de mercado.',
     'dashboard.readiness': 'Índice de preparación',
     'dashboard.readinessBody': 'de la colección con ficha útil para pinchar, recordar y valorar',
     'dashboard.ratingsMissing': 'Te faltan {count} discos por puntuar.',
@@ -688,7 +688,7 @@ export const messages = {
     'dashboard.syncedRecords': 'Synced records: {count}',
     'dashboard.mappedStyles': 'Mapped styles: {count}',
     'dashboard.coverageTitle': 'Record coverage',
-    'dashboard.coverageSubtitle': 'We rebuilt this section so it says something useful: how much of your collection is actually documented and what is still missing.',
+    'dashboard.coverageSubtitle': 'See how much of your collection is documented and which records still need ratings, notes, or market data.',
     'dashboard.readiness': 'Readiness index',
     'dashboard.readinessBody': 'of the collection documented enough to play, remember, and value',
     'dashboard.ratingsMissing': '{count} records still need ratings.',
@@ -952,7 +952,7 @@ export function persistLocale(locale) {
   }
 }
 
-export function interpolate(template, vars = {}) {
+function interpolate(template, vars = {}) {
   return String(template).replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ''));
 }
 

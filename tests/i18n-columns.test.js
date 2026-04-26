@@ -219,4 +219,11 @@ describe('i18n keys for import/media/client fallbacks', () => {
       expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
     }
   });
+
+  it('uses collector-facing dashboard coverage copy', () => {
+    expect(messages.es['dashboard.coverageSubtitle']).toBe('Consulta cuánto de tu colección está documentado y qué discos aún necesitan valoración, notas o precio de mercado.');
+    expect(messages.en['dashboard.coverageSubtitle']).toBe('See how much of your collection is documented and which records still need ratings, notes, or market data.');
+    expect(messages.es['dashboard.coverageSubtitle']).not.toMatch(/rehecho/i);
+    expect(messages.en['dashboard.coverageSubtitle']).not.toMatch(/rebuilt/i);
+  });
 });
