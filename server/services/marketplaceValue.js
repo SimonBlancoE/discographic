@@ -1,6 +1,18 @@
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { DEFAULT_CURRENCY } from './exchangeRates.js';
 
+function getErrorMessage(error) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error == null) {
+    return 'Unknown marketplace error';
+  }
+
+  return String(error);
+}
+
 export async function fetchMarketplaceValue(discogs, releaseId, currency = DEFAULT_CURRENCY) {
   try {
     const stats = await discogs.getMarketplaceStats(releaseId, currency);
@@ -21,11 +33,12 @@ export async function fetchMarketplaceValue(discogs, releaseId, currency = DEFAU
       error: null
     };
   } catch (error) {
-    console.log('[marketplace-value] fetch failed:', releaseId, error.message);
+    const message = getErrorMessage(error);
+    console.log('[marketplace-value] fetch failed:', releaseId, message);
     return {
       estimatedValue: null,
       marketplaceStatus: MARKETPLACE_STATUS.FAILED,
-      error: error.message
+      error: message
     };
   }
 }
