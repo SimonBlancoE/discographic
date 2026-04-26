@@ -30,7 +30,7 @@ export function getCurrentUser(req) {
   return getUserById(req.session.userId);
 }
 
-export function requireDiscogsAccount(req) {
+function requireDiscogsAccount(req) {
   const account = getDiscogsAccount(req.session.userId);
   if (!account) {
     throw new Error(req.t('backend.auth.configureDiscogs'));

@@ -1,4 +1,4 @@
-export function normalizeNoteText(value) {
+function normalizeNoteText(value) {
   return String(value || '').trim();
 }
 

@@ -7,14 +7,6 @@ export const COLLECTION_FILTER_KEYS = Object.freeze([
   'label'
 ]);
 
-export const DEFAULT_COLLECTION_FILTERS = Object.freeze({
-  search: '',
-  genre: '',
-  style: '',
-  decade: '',
-  format: '',
-  label: ''
-});
 
 function readFilterValue(source, key) {
   if (!source) {
