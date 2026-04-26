@@ -73,6 +73,24 @@ describe('migrateMarketplaceStatus', () => {
     expect(row.marketplace_status).toBe(MARKETPLACE_STATUS.PRICED);
   });
 
+  it('clears legacy zero estimated values when marketplace_status already exists', () => {
+    db.exec(`ALTER TABLE releases ADD COLUMN marketplace_status TEXT DEFAULT '${MARKETPLACE_STATUS.PENDING}'`);
+    insertRow({ release_id: 1, instance_id: 1, estimated_value: 0 });
+    insertRow({ release_id: 2, instance_id: 2, estimated_value: 0 });
+    insertRow({ release_id: 3, instance_id: 3, estimated_value: 20 });
+    db.prepare('UPDATE releases SET marketplace_status = ? WHERE release_id = 2').run(MARKETPLACE_STATUS.UNAVAILABLE);
+    db.prepare('UPDATE releases SET marketplace_status = ? WHERE release_id = 3').run(MARKETPLACE_STATUS.PRICED);
+
+    migrateMarketplaceStatus(db);
+
+    const rows = db.prepare('SELECT release_id, marketplace_status, estimated_value FROM releases ORDER BY release_id').all();
+    expect(rows).toEqual([
+      { release_id: 1, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_value: null },
+      { release_id: 2, marketplace_status: MARKETPLACE_STATUS.UNAVAILABLE, estimated_value: null },
+      { release_id: 3, marketplace_status: MARKETPLACE_STATUS.PRICED, estimated_value: 20 }
+    ]);
+  });
+
   it('preserves existing non-default statuses on re-run', () => {
     insertRow({ release_id: 1, instance_id: 1, estimated_value: 15 });
     migrateMarketplaceStatus(db);
