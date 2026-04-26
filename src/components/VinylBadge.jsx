@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../lib/I18nContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-const DEFAULT_GENRE_NAMES = ['JAZZ', 'ELECTRONIC', 'ROCK', 'SOUL', 'AMBIENT'];
+const NEUTRAL_BADGE_LABELS = ['DISC 1', 'DISC 2', 'DISC 3', 'DISC 4', 'DISC 5'];
 const GENRE_SWATCHES = [
   'radial-gradient(circle at 30% 30%, #fef3c7, #f59e0b 70%, #78350f)',
   'linear-gradient(135deg, #67e8f9, #a78bfa)',
@@ -28,7 +28,7 @@ export function buildBadgeGenres(genres = []) {
     .map(getGenreName)
     .filter(Boolean)
     .slice(0, GENRE_SWATCHES.length);
-  const source = names.length ? names : DEFAULT_GENRE_NAMES;
+  const source = names.length ? names : NEUTRAL_BADGE_LABELS;
 
   return source.map((name, index) => ({
     name,
