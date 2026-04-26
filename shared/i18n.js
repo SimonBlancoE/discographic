@@ -1,6 +1,6 @@
 export const LOCALE_STORAGE_KEY = 'discographic-locale';
-export const DEFAULT_LOCALE = 'es';
-export const SUPPORTED_LOCALES = ['es', 'en'];
+const DEFAULT_LOCALE = 'es';
+const SUPPORTED_LOCALES = ['es', 'en'];
 
 export const messages = {
   es: {
@@ -944,7 +944,7 @@ export function persistLocale(locale) {
   }
 }
 
-export function interpolate(template, vars = {}) {
+function interpolate(template, vars = {}) {
   return String(template).replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ''));
 }
 
