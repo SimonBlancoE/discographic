@@ -1,10 +1,18 @@
-import { MARKETPLACE_STATUS } from './marketplaceValue.js';
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 
 function hasColumn(db, tableName, columnName) {
   return db
     .prepare(`PRAGMA table_info(${tableName})`)
     .all()
     .some((column) => column.name === columnName);
+}
+
+function clearLegacyZeroEstimatedValues(db) {
+  db.prepare(`
+    UPDATE releases
+    SET estimated_value = NULL
+    WHERE estimated_value = 0
+  `).run();
 }
 
 export function migrateMarketplaceStatus(db) {
@@ -16,6 +24,12 @@ export function migrateMarketplaceStatus(db) {
   }
 
   if (!justAdded) {
+    db.prepare(`
+      UPDATE releases
+      SET marketplace_status = ?
+      WHERE marketplace_status = 'ready'
+    `).run(MARKETPLACE_STATUS.PRICED);
+    clearLegacyZeroEstimatedValues(db);
     return;
   }
 
@@ -28,14 +42,10 @@ export function migrateMarketplaceStatus(db) {
       ELSE marketplace_status
     END
   `).run(
-    MARKETPLACE_STATUS.READY,
+    MARKETPLACE_STATUS.PRICED,
     MARKETPLACE_STATUS.PENDING,
     MARKETPLACE_STATUS.PENDING
   );
 
-  db.prepare(`
-    UPDATE releases
-    SET estimated_value = NULL
-    WHERE estimated_value = 0
-  `).run();
+  clearLegacyZeroEstimatedValues(db);
 }

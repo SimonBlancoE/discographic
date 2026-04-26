@@ -2,6 +2,7 @@ import express from 'express';
 import db, { getSettingForUser, hydrateRelease, parseJson, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertReleasePrices, normalizeCurrency } from '../services/exchangeRates.js';
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 import { parseStoredNotes, replaceNoteText, resolveNoteFieldId } from '../services/notes.js';
 import { buildReleaseFilterWhere, getCollectionFilterOptions } from '../services/releaseFilters.js';
@@ -77,6 +78,10 @@ async function enrichReleaseIfNeeded(req, release) {
   const detail = await discogs.getRelease(release.release_id);
   const marketplace = await fetchMarketplaceValue(discogs, release.release_id, DEFAULT_CURRENCY);
 
+  const estimatedValue = marketplace.marketplaceStatus === MARKETPLACE_STATUS.PRICED
+    ? marketplace.estimatedValue
+    : null;
+
   db.prepare(`
     UPDATE releases
     SET genres = ?,
@@ -93,7 +98,7 @@ async function enrichReleaseIfNeeded(req, release) {
     stringifyJson(detail.styles || []),
     detail.country || release.country || null,
     stringifyJson(detail.tracklist || []),
-    marketplace.estimatedValue,
+    estimatedValue,
     marketplace.marketplaceStatus,
     JSON.stringify(detail),
     release.id,

@@ -1,16 +1,17 @@
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { DEFAULT_CURRENCY } from './exchangeRates.js';
 
-export const MARKETPLACE_STATUS = {
-  PENDING: 'pending',
-  READY: 'ready',
-  UNAVAILABLE: 'unavailable',
-  FAILED: 'failed'
-};
+function getErrorMessage(error) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
 
-export const RETRYABLE_MARKETPLACE_STATUSES = [
-  MARKETPLACE_STATUS.PENDING,
-  MARKETPLACE_STATUS.FAILED
-];
+  if (error == null) {
+    return 'Unknown marketplace error';
+  }
+
+  return String(error);
+}
 
 export async function fetchMarketplaceValue(discogs, releaseId, currency = DEFAULT_CURRENCY) {
   try {
@@ -21,19 +22,23 @@ export async function fetchMarketplaceValue(discogs, releaseId, currency = DEFAU
     if (!Number.isFinite(estimatedValue)) {
       return {
         estimatedValue: null,
-        marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE
+        marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE,
+        error: null
       };
     }
 
     return {
       estimatedValue,
-      marketplaceStatus: MARKETPLACE_STATUS.READY
+      marketplaceStatus: MARKETPLACE_STATUS.PRICED,
+      error: null
     };
   } catch (error) {
-    console.log('[marketplace-value] fetch failed:', releaseId, error.message);
+    const message = getErrorMessage(error);
+    console.log('[marketplace-value] fetch failed:', releaseId, message);
     return {
       estimatedValue: null,
-      marketplaceStatus: MARKETPLACE_STATUS.FAILED
+      marketplaceStatus: MARKETPLACE_STATUS.FAILED,
+      error: message
     };
   }
 }

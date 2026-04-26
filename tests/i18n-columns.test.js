@@ -38,6 +38,13 @@ const BACKEND_IMPORT_KEYS = [
   'backend.import.syncFailed'
 ];
 
+const COLLECTION_PRICE_STATUS_KEYS = [
+  'collection.pricePending',
+  'collection.priceFailed',
+  'collection.priceUnavailable',
+  'collection.priceUnknown'
+];
+
 const COLLECTION_IMPORT_RESULT_KEYS = [
   'collection.importCompletedTitle',
   'collection.importPartialTitle',
@@ -123,6 +130,22 @@ describe('i18n keys for table columns', () => {
   it('has collection.currency key in both locales', () => {
     expect(messages.es['collection.currency']).toBe('Divisa');
     expect(messages.en['collection.currency']).toBe('Currency');
+  });
+
+  it('has marketplace price status labels in both locales', () => {
+    for (const key of COLLECTION_PRICE_STATUS_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
+
+    expect(messages.es['collection.pricePending']).toBe('Pendiente');
+    expect(messages.en['collection.pricePending']).toBe('Pending');
+    expect(messages.es['collection.priceFailed']).toBe('Error');
+    expect(messages.en['collection.priceFailed']).toBe('Failed');
+    expect(messages.es['collection.priceUnavailable']).toBe('No disponible');
+    expect(messages.en['collection.priceUnavailable']).toBe('Unavailable');
+    expect(messages.es['collection.priceUnknown']).toBe('Desconocido');
+    expect(messages.en['collection.priceUnknown']).toBe('Unknown');
   });
 });
 
