@@ -1,4 +1,4 @@
-import { RETRYABLE_MARKETPLACE_STATUSES } from './marketplaceValue.js';
+import { RETRYABLE_MARKETPLACE_STATUSES } from '../../shared/contracts/marketplace.js';
 
 const quotedStatuses = RETRYABLE_MARKETPLACE_STATUSES
   .map((status) => `'${status}'`)

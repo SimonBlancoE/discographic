@@ -4,7 +4,7 @@ import { existsSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows } from '../server/services/enrichmentQueue.js';
-import { MARKETPLACE_STATUS } from '../server/services/marketplaceValue.js';
+import { MARKETPLACE_STATUS } from '../shared/contracts/marketplace.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
