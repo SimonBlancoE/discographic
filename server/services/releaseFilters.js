@@ -78,6 +78,6 @@ export function getCollectionFilterOptions(db, userId) {
     styles: [...styles].sort((a, b) => a.localeCompare(b)),
     decades: [...decades].sort((a, b) => a - b),
     formats: [...formats].sort((a, b) => a.localeCompare(b)),
-    labels: [...labels].sort((a, b) => a.localeCompare(b)).slice(0, 100)
+    labels: [...labels].sort((a, b) => a.localeCompare(b))
   };
 }
