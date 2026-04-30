@@ -1,5 +1,6 @@
 import express from 'express';
 import { normalizeAccountResponse } from '../../shared/contracts/account.js';
+import { COLLECTION_SAVED_VIEWS_KEY } from '../../shared/contracts/collectionViews.js';
 import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { normalizeCurrency } from '../../shared/currency.js';
@@ -67,6 +68,7 @@ router.post('/reset', (req, res) => {
 // Whitelist of valid preference keys. Add new entries here when introducing
 // new user-facing preferences that should be persisted via the API.
 const ALLOWED_PREFERENCE_KEYS = new Set([
+  COLLECTION_SAVED_VIEWS_KEY,
   'collection_visible_columns',
   'currency',
 ]);

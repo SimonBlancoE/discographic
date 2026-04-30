@@ -3,6 +3,10 @@ import Database from 'better-sqlite3';
 import { existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import {
+  COLLECTION_SAVED_VIEWS_KEY,
+  normalizeCollectionSavedViews
+} from '../shared/contracts/collectionViews.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -73,5 +77,58 @@ describe('Preferences storage (settings table)', () => {
     setSettingForUser(1, 'col_prefs', JSON.stringify(original));
     const stored = getSettingForUser(1, 'col_prefs');
     expect(JSON.parse(stored)).toEqual(original);
+  });
+
+  it('persists saved collection views per user', () => {
+    const userOneViews = [
+      {
+        id: 'recent-jazz',
+        name: 'Recent Jazz',
+        filters: { genre: 'Jazz', decade: '1970s', format: 'Vinyl' },
+        sortBy: 'date_added',
+        sortOrder: 'desc',
+        visibleColumns: ['cover', 'artist', 'title', 'year', 'price']
+      }
+    ];
+    const userTwoViews = [
+      {
+        id: 'ambient',
+        name: 'Ambient',
+        filters: { genre: 'Electronic', style: 'Ambient' },
+        sortBy: 'artist',
+        sortOrder: 'asc',
+        visibleColumns: ['cover', 'artist', 'title']
+      }
+    ];
+
+    setSettingForUser(1, COLLECTION_SAVED_VIEWS_KEY, JSON.stringify(userOneViews));
+    setSettingForUser(2, COLLECTION_SAVED_VIEWS_KEY, JSON.stringify(userTwoViews));
+
+    expect(normalizeCollectionSavedViews(JSON.parse(getSettingForUser(1, COLLECTION_SAVED_VIEWS_KEY)))).toEqual([
+      {
+        ...userOneViews[0],
+        filters: {
+          search: '',
+          genre: 'Jazz',
+          style: '',
+          decade: '1970s',
+          format: 'Vinyl',
+          label: ''
+        }
+      }
+    ]);
+    expect(normalizeCollectionSavedViews(JSON.parse(getSettingForUser(2, COLLECTION_SAVED_VIEWS_KEY)))).toEqual([
+      {
+        ...userTwoViews[0],
+        filters: {
+          search: '',
+          genre: 'Electronic',
+          style: 'Ambient',
+          decade: '',
+          format: '',
+          label: ''
+        }
+      }
+    ]);
   });
 });
