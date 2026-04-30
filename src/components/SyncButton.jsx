@@ -20,13 +20,13 @@ function SyncButton({ onSyncComplete, disabled = false }) {
   const enrichPollTimer = useRef(null);
   const syncPollFailures = useRef(0);
   const enrichPollFailures = useRef(0);
-  const syncing = status?.status === 'running';
+  const syncing = status?.isRunning || false;
   const pendingValues = status?.enrichment?.pending || 0;
   const thumbsRunning = status?.thumbnails?.status === 'running';
 
   const progress = useMemo(() => {
-    if (!syncing || !status?.total) return 0;
-    return Math.min(100, Math.round((status.current / status.total) * 100));
+    if (!syncing) return 0;
+    return status?.progressPercent || 0;
   }, [status, syncing]);
 
   const onSyncCompleteRef = useRef(onSyncComplete);
@@ -127,8 +127,8 @@ function SyncButton({ onSyncComplete, disabled = false }) {
   const enrichRunning = enrichStatus === 'running';
 
   const enrichProgress = useMemo(() => {
-    if (!enrichRunning || !status?.enrichment?.total) return 0;
-    return Math.min(100, Math.round((status.enrichment.current / status.enrichment.total) * 100));
+    if (!enrichRunning) return 0;
+    return status?.enrichment?.progressPercent || 0;
   }, [status, enrichRunning]);
 
   const pollEnrich = useCallback(async () => {
@@ -274,7 +274,7 @@ function SyncButton({ onSyncComplete, disabled = false }) {
             <span className="text-xs text-slate-500">{t('sync.mosaicPoster')}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-slate-900/80">
-            <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-400 transition-all duration-500" style={{ width: `${status.thumbnails.total ? Math.round((status.thumbnails.current / status.thumbnails.total) * 100) : 0}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-400 transition-all duration-500" style={{ width: `${status.thumbnails.progressPercent}%` }} />
           </div>
         </div>
       ) : null}
