@@ -3,6 +3,12 @@ import db, { getSettingForUser, hydrateRelease, parseJson, stringifyJson } from 
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertReleasePrices, normalizeCurrency } from '../services/exchangeRates.js';
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
+import {
+  normalizeCollectionRelease,
+  normalizeRandomRelease,
+  normalizeReleaseDetail,
+  normalizeWallRelease
+} from '../../shared/contracts/release.js';
 import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 import { parseStoredNotes, replaceNoteText, resolveNoteFieldId } from '../services/notes.js';
 import { buildReleaseFilterWhere, getCollectionFilterOptions } from '../services/releaseFilters.js';
@@ -44,17 +50,9 @@ function getDisplayCurrency(req) {
   return normalizeCurrency(req.query.currency || getSettingForUser(req.session.userId, 'currency', DEFAULT_CURRENCY));
 }
 
-async function convertHydratedRelease(req, release) {
-  return convertReleasePrices(hydrateRelease(release), getDisplayCurrency(req));
-}
-
-function attachCoverUrls(release) {
-  return {
-    ...release,
-    detail_cover_url: `/api/media/cover/${release.id}?variant=detail`,
-    wall_cover_url: `/api/media/cover/${release.id}?variant=wall`,
-    poster_cover_url: `/api/media/cover/${release.id}?variant=poster`
-  };
+async function convertHydratedRelease(req, release, normalizeRelease = normalizeCollectionRelease) {
+  const converted = await convertReleasePrices(hydrateRelease(release), getDisplayCurrency(req));
+  return normalizeRelease(converted);
 }
 
 async function enrichReleaseIfNeeded(req, release) {
@@ -66,7 +64,7 @@ async function enrichReleaseIfNeeded(req, release) {
   // tracklist stays '[]' until we call /releases/:id for the first time.
   const neverEnriched = !release.tracklist || release.tracklist === '[]';
   if (!neverEnriched) {
-    return convertHydratedRelease(req, release);
+    return convertHydratedRelease(req, release, normalizeReleaseDetail);
   }
 
   let discogs;
@@ -106,7 +104,7 @@ async function enrichReleaseIfNeeded(req, release) {
   );
 
   const fresh = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(release.id, req.session.userId);
-  return convertHydratedRelease(req, fresh);
+  return convertHydratedRelease(req, fresh, normalizeReleaseDetail);
 }
 
 router.get('/', async (req, res) => {
@@ -160,9 +158,9 @@ router.get('/random', async (req, res) => {
       return res.status(404).json({ error: 'No hay discos en la coleccion todavia' });
     }
 
-    const converted = await convertHydratedRelease(req, release);
+    const converted = await convertHydratedRelease(req, release, normalizeRandomRelease);
 
-    return res.json(attachCoverUrls(converted));
+    return res.json(converted);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -175,7 +173,7 @@ router.get('/covers', (req, res) => {
       FROM releases
       WHERE user_id = ?
       ORDER BY date_added DESC, artist ASC, title ASC
-    `).all(req.session.userId).map((release) => attachCoverUrls(hydrateRelease(release)));
+    `).all(req.session.userId).map((release) => normalizeWallRelease(hydrateRelease(release)));
 
     return res.json({ releases, filters: getCollectionFilterOptions(db, req.session.userId) });
   } catch (error) {
@@ -192,7 +190,7 @@ router.get('/:id', async (req, res) => {
     }
 
     const hydrated = await enrichReleaseIfNeeded(req, release);
-    return res.json(attachCoverUrls(hydrated));
+    return res.json(hydrated);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -247,8 +245,8 @@ router.put('/:id', async (req, res) => {
     `).run(nextRating, stringifyJson(nextNotes), req.params.id, req.session.userId);
 
     const updated = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(req.params.id, req.session.userId);
-    const converted = await convertHydratedRelease(req, updated);
-    return res.json(attachCoverUrls(converted));
+    const converted = await convertHydratedRelease(req, updated, normalizeReleaseDetail);
+    return res.json(converted);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

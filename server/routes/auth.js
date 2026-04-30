@@ -1,21 +1,22 @@
 import bcrypt from 'bcryptjs';
 import express from 'express';
+import { normalizeAuthStatus, normalizeUser } from '../../shared/contracts/account.js';
 import { createUser, getUserAuthById, getUserAuthByUsername, getUserCount, getUserById, migrateLegacyDataToUser, updateUserPasswordHash } from '../db.js';
 import { getCurrentUser, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 function sanitizeUser(user) {
-  return user ? { id: user.id, username: user.username, role: user.role, created_at: user.created_at } : null;
+  return normalizeUser(user);
 }
 
 router.get('/status', (req, res) => {
   const user = getCurrentUser(req);
-  res.json({
+  res.json(normalizeAuthStatus({
     needsBootstrap: getUserCount() === 0,
     loggedIn: Boolean(user),
     user: sanitizeUser(user)
-  });
+  }));
 });
 
 router.post('/bootstrap', async (req, res) => {

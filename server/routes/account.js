@@ -1,4 +1,5 @@
 import express from 'express';
+import { normalizeAccountResponse } from '../../shared/contracts/account.js';
 import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { normalizeCurrency } from '../../shared/currency.js';
@@ -16,12 +17,12 @@ function maskToken(token) {
 }
 
 function serializeAccount(account, userId) {
-  return {
+  return normalizeAccountResponse({
     discogsUsername: account?.discogs_username || '',
     tokenConfigured: Boolean(account?.discogs_token),
     tokenPreview: account?.discogs_token ? maskToken(account.discogs_token) : null,
     currency: normalizeCurrency(getSettingForUser(userId, 'currency', 'EUR'))
-  };
+  });
 }
 
 router.get('/', (req, res) => {

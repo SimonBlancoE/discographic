@@ -1,5 +1,12 @@
 import { LOCALE_STORAGE_KEY, resolveLocale, translate } from '../../shared/i18n.js';
+import { normalizeAccountResponse, normalizeAuthStatus } from '../../shared/contracts/account.js';
 import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
+import {
+  normalizeCollectionResponse,
+  normalizeRandomRelease,
+  normalizeReleaseDetail,
+  normalizeWallResponse
+} from '../../shared/contracts/release.js';
 
 const API_BASE = '/api';
 
@@ -39,13 +46,13 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  getAuthStatus: () => request('/auth/status'),
+  getAuthStatus: async () => normalizeAuthStatus(await request('/auth/status')),
   bootstrap: (payload) => request('/auth/bootstrap', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   getMe: () => request('/auth/me'),
   changePassword: (payload) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(payload) }),
-  getAccount: () => request('/account'),
+  getAccount: async () => normalizeAccountResponse(await request('/account')),
   updateAccount: (payload) => request('/account', { method: 'PUT', body: JSON.stringify(payload) }),
   resetCollection: () => request('/account/reset', { method: 'POST' }),
   getPreference: (key) => request(`/account/preferences/${encodeURIComponent(key)}`),
@@ -54,14 +61,14 @@ export const api = {
     body: JSON.stringify({ value })
   }),
   getStats: async () => normalizeDashboardStats(await request('/stats')),
-  getCollection: (params = {}) => request(`/collection?${new URLSearchParams(params).toString()}`),
-  getCollectionCovers: () => request('/collection/covers'),
-  getRandomRelease: () => request('/collection/random'),
-  getRelease: (id) => request(`/collection/${id}`),
-  updateRelease: (id, payload) => request(`/collection/${id}`, {
+  getCollection: async (params = {}) => normalizeCollectionResponse(await request(`/collection?${new URLSearchParams(params).toString()}`)),
+  getCollectionCovers: async () => normalizeWallResponse(await request('/collection/covers')),
+  getRandomRelease: async () => normalizeRandomRelease(await request('/collection/random')),
+  getRelease: async (id) => normalizeReleaseDetail(await request(`/collection/${id}`)),
+  updateRelease: async (id, payload) => normalizeReleaseDetail(await request(`/collection/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload)
-  }),
+  })),
   startSync: () => request('/sync', { method: 'POST' }),
   enrichValues: () => request('/sync/enrich', { method: 'POST' }),
   stopEnrich: () => request('/sync/enrich/stop', { method: 'POST' }),
