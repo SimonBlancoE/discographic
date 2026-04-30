@@ -1,15 +1,23 @@
+import { lazy, Suspense } from 'react';
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
-import Collection from './pages/Collection';
-import CollectionWall from './pages/CollectionWall';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import ReleaseDetail from './pages/ReleaseDetail';
-import Settings from './pages/Settings';
-import Setup from './pages/Setup';
 import { useAuth } from './lib/AuthContext';
 import { DashboardStatsProvider, useDashboardStats } from './lib/DashboardStatsContext';
 import { useI18n } from './lib/I18nContext';
 import VinylBadge from './components/VinylBadge';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Collection = lazy(() => import('./pages/Collection'));
+const CollectionWall = lazy(() => import('./pages/CollectionWall'));
+const ReleaseDetail = lazy(() => import('./pages/ReleaseDetail'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Login = lazy(() => import('./pages/Login'));
+const Setup = lazy(() => import('./pages/Setup'));
+
+function AppLoading() {
+  const { t } = useI18n();
+
+  return <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-4 text-slate-300">{t('app.loading')}</div>;
+}
 
 function AppLayoutFrame() {
   const { user, logout } = useAuth();
@@ -52,13 +60,15 @@ function AppLayoutFrame() {
         </header>
 
         <main className="flex-1">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/collection" element={<Collection />} />
-            <Route path="/wall" element={<CollectionWall />} />
-            <Route path="/release/:id" element={<ReleaseDetail />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
+          <Suspense fallback={<AppLoading />}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/collection" element={<Collection />} />
+              <Route path="/wall" element={<CollectionWall />} />
+              <Route path="/release/:id" element={<ReleaseDetail />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>
@@ -75,18 +85,25 @@ function AppLayout() {
 
 function App() {
   const { loading, needsBootstrap, loggedIn } = useAuth();
-  const { t } = useI18n();
 
   if (loading) {
-    return <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-4 text-slate-300">{t('app.loading')}</div>;
+    return <AppLoading />;
   }
 
   if (needsBootstrap) {
-    return <Setup />;
+    return (
+      <Suspense fallback={<AppLoading />}>
+        <Setup />
+      </Suspense>
+    );
   }
 
   if (!loggedIn) {
-    return <Login />;
+    return (
+      <Suspense fallback={<AppLoading />}>
+        <Login />
+      </Suspense>
+    );
   }
 
   return <AppLayout />;
