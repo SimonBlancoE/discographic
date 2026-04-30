@@ -7,6 +7,7 @@ import {
   normalizeReleaseDetail,
   normalizeWallResponse
 } from '../../shared/contracts/release.js';
+import { normalizeImportSyncState, normalizeSyncStatus } from '../../shared/contracts/syncStatus.js';
 
 const API_BASE = '/api';
 
@@ -72,7 +73,7 @@ export const api = {
   startSync: () => request('/sync', { method: 'POST' }),
   enrichValues: () => request('/sync/enrich', { method: 'POST' }),
   stopEnrich: () => request('/sync/enrich/stop', { method: 'POST' }),
-  getSyncStatus: () => request('/sync/status'),
+  getSyncStatus: async () => normalizeSyncStatus(await request('/sync/status')),
   listUsers: () => request('/admin/users'),
   createUser: (payload) => request('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
@@ -82,8 +83,14 @@ export const api = {
     form.append('file', file);
     return request('/import/preview', { method: 'POST', body: form });
   },
-  importApply: (previewId) => request('/import/apply', { method: 'POST', body: JSON.stringify({ previewId }) }),
-  getImportStatus: () => request('/import/status'),
+  importApply: async (previewId) => {
+    const result = await request('/import/apply', { method: 'POST', body: JSON.stringify({ previewId }) });
+    return {
+      ...result,
+      syncState: result.syncState ? normalizeImportSyncState(result.syncState) : null
+    };
+  },
+  getImportStatus: async () => normalizeImportSyncState(await request('/import/status')),
   downloadImportTemplate: () => {
     const locale = getLocaleHeader();
     const query = new URLSearchParams({ locale }).toString();
