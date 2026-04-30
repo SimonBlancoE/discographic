@@ -15,6 +15,12 @@ import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
 import { applyOptimisticReleasePatch } from '../lib/releaseEdits';
 import { COLLECTION_FILTER_KEYS, createCollectionFilters, getActiveCollectionFilters } from '../../shared/collectionFilters.js';
+import {
+  COLLECTION_SAVED_VIEWS_KEY,
+  MAX_COLLECTION_SAVED_VIEWS,
+  normalizeCollectionSavedView,
+  normalizeCollectionSavedViews
+} from '../../shared/contracts/collectionViews.js';
 import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from '../../shared/currency';
 
 const CURRENCY_LABELS = {
@@ -22,6 +28,27 @@ const CURRENCY_LABELS = {
   USD: 'USD · $',
   GBP: 'GBP · £'
 };
+
+function createSavedViewId(name, existingViews) {
+  const base = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'view';
+  const usedIds = new Set(existingViews.map((view) => view.id));
+
+  if (!usedIds.has(base)) {
+    return base;
+  }
+
+  let suffix = 2;
+  while (usedIds.has(`${base}-${suffix}`)) {
+    suffix += 1;
+  }
+  return `${base}-${suffix}`;
+}
 
 function Collection() {
   const { accountUnavailable, discogsConfigured, currency, setCurrencyPreference } = useAuth();
@@ -35,6 +62,9 @@ function Collection() {
   const [payload, setPayload] = useState({ releases: [], pagination: {}, filters: {} });
   const [loading, setLoading] = useState(true);
   const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
+  const [savedViews, setSavedViews] = useState([]);
+  const [savedViewName, setSavedViewName] = useState('');
+  const [selectedSavedViewId, setSelectedSavedViewId] = useState('');
   const saveColumnsTimer = useRef(null);
   const [displayCurrency, setDisplayCurrency] = useState(currency || DEFAULT_CURRENCY);
 
@@ -71,6 +101,10 @@ function Collection() {
           }
         } catch {}
       }
+    }).catch(() => {});
+
+    api.getPreference(COLLECTION_SAVED_VIEWS_KEY).then(({ value }) => {
+      setSavedViews(normalizeCollectionSavedViews(value));
     }).catch(() => {});
   }, []);
 
@@ -141,6 +175,78 @@ function Collection() {
 
       return next;
     });
+  }
+
+  async function persistSavedViews(nextViews, successKey) {
+    const previousViews = savedViews;
+    const normalizedViews = normalizeCollectionSavedViews(nextViews);
+    setSavedViews(normalizedViews);
+
+    try {
+      await api.setPreference(COLLECTION_SAVED_VIEWS_KEY, JSON.stringify(normalizedViews));
+      if (successKey) {
+        toast.success(t(successKey));
+      }
+      return normalizedViews;
+    } catch (error) {
+      setSavedViews(previousViews);
+      toast.error(t('collection.savedViewSaveError', { error: error.message }));
+      return previousViews;
+    }
+  }
+
+  async function handleSaveCurrentView() {
+    const name = savedViewName.trim();
+    if (!name) {
+      toast.error(t('collection.savedViewNameRequired'));
+      return;
+    }
+
+    const nextView = normalizeCollectionSavedView({
+      id: createSavedViewId(name, savedViews),
+      name,
+      filters,
+      sortBy,
+      sortOrder,
+      visibleColumns
+    });
+
+    if (!nextView) {
+      toast.error(t('collection.savedViewNameRequired'));
+      return;
+    }
+
+    const nextViews = [nextView, ...savedViews].slice(0, MAX_COLLECTION_SAVED_VIEWS);
+    await persistSavedViews(nextViews, 'collection.savedViewSaved');
+    setSelectedSavedViewId(nextView.id);
+    setSavedViewName('');
+  }
+
+  function handleApplySavedView(viewId) {
+    const view = savedViews.find((item) => item.id === viewId);
+    if (!view) {
+      return;
+    }
+
+    const nextVisibleColumns = view.visibleColumns.length ? view.visibleColumns : DEFAULT_VISIBLE;
+    setSelectedSavedViewId(view.id);
+    setFilters(view.filters);
+    setPage(1);
+    setSortBy(view.sortBy);
+    setSortOrder(view.sortOrder);
+    setVisibleColumns(nextVisibleColumns);
+    syncFilterParams(view.filters);
+    load(1, view.filters, view.sortBy, view.sortOrder, displayCurrency);
+  }
+
+  async function handleDeleteSavedView() {
+    if (!selectedSavedViewId) {
+      return;
+    }
+
+    const nextViews = savedViews.filter((view) => view.id !== selectedSavedViewId);
+    await persistSavedViews(nextViews, 'collection.savedViewDeleted');
+    setSelectedSavedViewId('');
   }
 
   async function handleUpdate(release, patch) {
@@ -233,6 +339,57 @@ function Collection() {
           load(1, resetFilters, sortBy, sortOrder, displayCurrency);
         }}
       />
+
+      <section className="glass-panel flex flex-col gap-3 p-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{t('collection.savedViews')}</p>
+          <p className="mt-1 text-sm text-slate-300">{t('collection.savedViewsHint')}</p>
+        </div>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <select
+            value={selectedSavedViewId}
+            onChange={(event) => setSelectedSavedViewId(event.target.value)}
+            className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-brand-300"
+          >
+            <option value="">{savedViews.length ? t('collection.savedViewsPlaceholder') : t('collection.savedViewsEmpty')}</option>
+            {savedViews.map((view) => (
+              <option key={view.id} value={view.id} className="bg-slate-950 text-slate-100">
+                {view.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleApplySavedView(selectedSavedViewId)}
+              disabled={!selectedSavedViewId}
+              className="secondary-button disabled:opacity-50"
+            >
+              {t('collection.applySavedView')}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteSavedView}
+              disabled={!selectedSavedViewId}
+              className="secondary-button disabled:opacity-50"
+            >
+              {t('collection.deleteSavedView')}
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={savedViewName}
+              onChange={(event) => setSavedViewName(event.target.value)}
+              placeholder={t('collection.savedViewName')}
+              maxLength={48}
+              className="min-w-0 rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-brand-300"
+            />
+            <button type="button" onClick={handleSaveCurrentView} className="primary-button">
+              {t('collection.saveSavedView')}
+            </button>
+          </div>
+        </div>
+      </section>
 
       {loading ? (
         <CollectionSkeleton />
