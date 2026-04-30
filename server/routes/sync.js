@@ -7,6 +7,7 @@ import { DEFAULT_CURRENCY, convertAmountWithRates, getExchangeSnapshot } from '.
 import { pruneUnseenReleases } from '../services/collectionReconcile.js';
 import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows } from '../services/enrichmentQueue.js';
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
+import { normalizeSyncStatus } from '../../shared/contracts/syncStatus.js';
 import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 
 const router = express.Router();
@@ -538,14 +539,15 @@ router.get('/status', (req, res) => {
     `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
   ).get(req.session.userId).count;
 
-  res.json({
+  res.json(normalizeSyncStatus({
     ...state,
     enrichment: {
       ...state.enrichment,
       pending
     },
-    thumbnails: state.thumbnails
-  });
+    thumbnails: state.thumbnails,
+    inventory: state.inventory
+  }));
 });
 
 export default router;

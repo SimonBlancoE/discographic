@@ -14,6 +14,7 @@ import {
 } from '../services/importSync.js';
 import { notesToText, parseStoredNotes, replaceNoteText, resolveNoteFieldId } from '../services/notes.js';
 import { translate } from '../../shared/i18n.js';
+import { normalizeImportSyncState } from '../../shared/contracts/syncStatus.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -420,7 +421,7 @@ router.post('/apply', async (req, res) => {
         t: req.t
       });
       setImportSyncState(userId, syncState);
-      return res.json({ ok: true, applied: changes.length, syncState });
+      return res.json({ ok: true, applied: changes.length, syncState: normalizeImportSyncState(syncState) });
     }
 
     const syncState = createRunningImportSyncState({
@@ -432,7 +433,7 @@ router.post('/apply', async (req, res) => {
       t: req.t
     });
     setImportSyncState(userId, syncState);
-    res.json({ ok: true, applied: changes.length, syncState });
+    res.json({ ok: true, applied: changes.length, syncState: normalizeImportSyncState(syncState) });
 
     // Background sync with Discogs
     void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale });
@@ -442,7 +443,7 @@ router.post('/apply', async (req, res) => {
 });
 
 router.get('/status', (req, res) => {
-  res.json(getImportSyncState(req.session.userId, req.locale));
+  res.json(normalizeImportSyncState(getImportSyncState(req.session.userId, req.locale)));
 });
 
 export default router;
