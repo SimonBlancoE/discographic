@@ -1,28 +1,22 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
-import { DEFAULT_CURRENCY } from '../../shared/currency';
+import { normalizeAccountState, normalizeAuthStatus } from '../../shared/contracts/account';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
-  const [needsBootstrap, setNeedsBootstrap] = useState(false);
-  const [user, setUser] = useState(null);
-  const [discogsConfigured, setDiscogsConfigured] = useState(false);
-  const [accountUnavailable, setAccountUnavailable] = useState(false);
-  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
+  const [accountState, setAccountState] = useState(() => normalizeAccountState());
 
-  async function refreshAccountState() {
+  async function refreshAccountState(auth = accountState) {
     try {
       const account = await api.getAccount();
-      setDiscogsConfigured(Boolean(account.tokenConfigured));
-      setCurrency(account.currency || DEFAULT_CURRENCY);
-      setAccountUnavailable(false);
-      return account;
+      const nextState = normalizeAccountState({ auth, account });
+      setAccountState(nextState);
+      return nextState;
     } catch (error) {
-      setDiscogsConfigured(false);
-      setCurrency(DEFAULT_CURRENCY);
-      setAccountUnavailable(true);
+      const nextState = normalizeAccountState({ auth, accountUnavailable: true });
+      setAccountState(nextState);
       throw error;
     }
   }
@@ -31,21 +25,14 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const status = await api.getAuthStatus();
-      setNeedsBootstrap(status.needsBootstrap);
-      setUser(status.user || null);
 
       if (status.loggedIn) {
-        await refreshAccountState().catch(() => null);
+        await refreshAccountState(status).catch(() => null);
       } else {
-        setDiscogsConfigured(false);
-        setAccountUnavailable(false);
-        setCurrency(DEFAULT_CURRENCY);
+        setAccountState(normalizeAccountState({ auth: status }));
       }
     } catch {
-      setUser(null);
-      setDiscogsConfigured(false);
-      setAccountUnavailable(false);
-      setCurrency(DEFAULT_CURRENCY);
+      setAccountState(normalizeAccountState());
     } finally {
       setLoading(false);
     }
@@ -57,28 +44,28 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => ({
     loading,
-    needsBootstrap,
-    user,
-    loggedIn: Boolean(user),
-    isAdmin: user?.role === 'admin',
-    discogsConfigured,
-    accountUnavailable,
-    currency,
+    accountState,
+    capabilities: accountState.capabilities,
+    needsBootstrap: accountState.needsBootstrap,
+    user: accountState.user,
+    loggedIn: accountState.loggedIn,
+    isAdmin: accountState.isAdmin,
+    discogsConfigured: accountState.discogs.tokenConfigured === true,
+    accountUnavailable: accountState.accountUnavailable,
+    currency: accountState.preferences.currency,
     async login(username, password) {
       const result = await api.login({ username, password });
-      setNeedsBootstrap(false);
-      setUser(result.user);
+      const auth = normalizeAuthStatus({ needsBootstrap: false, loggedIn: true, user: result.user });
+      setAccountState(normalizeAccountState({ auth }));
       setLoading(false);
-      await refreshAccountState().catch(() => null);
+      await refreshAccountState(auth).catch(() => null);
       return result;
     },
     async bootstrap(username, password) {
       const result = await api.bootstrap({ username, password });
-      setNeedsBootstrap(false);
-      setUser(result.user);
+      const auth = normalizeAuthStatus({ needsBootstrap: false, loggedIn: true, user: result.user });
+      setAccountState(normalizeAccountState({ auth, account: { tokenConfigured: false } }));
       setLoading(false);
-      setDiscogsConfigured(false);
-      setAccountUnavailable(false);
       return result;
     },
     async logout() {
@@ -90,11 +77,20 @@ export function AuthProvider({ children }) {
     },
     async setCurrencyPreference(nextCurrency) {
       await api.setPreference('currency', nextCurrency);
-      setCurrency(nextCurrency);
-      return nextCurrency;
+      const nextState = normalizeAccountState({
+        auth: accountState,
+        account: {
+          discogsUsername: accountState.discogs.username || '',
+          tokenConfigured: accountState.discogs.tokenConfigured === true,
+          tokenPreview: accountState.discogs.tokenPreview,
+          currency: nextCurrency
+        }
+      });
+      setAccountState(nextState);
+      return nextState.preferences.currency;
     },
     refresh
-  }), [loading, needsBootstrap, user, discogsConfigured, accountUnavailable, currency]);
+  }), [loading, accountState]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
