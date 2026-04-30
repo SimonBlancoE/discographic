@@ -140,9 +140,7 @@ function ImportButton({ disabled = false }) {
     void poll();
   }
 
-  const syncProgress = syncState?.total
-    ? Math.min(100, Math.round((syncState.current / syncState.total) * 100))
-    : 0;
+  const syncProgress = syncState?.progressPercent || 0;
   const resultTone = getImportResultTone(syncState?.status);
   const resultTitleKey = getImportResultTitleKey(syncState?.status);
   const resultHelpKey = getImportResultHelpKey(syncState?.status);
