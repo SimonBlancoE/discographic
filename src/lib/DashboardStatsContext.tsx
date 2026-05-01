@@ -3,6 +3,7 @@ import { getDashboardBadgeGenres } from '../../shared/contracts/dashboardStats.j
 import type { DashboardStats } from '../../shared/contracts/dashboardStats.js';
 import { useAuth } from './AuthContext';
 import { api } from './api';
+import { getErrorMessage } from './errors';
 import type { ChildrenProp, DashboardStatsContextValue } from './types';
 
 const DashboardStatsContext = createContext<DashboardStatsContextValue | null>(null);
@@ -61,4 +62,3 @@ export function useDashboardStats() {
   }
   return context;
 }
-import { getErrorMessage } from './errors';

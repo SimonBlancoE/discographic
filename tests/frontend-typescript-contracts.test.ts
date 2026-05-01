@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -40,5 +40,12 @@ describe('frontend TypeScript migration', () => {
     for (const filename of expectedTsTests) {
       expect(readdirSync(testsRoot)).toContain(filename);
     }
+  });
+
+  it('points the Vite HTML entrypoint at the TypeScript React entry module', () => {
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+    expect(html).toContain('/src/main.tsx');
+    expect(html).not.toContain('/src/main.jsx');
   });
 });

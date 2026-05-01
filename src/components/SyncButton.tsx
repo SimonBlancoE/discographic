@@ -100,7 +100,7 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
       }
     }).catch((error) => {
       if (!disposed.current) {
-        setSyncStatusError(t('sync.statusError', { error: error.message }));
+        setSyncStatusError(t('sync.statusError', { error: getErrorMessage(error, t('client.networkError')) }));
       }
     });
 
@@ -206,6 +206,10 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
     void pollEnrich();
   }
 
+  const enrichmentMessage = enrichRunning
+    ? status?.enrichment.message
+    : t('sync.pendingEnrich', { count: pendingValues });
+
   return (
     <div className="glass-panel w-full max-w-md p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -240,9 +244,7 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
         <div className="mt-3 space-y-2 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-slate-300">
-            {enrichRunning
-                ? status?.enrichment.message
-                 : t('sync.pendingEnrich', { count: pendingValues })}
+              {enrichmentMessage}
             </span>
             {enrichRunning ? (
               <button type="button" onClick={handleStopEnrich} className="secondary-button text-sm">

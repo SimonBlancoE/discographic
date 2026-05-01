@@ -16,6 +16,16 @@ type ToastViewportProps = {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+const TOAST_VARIANT_CLASSES: Record<ToastVariant, string> = {
+  error: 'toast-card-error',
+  info: 'toast-card-info',
+  success: 'toast-card-success',
+};
+
+function getToastClassName(variant: ToastVariant): string {
+  return `toast-card pointer-events-auto ${TOAST_VARIANT_CLASSES[variant]}`;
+}
+
 function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
   return (
     <div className="pointer-events-none fixed inset-x-4 top-4 z-50 mx-auto flex max-w-xl flex-col gap-3 sm:right-6 sm:left-auto sm:w-full sm:max-w-sm" aria-live="polite" aria-atomic="true">
@@ -23,7 +33,7 @@ function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
         <div
           key={toast.id}
           role="status"
-          className={`toast-card pointer-events-auto ${toast.variant === 'error' ? 'toast-card-error' : toast.variant === 'success' ? 'toast-card-success' : 'toast-card-info'}`}
+          className={getToastClassName(toast.variant)}
         >
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">

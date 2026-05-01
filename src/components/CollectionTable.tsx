@@ -50,6 +50,14 @@ function NotesInput({ value, onCommit }: { value: string; onCommit: (value: stri
   );
 }
 
+function getSortIndicator(active: boolean, sortOrder: SortOrder): string {
+  if (!active) {
+    return '↕';
+  }
+
+  return sortOrder === 'asc' ? '↑' : '↓';
+}
+
 function SortButton({ label, column, sortBy, sortOrder, onSort }: {
   label: string;
   column: TableSortColumn;
@@ -61,7 +69,7 @@ function SortButton({ label, column, sortBy, sortOrder, onSort }: {
   return (
     <button type="button" onClick={() => onSort(column)} className={`flex items-center gap-1 ${active ? 'text-brand-200' : 'text-slate-300'}`}>
       <span>{label}</span>
-      <span>{active ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}</span>
+      <span>{getSortIndicator(active, sortOrder)}</span>
     </button>
   );
 }

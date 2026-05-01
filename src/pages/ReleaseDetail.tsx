@@ -99,6 +99,8 @@ function ReleaseDetail() {
     return <div className="glass-panel p-10 text-center text-slate-300">{t('release.notFound')}</div>;
   }
 
+  const tracklist = (release.tracklist as ReleaseTrackRow[]) || [];
+
   return (
     <div className="space-y-6">
       <Link to="/collection" className="inline-flex items-center gap-2 text-sm text-brand-200 transition hover:text-brand-100">
@@ -106,53 +108,53 @@ function ReleaseDetail() {
       </Link>
 
       <div ref={shareCardRef} className="space-y-6 rounded-[34px] bg-slate-950/35 p-1">
-      <section className="glass-panel grid gap-6 p-6 xl:grid-cols-[320px_1fr]">
-        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80">
-          {release.detail_cover_url || release.cover_url ? (
-            <img src={release.detail_cover_url || release.cover_url || undefined} alt={release.title} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex min-h-[320px] items-center justify-center text-6xl">💿</div>
-          )}
-        </div>
-
-        <div>
-          <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('release.eyebrow')}</p>
-          <h2 className="mt-2 font-display text-4xl text-white">{release.title}</h2>
-          <p className="mt-3 text-xl text-slate-300">{release.artist}</p>
-
-          <div className="mt-6 flex flex-wrap items-center gap-4">
-            <div>
-               <p className="mb-2 text-sm text-slate-400">{t('release.rating')}</p>
-              <StarRating value={release.rating} onChange={(rating) => updateRelease({ rating })} />
-            </div>
-            <div>
-               <p className="mb-2 text-sm text-slate-400">{t('release.marketplacePrice')}</p>
-              <p className="text-2xl text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value, currency) : '-'}</p>
-            </div>
+        <section className="glass-panel grid gap-6 p-6 xl:grid-cols-[320px_1fr]">
+          <div className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80">
+            {release.detail_cover_url || release.cover_url ? (
+              <img src={release.detail_cover_url || release.cover_url || undefined} alt={release.title} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex min-h-[320px] items-center justify-center text-6xl">💿</div>
+            )}
           </div>
 
-          <label className="mt-6 block">
-             <span className="mb-2 block text-sm text-slate-400">{t('release.notes')}</span>
-            <textarea
-              defaultValue={release.notes_text || ''}
-              onBlur={(event) => updateRelease({ notes: event.target.value })}
-              rows={4}
-              className="w-full rounded-3xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-brand-300"
-            />
-          </label>
-        </div>
-      </section>
+          <div>
+            <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('release.eyebrow')}</p>
+            <h2 className="mt-2 font-display text-4xl text-white">{release.title}</h2>
+            <p className="mt-3 text-xl text-slate-300">{release.artist}</p>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-         <MetaItem label={t('collection.year')} value={release.year || '-'} />
-         <MetaItem label={t('dashboard.genres')} value={joinNames(release.genres)} />
-         <MetaItem label={t('dashboard.styles')} value={joinNames(release.styles)} />
-         <MetaItem label={t('dashboard.formats')} value={joinNames(release.formats)} />
-         <MetaItem label={t('dashboard.labels')} value={joinNames(release.labels)} />
-         <MetaItem label={t('release.country')} value={release.country} />
-         <MetaItem label={t('release.createdAt')} value={formatDate(release.date_added)} />
-         <MetaItem label={t('release.lastSync')} value={formatDate(release.synced_at)} />
-      </section>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <div>
+                <p className="mb-2 text-sm text-slate-400">{t('release.rating')}</p>
+                <StarRating value={release.rating} onChange={(rating) => updateRelease({ rating })} />
+              </div>
+              <div>
+                <p className="mb-2 text-sm text-slate-400">{t('release.marketplacePrice')}</p>
+                <p className="text-2xl text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value, currency) : '-'}</p>
+              </div>
+            </div>
+
+            <label className="mt-6 block">
+              <span className="mb-2 block text-sm text-slate-400">{t('release.notes')}</span>
+              <textarea
+                defaultValue={release.notes_text || ''}
+                onBlur={(event) => updateRelease({ notes: event.target.value })}
+                rows={4}
+                className="w-full rounded-3xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-brand-300"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetaItem label={t('collection.year')} value={release.year || '-'} />
+          <MetaItem label={t('dashboard.genres')} value={joinNames(release.genres)} />
+          <MetaItem label={t('dashboard.styles')} value={joinNames(release.styles)} />
+          <MetaItem label={t('dashboard.formats')} value={joinNames(release.formats)} />
+          <MetaItem label={t('dashboard.labels')} value={joinNames(release.labels)} />
+          <MetaItem label={t('release.country')} value={release.country} />
+          <MetaItem label={t('release.createdAt')} value={formatDate(release.date_added)} />
+          <MetaItem label={t('release.lastSync')} value={formatDate(release.synced_at)} />
+        </section>
       </div>
 
       <section className="glass-panel flex flex-wrap items-center justify-between gap-3 p-5">
@@ -171,27 +173,27 @@ function ReleaseDetail() {
       </section>
 
       <section className="glass-panel p-5">
-         <h3 className="font-display text-2xl text-slate-50">{t('release.tracklist')}</h3>
+        <h3 className="font-display text-2xl text-slate-50">{t('release.tracklist')}</h3>
         <div className="mt-4 overflow-hidden rounded-3xl border border-white/5">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-900/80 text-slate-400">
               <tr>
-                 <th className="px-4 py-3">{t('release.position')}</th>
-                 <th className="px-4 py-3">{t('release.track')}</th>
-                 <th className="px-4 py-3">{t('release.duration')}</th>
+                <th className="px-4 py-3">{t('release.position')}</th>
+                <th className="px-4 py-3">{t('release.track')}</th>
+                <th className="px-4 py-3">{t('release.duration')}</th>
               </tr>
             </thead>
             <tbody>
-              {(release.tracklist as ReleaseTrackRow[] || []).map((track, index) => (
+              {tracklist.map((track, index) => (
                 <tr key={`${track.position}-${track.title}-${index}`} className="border-t border-white/5 text-slate-200">
                   <td className="px-4 py-3">{track.position || '-'}</td>
                   <td className="px-4 py-3">{track.title || '-'}</td>
                   <td className="px-4 py-3">{track.duration || '-'}</td>
                 </tr>
               ))}
-              {!release.tracklist?.length && (
+              {!tracklist.length && (
                 <tr>
-                   <td className="px-4 py-4 text-slate-400" colSpan={3}>{t('release.noTracklist')}</td>
+                  <td className="px-4 py-4 text-slate-400" colSpan={3}>{t('release.noTracklist')}</td>
                 </tr>
               )}
             </tbody>
