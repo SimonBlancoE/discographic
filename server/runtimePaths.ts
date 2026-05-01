@@ -8,9 +8,10 @@ export type RuntimePaths = {
   distDir: string;
 };
 
+type RuntimePathOverrideKey = 'DISCOGRAPHIC_APP_ROOT' | 'DISCOGRAPHIC_DATA_DIR' | 'DISCOGRAPHIC_DIST_DIR';
+
 function getModuleDir(moduleUrl: string | URL): string {
-  const modulePath = typeof moduleUrl === 'string' ? fileURLToPath(moduleUrl) : fileURLToPath(moduleUrl);
-  return dirname(modulePath);
+  return dirname(fileURLToPath(moduleUrl));
 }
 
 function findAppRoot(startDir: string): string {
@@ -30,7 +31,7 @@ function findAppRoot(startDir: string): string {
   }
 }
 
-function getOverridePath(envKey: 'DISCOGRAPHIC_APP_ROOT' | 'DISCOGRAPHIC_DATA_DIR' | 'DISCOGRAPHIC_DIST_DIR'): string | null {
+function getOverridePath(envKey: RuntimePathOverrideKey): string | null {
   const value = process.env[envKey]?.trim();
   return value ? resolve(value) : null;
 }

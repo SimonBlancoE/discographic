@@ -27,6 +27,11 @@ type RequestResult = {
   json: unknown;
 };
 
+type ManagedProcess = {
+  child: ChildProcess;
+  getLogs: () => string;
+};
+
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const distStartPath = join(projectRoot, 'dist', 'server', 'start.js');
 const legacyPassword = 'legacy12345';
@@ -85,8 +90,8 @@ function ensureBuildArtifacts(): void {
   assert(existsSync(distStartPath), 'Missing dist/server/start.js. Run `npm run build` before `npm run test:upgrade-smoke`.');
 }
 
-async function getAvailablePort(): Promise<number> {
-  return await new Promise<number>((resolvePort, reject) => {
+function getAvailablePort(): Promise<number> {
+  return new Promise<number>((resolvePort, reject) => {
     const server = createServer();
 
     server.once('error', reject);
@@ -310,10 +315,17 @@ function cleanupFixture(fixture: LegacyFixture): void {
   rmSync(fixture.tempRoot, { recursive: true, force: true });
 }
 
-function startManagedProcess(command: string, args: string[], env: NodeJS.ProcessEnv): {
-  child: ChildProcess;
-  getLogs: () => string;
-} {
+async function withLegacyFixture(runSmoke: (fixture: LegacyFixture) => Promise<void>): Promise<void> {
+  const fixture = await createLegacyFixture();
+
+  try {
+    await runSmoke(fixture);
+  } finally {
+    cleanupFixture(fixture);
+  }
+}
+
+function startManagedProcess(command: string, args: string[], env: NodeJS.ProcessEnv): ManagedProcess {
   const child = spawn(command, args, {
     cwd: projectRoot,
     env,
@@ -335,7 +347,7 @@ function startManagedProcess(command: string, args: string[], env: NodeJS.Proces
 }
 
 async function stopManagedProcess(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null) {
+  if (child.exitCode !== null || child.signalCode !== null) {
     return;
   }
 
@@ -353,21 +365,27 @@ async function stopManagedProcess(child: ChildProcess): Promise<void> {
   });
 }
 
-async function request(baseUrl: string, path: string, session: SessionState, init: RequestInit & { json?: unknown } = {}): Promise<RequestResult> {
-  const headers = new Headers(init.headers);
+async function request(
+  baseUrl: string,
+  path: string,
+  session: SessionState,
+  init: RequestInit & { json?: unknown } = {}
+): Promise<RequestResult> {
+  const { json: jsonBody, ...fetchInit } = init;
+  const headers = new Headers(fetchInit.headers);
 
   if (session.cookie) {
     headers.set('Cookie', session.cookie);
   }
 
-  let body = init.body;
-  if (init.json !== undefined) {
+  let body = fetchInit.body;
+  if (jsonBody !== undefined) {
     headers.set('Content-Type', 'application/json');
-    body = JSON.stringify(init.json);
+    body = JSON.stringify(jsonBody);
   }
 
   const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
+    ...fetchInit,
     headers,
     body,
   });
@@ -411,18 +429,34 @@ async function waitForHealth(baseUrl: string): Promise<void> {
 
 function verifyPostUpgradeDbState(fixture: LegacyFixture): void {
   const db = new Database(join(fixture.dataDir, 'discographic.db'), { readonly: true });
-  const pendingRow = db
-    .prepare<[number], { estimated_value: number | null; marketplace_status: string }>(`
-      SELECT estimated_value, marketplace_status
-      FROM releases
-      WHERE id = ?
-    `)
-    .get(2);
-  db.close();
+  let pendingRow: { estimated_value: number | null; marketplace_status: string } | undefined;
+
+  try {
+    pendingRow = db
+      .prepare<[number], { estimated_value: number | null; marketplace_status: string }>(`
+        SELECT estimated_value, marketplace_status
+        FROM releases
+        WHERE id = ?
+      `)
+      .get(2);
+  } finally {
+    db.close();
+  }
 
   assert(pendingRow, 'Expected migrated pending release row to exist');
   assert(pendingRow.estimated_value === null, 'Expected legacy zero estimated value to be normalized to NULL');
   assert(pendingRow.marketplace_status === 'pending', 'Expected pending marketplace status to be preserved');
+}
+
+function appendPostUpgradeVerificationFailure(fixture: LegacyFixture, failure: Error | null): Error | null {
+  try {
+    verifyPostUpgradeDbState(fixture);
+    return failure;
+  } catch (error) {
+    return failure
+      ? new Error(`${failure.message}\n\nPost-upgrade DB verification failed: ${(error as Error).message}`)
+      : (error as Error);
+  }
 }
 
 function getJsonRecord(value: unknown, label: string): Record<string, unknown> {
@@ -500,94 +534,82 @@ async function assertLegacyAppBehavior(baseUrl: string, cachedCoverPath: string,
 }
 
 async function runCompiledStartSmoke(): Promise<void> {
-  const fixture = await createLegacyFixture();
-  const port = await getAvailablePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const runtime = startManagedProcess('node', [distStartPath], {
-    ...process.env,
-    PORT: String(port),
-    SESSION_SECRET: 'discographic-upgrade-smoke',
-    COOKIE_SECURE: 'false',
-    DISCOGRAPHIC_DATA_DIR: fixture.dataDir,
-  });
-  let failure: Error | null = null;
+  await withLegacyFixture(async (fixture) => {
+    const port = await getAvailablePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const runtime = startManagedProcess('node', [distStartPath], {
+      ...process.env,
+      PORT: String(port),
+      SESSION_SECRET: 'discographic-upgrade-smoke',
+      COOKIE_SECURE: 'false',
+      DISCOGRAPHIC_DATA_DIR: fixture.dataDir,
+    });
+    let failure: Error | null = null;
 
-  try {
-    await waitForHealth(baseUrl);
-    await assertLegacyAppBehavior(baseUrl, fixture.cachedCoverPath, 'compiled runtime');
-  } catch (error) {
-    const details = runtime.getLogs();
-    failure = new Error(`${(error as Error).message}${details ? `\n\nServer output:\n${details}` : ''}`);
-  } finally {
-    await stopManagedProcess(runtime.child);
     try {
-      verifyPostUpgradeDbState(fixture);
+      await waitForHealth(baseUrl);
+      await assertLegacyAppBehavior(baseUrl, fixture.cachedCoverPath, 'compiled runtime');
     } catch (error) {
-      failure = failure
-        ? new Error(`${failure.message}\n\nPost-upgrade DB verification failed: ${(error as Error).message}`)
-        : (error as Error);
+      const details = runtime.getLogs();
+      failure = new Error(`${(error as Error).message}${details ? `\n\nServer output:\n${details}` : ''}`);
+    } finally {
+      await stopManagedProcess(runtime.child);
+      failure = appendPostUpgradeVerificationFailure(fixture, failure);
     }
-    cleanupFixture(fixture);
-  }
 
-  if (failure) {
-    throw failure;
-  }
+    if (failure) {
+      throw failure;
+    }
+  });
 }
 
 async function runDockerSmoke(): Promise<void> {
-  const fixture = await createLegacyFixture();
-  const port = await getAvailablePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const imageTag = `discographic-upgrade-smoke:${Date.now()}`;
-  const containerName = `discographic-upgrade-smoke-${process.pid}-${Date.now()}`;
-  let failure: Error | null = null;
+  await withLegacyFixture(async (fixture) => {
+    const port = await getAvailablePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const imageTag = `discographic-upgrade-smoke:${Date.now()}`;
+    const containerName = `discographic-upgrade-smoke-${process.pid}-${Date.now()}`;
+    let failure: Error | null = null;
 
-  try {
-    runCommand('docker', ['build', '-t', imageTag, '.'], 'docker build');
-    runCommand(
-      'docker',
-      [
-        'run',
-        '--detach',
-        '--rm',
-        '--name',
-        containerName,
-        '--publish',
-        `127.0.0.1:${port}:3800`,
-        '--env',
-        'PORT=3800',
-        '--env',
-        'SESSION_SECRET=discographic-upgrade-smoke',
-        '--env',
-        'COOKIE_SECURE=false',
-        '--volume',
-        `${resolve(fixture.dataDir)}:/app/data`,
-        imageTag,
-      ],
-      'docker run'
-    );
-
-    await waitForHealth(baseUrl);
-    await assertLegacyAppBehavior(baseUrl, fixture.cachedCoverPath, 'docker runtime');
-  } catch (error) {
-    failure = error as Error;
-  } finally {
-    runCommandAllowFailure('docker', ['rm', '-f', containerName]);
-    runCommandAllowFailure('docker', ['image', 'rm', imageTag]);
     try {
-      verifyPostUpgradeDbState(fixture);
-    } catch (error) {
-      failure = failure
-        ? new Error(`${failure.message}\n\nPost-upgrade DB verification failed: ${(error as Error).message}`)
-        : (error as Error);
-    }
-    cleanupFixture(fixture);
-  }
+      runCommand('docker', ['build', '-t', imageTag, '.'], 'docker build');
+      runCommand(
+        'docker',
+        [
+          'run',
+          '--detach',
+          '--rm',
+          '--name',
+          containerName,
+          '--publish',
+          `127.0.0.1:${port}:3800`,
+          '--env',
+          'PORT=3800',
+          '--env',
+          'SESSION_SECRET=discographic-upgrade-smoke',
+          '--env',
+          'COOKIE_SECURE=false',
+          '--volume',
+          `${resolve(fixture.dataDir)}:/app/data`,
+          imageTag,
+        ],
+        'docker run'
+      );
 
-  if (failure) {
-    throw failure;
-  }
+      await waitForHealth(baseUrl);
+      await assertLegacyAppBehavior(baseUrl, fixture.cachedCoverPath, 'docker runtime');
+    } catch (error) {
+      failure = error as Error;
+    } finally {
+      runCommandAllowFailure('docker', ['rm', '-f', containerName]);
+      runCommandAllowFailure('docker', ['image', 'rm', imageTag]);
+      failure = appendPostUpgradeVerificationFailure(fixture, failure);
+    }
+
+    if (failure) {
+      throw failure;
+    }
+  });
 }
 
 async function main(): Promise<void> {
