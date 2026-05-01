@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -19,6 +20,15 @@ const projectFile = (relativePath: string): URL => new URL(`../${relativePath}`,
 const fileExists = (relativePath: string): boolean => existsSync(projectFile(relativePath));
 const readText = (relativePath: string): string => readFileSync(projectFile(relativePath), 'utf8');
 const readJson = <JsonShape>(relativePath: string): JsonShape => JSON.parse(readText(relativePath));
+const getTrackedJavaScriptSources = (): string[] =>
+  execFileSync('git', ['ls-files', '--', '*.js', '*.jsx', '*.mjs', '*.cjs'], {
+    cwd: new URL('../', import.meta.url),
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean)
+    .filter((filePath) => fileExists(filePath))
+    .sort();
 const packageJson = readJson<PackageJson>('package.json');
 
 describe('TypeScript migration toolchain guardrails', () => {
@@ -35,6 +45,7 @@ describe('TypeScript migration toolchain guardrails', () => {
       skipLibCheck: false,
       noEmit: true,
     });
+    expect(tsconfig.include).toContain('tailwind.config.ts');
     expect(tsconfig.include).toContain('scripts/**/*.ts');
     expect(serverTsconfig.extends).toBe('./tsconfig.json');
     expect(serverTsconfig.compilerOptions).toMatchObject({
@@ -56,6 +67,23 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(packageJson.scripts.start).toBe('node dist/server/start.js');
     expect(packageJson.scripts['scan:js-sources']).toBe('tsx scripts/scan-javascript-sources.ts');
     expect(packageJson.scripts.verify).toBe('npm run scan:js-sources && npm run typecheck && npm run test && npm run build');
+  });
+
+  it('enforces zero tracked JavaScript source files, including tool config', () => {
+    expect(fileExists('.postcssrc.json')).toBe(true);
+    expect(fileExists('tailwind.config.ts')).toBe(true);
+    expect(fileExists('postcss.config.js')).toBe(false);
+    expect(fileExists('tailwind.config.js')).toBe(false);
+
+    const postcssConfig = readText('.postcssrc.json');
+    expect(postcssConfig).toContain('"tailwindcss"');
+    expect(postcssConfig).toContain('"autoprefixer"');
+
+    const tailwindConfig = readText('tailwind.config.ts');
+    expect(tailwindConfig).toContain('./src/**/*.{ts,tsx}');
+    expect(tailwindConfig).not.toContain('{js,ts,jsx,tsx}');
+
+    expect(getTrackedJavaScriptSources()).toEqual([]);
   });
 
   it('marks Forgejo as the canonical upstream in package metadata', () => {
