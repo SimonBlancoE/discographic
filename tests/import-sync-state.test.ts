@@ -15,8 +15,9 @@ import {
   getImportResultTone,
   isTerminalImportStatus
 } from '../src/lib/importSync.js';
+import type { TranslationVars } from '../shared/i18n.js';
 
-const t = (key, vars) => translate('en', key, vars);
+const t = (key: string, vars?: TranslationVars) => translate('en', key, vars);
 
 describe('import sync state helpers', () => {
   it('creates an idle state with zero progress', () => {

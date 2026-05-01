@@ -21,6 +21,7 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "server/**/*.ts",
+    "server/**/*.d.ts",
     "shared/**/*.ts",
     "tests/**/*.ts",
     "types/**/*.d.ts"
