@@ -19,7 +19,9 @@ Normalize and validate data at the first untrusted boundary, then keep the inter
 - Migration gate: `npm run verify`.
 - Upgrade gate for this migration slice: `npm run test:upgrade-smoke`.
 - Docker-enforced self-hosted upgrade gate: `npm run test:upgrade-smoke:docker`.
+- Full Docker-capable upgrade-path verification for this migration slice: `npm run verify:upgrade-path`.
 - `npm run verify` chains the tracked-file JavaScript source scan, typecheck, tests, build, and upgrade smoke in one command.
+- `npm run verify:upgrade-path` is the authoritative issue-15 / PRD-9 completion gate on a Docker-capable runner.
 - `npm run verify` and `npm run test:upgrade-smoke` will skip the Docker half automatically when `docker` is unavailable on PATH.
 - Use `npm run test:upgrade-smoke:docker` for the final migration verification in a Docker-capable environment; it clears the skip flag and treats Docker as mandatory.
 - Set `DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true` only when you need to force the non-Docker path even on a machine that has Docker.

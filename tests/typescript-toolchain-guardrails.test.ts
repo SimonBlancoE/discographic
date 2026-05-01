@@ -76,6 +76,9 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(packageJson.scripts['test:upgrade-smoke:docker']).toBe(
       'DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=false DISCOGRAPHIC_UPGRADE_SMOKE_REQUIRE_DOCKER=true tsx scripts/upgrade-smoke.ts'
     );
+    expect(packageJson.scripts['verify:upgrade-path']).toBe(
+      'npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke:docker'
+    );
     expect(packageJson.scripts.verify).toBe('npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke');
   });
 
@@ -122,6 +125,7 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(contributing).toContain('npm run build');
     expect(contributing).toContain('npm run test:upgrade-smoke');
     expect(contributing).toContain('npm run test:upgrade-smoke:docker');
+    expect(contributing).toContain('npm run verify:upgrade-path');
     expect(contributing).toContain('npm run verify');
   });
 });
