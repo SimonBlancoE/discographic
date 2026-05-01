@@ -72,7 +72,8 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(packageJson.scripts.build).toBe('npm run build:app && npm run build:server');
     expect(packageJson.scripts.start).toBe('node dist/server/start.js');
     expect(packageJson.scripts['scan:js-sources']).toBe('tsx scripts/scan-javascript-sources.ts');
-    expect(packageJson.scripts.verify).toBe('npm run scan:js-sources && npm run typecheck && npm run test && npm run build');
+    expect(packageJson.scripts['test:upgrade-smoke']).toBe('tsx scripts/upgrade-smoke.ts');
+    expect(packageJson.scripts.verify).toBe('npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke');
   });
 
   it('enforces zero tracked JavaScript source files, including tool config', () => {
@@ -116,6 +117,7 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(contributing).toContain('npm run typecheck');
     expect(contributing).toContain('npm run test');
     expect(contributing).toContain('npm run build');
+    expect(contributing).toContain('npm run test:upgrade-smoke');
     expect(contributing).toContain('npm run verify');
   });
 });

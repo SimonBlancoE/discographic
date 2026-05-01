@@ -1,12 +1,11 @@
 import { existsSync, mkdirSync } from 'fs';
 import { access, unlink, writeFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import sharp from 'sharp';
-import { fileURLToPath } from 'url';
+import { resolveRuntimePaths } from '../runtimePaths.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const coversDir = join(__dirname, '..', '..', 'data', 'covers');
+const { dataDir } = resolveRuntimePaths(import.meta.url);
+const coversDir = join(dataDir, 'covers');
 const REMOTE_IMAGE_HOSTS = new Set(['i.discogs.com', 'img.discogs.com']);
 const USER_AGENT = 'Discographic/1.0';
 

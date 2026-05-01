@@ -3,8 +3,7 @@ import express from 'express';
 import session from 'express-session';
 import connectSqlite3 from 'better-sqlite3-session-store';
 import { existsSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import db from './db.js';
 import accountRouter from './routes/account.js';
 import adminRouter from './routes/admin.js';
@@ -15,11 +14,10 @@ import importRouter from './routes/import.js';
 import mediaRouter from './routes/media.js';
 import statsRouter from './routes/stats.js';
 import syncRouter from './routes/sync.js';
+import { resolveRuntimePaths } from './runtimePaths.js';
 import { resolveLocale, translate } from '../shared/i18n.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const distPath = join(__dirname, '..', 'dist');
+const { distDir } = resolveRuntimePaths(import.meta.url);
 const app = express();
 const port = Number(process.env.PORT || 3800);
 const SqliteStore = connectSqlite3(session);
@@ -69,10 +67,10 @@ app.use('/api/export', exportRouter);
 app.use('/api/import', importRouter);
 app.use('/api/media', mediaRouter);
 
-if (existsSync(distPath)) {
-  app.use(express.static(distPath));
+if (existsSync(distDir)) {
+  app.use(express.static(distDir));
   app.get('*', (req, res) => {
-    res.sendFile(join(distPath, 'index.html'));
+    res.sendFile(join(distDir, 'index.html'));
   });
 }
 
