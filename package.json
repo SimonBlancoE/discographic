@@ -37,6 +37,7 @@
     "verify:upgrade-path": "npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke:docker",
     "verify": "npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke",
     "test": "vitest run",
+    "sandcastle": "npx --yes tsx .sandcastle/main.ts",
     "test:instance:start": "bash scripts/test-instance.sh start",
     "test:instance:stop": "bash scripts/test-instance.sh stop"
   },
@@ -58,11 +59,12 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@ai-hero/sandcastle": "^0.5.7",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.19.0",
-    "@types/multer": "^2.1.0",
     "@types/lodash": "^4.17.24",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.19.17",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
