@@ -17,6 +17,20 @@ export function resolveDockerSmokePlan({
   requireDocker: boolean;
   dockerAvailable: boolean;
 }): DockerSmokePlan {
+  if (requireDocker) {
+    if (dockerAvailable) {
+      return {
+        action: 'run',
+        message: null,
+      };
+    }
+
+    return {
+      action: 'error',
+      message: 'Docker is required for upgrade smoke but `docker` is not available on PATH.',
+    };
+  }
+
   if (skipDocker) {
     return {
       action: 'skip',
@@ -28,13 +42,6 @@ export function resolveDockerSmokePlan({
     return {
       action: 'run',
       message: null,
-    };
-  }
-
-  if (requireDocker) {
-    return {
-      action: 'error',
-      message: 'Docker is required for upgrade smoke but `docker` is not available on PATH.',
     };
   }
 
