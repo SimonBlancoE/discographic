@@ -1,3 +1,3 @@
-const runtimeServerEntry = new URL('../../server/index.js', import.meta.url);
+const sourceServerEntry = new URL('../../server/index.js', import.meta.url);
 
-await import(runtimeServerEntry.href);
+await import(sourceServerEntry.href);

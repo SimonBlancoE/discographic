@@ -1,17 +1,33 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const readText = (relativePath) => readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
-const readJson = (relativePath) => JSON.parse(readText(relativePath));
+type PackageJson = {
+  homepage: string;
+  repository: {
+    url: string;
+  };
+  scripts: Record<string, string>;
+};
+
+type Tsconfig = {
+  compilerOptions: Record<string, unknown>;
+  extends?: string;
+  include?: string[];
+};
+
+const projectFile = (relativePath: string): URL => new URL(`../${relativePath}`, import.meta.url);
+const fileExists = (relativePath: string): boolean => existsSync(projectFile(relativePath));
+const readText = (relativePath: string): string => readFileSync(projectFile(relativePath), 'utf8');
+const readJson = <JsonShape>(relativePath: string): JsonShape => JSON.parse(readText(relativePath));
+const packageJson = readJson<PackageJson>('package.json');
 
 describe('TypeScript migration toolchain guardrails', () => {
   it('defines strict no-emit TypeScript defaults with a server build config', () => {
-    expect(existsSync(new URL('../tsconfig.json', import.meta.url))).toBe(true);
-    expect(existsSync(new URL('../tsconfig.server.json', import.meta.url))).toBe(true);
+    expect(fileExists('tsconfig.json')).toBe(true);
+    expect(fileExists('tsconfig.server.json')).toBe(true);
 
-    const tsconfig = readJson('tsconfig.json');
-    const serverTsconfig = readJson('tsconfig.server.json');
+    const tsconfig = readJson<Tsconfig>('tsconfig.json');
+    const serverTsconfig = readJson<Tsconfig>('tsconfig.server.json');
 
     expect(tsconfig.compilerOptions).toMatchObject({
       strict: true,
@@ -19,6 +35,7 @@ describe('TypeScript migration toolchain guardrails', () => {
       skipLibCheck: false,
       noEmit: true,
     });
+    expect(tsconfig.include).toContain('scripts/**/*.ts');
     expect(serverTsconfig.extends).toBe('./tsconfig.json');
     expect(serverTsconfig.compilerOptions).toMatchObject({
       noEmit: false,
@@ -36,7 +53,7 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(packageJson.scripts['build:server']).toBe('tsc -p tsconfig.server.json');
     expect(packageJson.scripts.build).toBe('npm run build:app && npm run build:server');
     expect(packageJson.scripts.start).toBe('node dist/server/start.js');
-    expect(packageJson.scripts['scan:js-sources']).toBe('node scripts/scan-javascript-sources.mjs');
+    expect(packageJson.scripts['scan:js-sources']).toBe('tsx scripts/scan-javascript-sources.ts');
     expect(packageJson.scripts.verify).toBe('npm run scan:js-sources && npm run typecheck && npm run test && npm run build');
   });
 
@@ -46,8 +63,8 @@ describe('TypeScript migration toolchain guardrails', () => {
   });
 
   it('documents TypeScript-only contribution guardrails and required verification', () => {
-    expect(existsSync(new URL('../CONTRIBUTING.md', import.meta.url))).toBe(true);
-    expect(existsSync(new URL('../scripts/scan-javascript-sources.mjs', import.meta.url))).toBe(true);
+    expect(fileExists('CONTRIBUTING.md')).toBe(true);
+    expect(fileExists('scripts/scan-javascript-sources.ts')).toBe(true);
 
     const readme = readText('README.md');
     const contributing = readText('CONTRIBUTING.md');
