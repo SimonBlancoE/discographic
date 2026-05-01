@@ -1,24 +1,39 @@
-// @ts-nocheck
-import { EcbClient } from 'ecb-exchange-rates-ts';
-import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES, normalizeCurrency } from '../../shared/currency.js';
+import { EcbClient, type ExchangeRateResult } from 'ecb-exchange-rates-ts';
+import {
+  DEFAULT_CURRENCY,
+  SUPPORTED_CURRENCIES,
+  normalizeCurrency,
+  type Currency
+} from '../../shared/currency.js';
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-const ecb = new EcbClient();
-let cachedSnapshot = null;
-let pendingFetch = null;
+type RateMap = Record<string, number | null | undefined>;
+type ExchangeSnapshot = {
+  fetchedAt: number;
+  date: string;
+  rates: RateMap;
+};
+type ReleasePriceFields = {
+  estimated_value?: unknown;
+  listing_price_eur?: unknown;
+};
 
-function todayIsoDate() {
+const ecb = new EcbClient();
+let cachedSnapshot: ExchangeSnapshot | null = null;
+let pendingFetch: Promise<ExchangeSnapshot> | null = null;
+
+function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function yesterdayIsoDate() {
+function yesterdayIsoDate(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
-function latestRate(result) {
+function latestRate(result: ExchangeRateResult | null): number | null {
   if (!result?.rates?.size) {
     return null;
   }
@@ -28,26 +43,31 @@ function latestRate(result) {
     .at(-1)?.[1] ?? null;
 }
 
-function normalizeRateCurrency(value, fallback = DEFAULT_CURRENCY) {
+function normalizeRateCurrency(value: unknown, fallback: string = DEFAULT_CURRENCY): string {
   const normalized = String(value || '').trim().toUpperCase();
   return normalized || fallback;
 }
 
-export async function getExchangeSnapshot(extraCurrencies = []) {
-  const requiredCurrencies = [...new Set([
+function getRequiredCurrencies(extraCurrencies: unknown[]): string[] {
+  return [...new Set([
     ...SUPPORTED_CURRENCIES,
     ...extraCurrencies
       .map((currency) => normalizeRateCurrency(currency))
       .filter((c) => /^[A-Z]{3}$/.test(c))
   ])]
     .filter((currency) => currency !== DEFAULT_CURRENCY);
+}
+
+export async function getExchangeSnapshot(extraCurrencies: unknown[] = []): Promise<ExchangeSnapshot> {
+  const requiredCurrencies = getRequiredCurrencies(extraCurrencies);
+  const snapshot = cachedSnapshot;
 
   if (
-    cachedSnapshot &&
-    Date.now() - cachedSnapshot.fetchedAt < CACHE_TTL_MS &&
-    requiredCurrencies.every((currency) => cachedSnapshot.rates[currency])
+    snapshot &&
+    Date.now() - snapshot.fetchedAt < CACHE_TTL_MS &&
+    requiredCurrencies.every((currency) => snapshot.rates[currency])
   ) {
-    return cachedSnapshot;
+    return snapshot;
   }
 
   if (pendingFetch) {
@@ -56,14 +76,14 @@ export async function getExchangeSnapshot(extraCurrencies = []) {
 
   pendingFetch = (async () => {
     try {
-      const results = await Promise.all(requiredCurrencies.map(async (currency) => {
+      const results = await Promise.all(requiredCurrencies.map(async (currency): Promise<[string, number | null]> => {
         const today = todayIsoDate();
         const rate = latestRate(await ecb.getRate(currency, today).catch(() => null))
           ?? latestRate(await ecb.getRate(currency, yesterdayIsoDate()).catch(() => null));
         return [currency, rate];
       }));
 
-      const rates = { EUR: 1 };
+      const rates: RateMap = { EUR: 1 };
       for (const [currency, rate] of results) {
         rates[currency] = rate;
       }
@@ -94,7 +114,12 @@ export async function getExchangeSnapshot(extraCurrencies = []) {
   return pendingFetch;
 }
 
-export function convertAmountWithRates(amount, fromCurrency, toCurrency, rates) {
+export function convertAmountWithRates(
+  amount: unknown,
+  fromCurrency: unknown,
+  toCurrency: unknown,
+  rates: RateMap,
+): number | null {
   if (amount === null || amount === undefined || amount === '') {
     return null;
   }
@@ -123,12 +148,19 @@ export function convertAmountWithRates(amount, fromCurrency, toCurrency, rates) 
   return Number(converted.toFixed(2));
 }
 
-export async function convertAmount(amount, fromCurrency, toCurrency) {
+export async function convertAmount(amount: unknown, fromCurrency: unknown, toCurrency: unknown): Promise<number | null> {
   const snapshot = await getExchangeSnapshot();
   return convertAmountWithRates(amount, fromCurrency, toCurrency, snapshot.rates);
 }
 
-export async function convertReleasePrices(release, displayCurrency) {
+export async function convertReleasePrices<Release extends ReleasePriceFields>(
+  release: Release,
+  displayCurrency: unknown,
+): Promise<Release & {
+  estimated_value: number | null;
+  listing_price: number | null;
+  display_currency: Currency;
+}> {
   const targetCurrency = normalizeCurrency(displayCurrency);
   const snapshot = await getExchangeSnapshot();
 

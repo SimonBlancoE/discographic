@@ -1,7 +1,12 @@
-// @ts-nocheck
-export function pruneUnseenReleases(db, userId, syncId) {
-  const reconcileTx = db.transaction((targetUserId, targetSyncId) => {
-    const staleReleaseIds = db.prepare(`
+import type Database from 'better-sqlite3';
+
+type ReleaseIdRow = {
+  id: number;
+};
+
+export function pruneUnseenReleases(db: Database.Database, userId: number, syncId: number): number[] {
+  const reconcileTx = db.transaction((targetUserId: number, targetSyncId: number): number[] => {
+    const staleReleaseIds = db.prepare<[number, number], ReleaseIdRow>(`
       SELECT id
       FROM releases
       WHERE user_id = ?
@@ -12,7 +17,7 @@ export function pruneUnseenReleases(db, userId, syncId) {
       return [];
     }
 
-    db.prepare(`
+    db.prepare<[number, number]>(`
       DELETE FROM releases
       WHERE user_id = ?
         AND (last_seen_sync_id IS NULL OR last_seen_sync_id != ?)
