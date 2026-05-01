@@ -99,6 +99,8 @@ const IMPORT_RESULT_META = {
     helpKey: 'collection.importFailedHelp'
   }
 };
+type ImportResultStatus = keyof typeof IMPORT_RESULT_META;
+type ImportResultMeta = (typeof IMPORT_RESULT_META)[ImportResultStatus];
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
@@ -138,12 +140,20 @@ function progressPercent(current: number, total: number): number {
   return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
 }
 
+function isWorkflowStatus(value: unknown): value is WorkflowStatus {
+  return SYNC_STATUSES.has(value as WorkflowStatus);
+}
+
 function normalizeWorkflowStatus(value: unknown, fallback: WorkflowStatus = SYNC_STATUS.IDLE): WorkflowStatus {
-  return SYNC_STATUSES.has(value as WorkflowStatus) ? (value as WorkflowStatus) : fallback;
+  return isWorkflowStatus(value) ? value : fallback;
+}
+
+function isImportWorkflowStatus(value: unknown): value is ImportWorkflowStatus {
+  return IMPORT_STATUSES.has(value as ImportWorkflowStatus);
 }
 
 function normalizeImportStatus(value: unknown): ImportWorkflowStatus {
-  return IMPORT_STATUSES.has(value as ImportWorkflowStatus) ? (value as ImportWorkflowStatus) : IMPORT_SYNC_STATUS.IDLE;
+  return isImportWorkflowStatus(value) ? value : IMPORT_SYNC_STATUS.IDLE;
 }
 
 function normalizeProgressWorkflow(workflow: unknown = {}): ProgressWorkflow {
@@ -232,17 +242,23 @@ export function normalizeImportSyncState(payload: UnknownRecord = {}): ImportSyn
 }
 
 export function isTerminalImportStatus(status: unknown): boolean {
-  return IMPORT_TERMINAL_STATUSES.has(status as ImportWorkflowStatus);
+  return isImportWorkflowStatus(status) && IMPORT_TERMINAL_STATUSES.has(status);
+}
+
+function getImportResultMeta(status: unknown): ImportResultMeta | null {
+  return Object.prototype.hasOwnProperty.call(IMPORT_RESULT_META, status as PropertyKey)
+    ? IMPORT_RESULT_META[status as ImportResultStatus]
+    : null;
 }
 
 export function getImportResultTone(status: unknown): string {
-  return IMPORT_RESULT_META[status as keyof typeof IMPORT_RESULT_META]?.tone || 'neutral';
+  return getImportResultMeta(status)?.tone || 'neutral';
 }
 
 export function getImportResultTitleKey(status: unknown): string {
-  return IMPORT_RESULT_META[status as keyof typeof IMPORT_RESULT_META]?.titleKey || 'collection.done';
+  return getImportResultMeta(status)?.titleKey || 'collection.done';
 }
 
 export function getImportResultHelpKey(status: unknown): string | null {
-  return IMPORT_RESULT_META[status as keyof typeof IMPORT_RESULT_META]?.helpKey || null;
+  return getImportResultMeta(status)?.helpKey || null;
 }

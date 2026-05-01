@@ -1,4 +1,4 @@
-import { DEFAULT_CURRENCY, normalizeCurrency } from '../currency.js';
+import { DEFAULT_CURRENCY, normalizeCurrency, type Currency } from '../currency.js';
 
 type UnknownRecord = Record<string, unknown>;
 type AuthPayload = {
@@ -30,7 +30,7 @@ export type AccountResponse = {
   discogsUsername: string;
   tokenConfigured: boolean;
   tokenPreview: string | null;
-  currency: ReturnType<typeof normalizeCurrency>;
+  currency: Currency;
 };
 
 export type AccountCapabilities = {
@@ -54,7 +54,7 @@ export type AccountState = {
     tokenPreview: string | null;
   };
   preferences: {
-    currency: ReturnType<typeof normalizeCurrency>;
+    currency: Currency;
   };
   capabilities: AccountCapabilities;
 };
@@ -88,21 +88,21 @@ function asRecord(value: unknown): UnknownRecord | null {
 }
 
 export function normalizeUser(user: unknown): NormalizedUser | null {
-  if (!user || typeof user !== 'object') {
+  const record = asRecord(user);
+  if (!record) {
     return null;
   }
 
-  const record = asRecord(user);
-  const id = asNumber(record?.id);
+  const id = asNumber(record.id);
   if (id == null) {
     return null;
   }
 
   return {
     id,
-    username: asText(record?.username),
-    role: asText(record?.role, 'user') || 'user',
-    created_at: asNullableText(record?.created_at)
+    username: asText(record.username),
+    role: asText(record.role, 'user') || 'user',
+    created_at: asNullableText(record.created_at)
   };
 }
 

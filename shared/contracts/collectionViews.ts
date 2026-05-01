@@ -19,7 +19,11 @@ type SavedViewInput = {
   sortBy?: unknown;
   sortOrder?: unknown;
   visibleColumns?: unknown;
-} | null | undefined;
+};
+
+function asSavedViewInput(value: unknown): SavedViewInput | null {
+  return value && typeof value === 'object' ? (value as SavedViewInput) : null;
+}
 
 function asArray(value: unknown): unknown[] {
   if (Array.isArray(value)) {
@@ -50,13 +54,14 @@ function normalizeVisibleColumns(columns: unknown): string[] {
   return [...new Set(asArray(columns).map(asText).filter(Boolean))];
 }
 
-export function normalizeCollectionSavedView(view: SavedViewInput): CollectionSavedView | null {
-  if (!view || typeof view !== 'object') {
+export function normalizeCollectionSavedView(view: unknown): CollectionSavedView | null {
+  const source = asSavedViewInput(view);
+  if (!source) {
     return null;
   }
 
-  const id = asText(view.id);
-  const name = asText(view.name);
+  const id = asText(source.id);
+  const name = asText(source.name);
   if (!id || !name) {
     return null;
   }
@@ -64,16 +69,16 @@ export function normalizeCollectionSavedView(view: SavedViewInput): CollectionSa
   return {
     id,
     name,
-    filters: createCollectionFilters(view.filters || {}),
-    sortBy: asText(view.sortBy) || 'artist',
-    sortOrder: normalizeSortOrder(view.sortOrder),
-    visibleColumns: normalizeVisibleColumns(view.visibleColumns)
+    filters: createCollectionFilters(source.filters || {}),
+    sortBy: asText(source.sortBy) || 'artist',
+    sortOrder: normalizeSortOrder(source.sortOrder),
+    visibleColumns: normalizeVisibleColumns(source.visibleColumns)
   };
 }
 
 export function normalizeCollectionSavedViews(value: unknown): CollectionSavedView[] {
   return asArray(value)
-    .map((view) => normalizeCollectionSavedView(view as SavedViewInput))
+    .map(normalizeCollectionSavedView)
     .filter((view): view is CollectionSavedView => Boolean(view))
     .slice(0, MAX_COLLECTION_SAVED_VIEWS);
 }
