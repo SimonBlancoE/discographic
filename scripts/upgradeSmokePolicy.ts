@@ -11,23 +11,32 @@ export type DockerSmokePlan =
 export function resolveDockerSmokePlan({
   skipDocker,
   requireDocker,
-  dockerAvailable,
+  dockerAvailableOnPath,
+  dockerDaemonReachable,
 }: {
   skipDocker: boolean;
   requireDocker: boolean;
-  dockerAvailable: boolean;
+  dockerAvailableOnPath: boolean;
+  dockerDaemonReachable: boolean;
 }): DockerSmokePlan {
   if (requireDocker) {
-    if (dockerAvailable) {
+    if (!dockerAvailableOnPath) {
       return {
-        action: 'run',
-        message: null,
+        action: 'error',
+        message: 'Docker is required for upgrade smoke but `docker` is not available on PATH.',
+      };
+    }
+
+    if (!dockerDaemonReachable) {
+      return {
+        action: 'error',
+        message: 'Docker is required for upgrade smoke but the Docker daemon is not reachable.',
       };
     }
 
     return {
-      action: 'error',
-      message: 'Docker is required for upgrade smoke but `docker` is not available on PATH.',
+      action: 'run',
+      message: null,
     };
   }
 
@@ -38,15 +47,22 @@ export function resolveDockerSmokePlan({
     };
   }
 
-  if (dockerAvailable) {
+  if (!dockerAvailableOnPath) {
     return {
-      action: 'run',
-      message: null,
+      action: 'skip',
+      message: 'Skipping Docker upgrade smoke because `docker` is not available on PATH.',
+    };
+  }
+
+  if (!dockerDaemonReachable) {
+    return {
+      action: 'skip',
+      message: 'Skipping Docker upgrade smoke because the Docker daemon is not reachable.',
     };
   }
 
   return {
-    action: 'skip',
-    message: 'Skipping Docker upgrade smoke because `docker` is not available on PATH.',
+    action: 'run',
+    message: null,
   };
 }

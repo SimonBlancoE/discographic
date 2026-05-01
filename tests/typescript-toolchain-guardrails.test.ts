@@ -127,6 +127,8 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(contributing).toContain('npm run test:upgrade-smoke:docker');
     expect(contributing).toContain('npm run verify:upgrade-path');
     expect(contributing).toContain('npm run verify');
+    expect(contributing).toContain('Docker daemon is unreachable');
+    expect(contributing).toContain('reachable Docker daemon');
     expect(contributing).toContain('The JavaScript scan is expected to pass once the tracked source tree is TypeScript-only');
     expect(contributing).not.toContain('The JavaScript scan is expected to fail until parent issue `#9` removes the remaining versioned JavaScript and JSX files.');
   });
