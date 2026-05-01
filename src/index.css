@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@property --vinyl-wave-opacity {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
 @layer base {
   :root {
     color-scheme: dark;
@@ -175,12 +181,8 @@
     transition: border-color 240ms ease-out, background 240ms ease-out;
   }
 
-  .brand-lockup:hover .vinyl-record,
-  .brand-lockup:focus-visible .vinyl-record {
-    animation-duration: 1.5s;
-  }
-
   .vinyl-badge {
+    --vinyl-wave-opacity: 0;
     position: relative;
     display: inline-flex;
     height: 5.25rem;
@@ -191,6 +193,30 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: linear-gradient(180deg, rgba(251, 113, 133, 0.18), rgba(56, 189, 248, 0.08));
     box-shadow: 0 18px 36px rgba(2, 6, 23, 0.42);
+    transition: --vinyl-wave-opacity 360ms ease;
+  }
+
+  .brand-lockup:hover .vinyl-badge,
+  .brand-lockup:focus-visible .vinyl-badge {
+    --vinyl-wave-opacity: 1;
+  }
+
+  .vinyl-badge::before,
+  .vinyl-badge::after {
+    content: '';
+    position: absolute;
+    inset: -0.35rem;
+    border-radius: 1.85rem;
+    pointer-events: none;
+    border: 1px solid rgba(103, 232, 249, 0.28);
+    box-shadow: 0 0 22px rgba(103, 232, 249, 0.12), inset 0 0 18px rgba(251, 113, 133, 0.08);
+    animation: vinyl-wave-pulse 1.75s ease-out infinite;
+  }
+
+  .vinyl-badge::after {
+    inset: -0.65rem;
+    border-color: rgba(251, 113, 133, 0.24);
+    animation-delay: 420ms;
   }
 
   .vinyl-record {
@@ -199,7 +225,7 @@
     width: 4.2rem;
     height: 4.2rem;
     border-radius: 999px;
-    animation: vinyl-spin 4.5s linear infinite;
+    transform: rotate(0deg);
     transform-origin: center;
     will-change: transform;
   }
@@ -661,6 +687,20 @@
   }
 }
 
+@keyframes vinyl-wave-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  34% {
+    opacity: calc(var(--vinyl-wave-opacity) * 0.48);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.38);
+  }
+}
+
 @keyframes skeleton-shift {
   100% {
     transform: translateX(100%);
@@ -700,6 +740,8 @@
   body::before,
   body::after,
   .vinyl-record,
+  .vinyl-badge::before,
+  .vinyl-badge::after,
   .random-card__record,
   .skeleton-shimmer::after,
   .toast-card,
