@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { messages } from '../shared/i18n.js';
-import { COLUMNS } from '../src/lib/columns.js';
+
+// @ts-expect-error Legacy JS UI metadata module remains outside issue 11's shared-boundary migration.
+const { COLUMNS } = await import('../src/lib/columns.js') as {
+  COLUMNS: Array<{
+    i18nKey: string;
+  }>;
+};
 
 const EXPORT_KEYS = [
   'export.id', 'export.releaseDiscogs', 'export.instance', 'export.artist',
