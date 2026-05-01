@@ -8,17 +8,19 @@ export type DockerSmokePlan =
       message: string;
     };
 
+export type DockerSmokePlanInput = {
+  skipDocker: boolean;
+  requireDocker: boolean;
+  dockerAvailableOnPath: boolean;
+  dockerDaemonReachable: boolean;
+};
+
 export function resolveDockerSmokePlan({
   skipDocker,
   requireDocker,
   dockerAvailableOnPath,
   dockerDaemonReachable,
-}: {
-  skipDocker: boolean;
-  requireDocker: boolean;
-  dockerAvailableOnPath: boolean;
-  dockerDaemonReachable: boolean;
-}): DockerSmokePlan {
+}: DockerSmokePlanInput): DockerSmokePlan {
   if (requireDocker) {
     if (!dockerAvailableOnPath) {
       return {

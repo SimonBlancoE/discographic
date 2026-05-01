@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveRuntimePaths } from '../server/runtimePaths.js';
 
 const tempRoots: string[] = [];
+type RuntimePathEnvKey = 'DISCOGRAPHIC_DATA_DIR' | 'DISCOGRAPHIC_DIST_DIR';
 
 function createTempAppRoot(): string {
   const appRoot = mkdtempSync(join(tmpdir(), 'discographic-runtime-paths-'));
@@ -23,6 +24,15 @@ afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
   }
 });
+
+function restoreEnvValue(key: RuntimePathEnvKey, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+
+  process.env[key] = value;
+}
 
 describe('runtime path resolution', () => {
   it('maps source and compiled server modules to the same app directories', () => {
@@ -55,17 +65,8 @@ describe('runtime path resolution', () => {
         distDir: join(appRoot, 'fixtures', 'dist'),
       });
     } finally {
-      if (originalDataDir === undefined) {
-        delete process.env.DISCOGRAPHIC_DATA_DIR;
-      } else {
-        process.env.DISCOGRAPHIC_DATA_DIR = originalDataDir;
-      }
-
-      if (originalDistDir === undefined) {
-        delete process.env.DISCOGRAPHIC_DIST_DIR;
-      } else {
-        process.env.DISCOGRAPHIC_DIST_DIR = originalDistDir;
-      }
+      restoreEnvValue('DISCOGRAPHIC_DATA_DIR', originalDataDir);
+      restoreEnvValue('DISCOGRAPHIC_DIST_DIR', originalDistDir);
     }
   });
 });
