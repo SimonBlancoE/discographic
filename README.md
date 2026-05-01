@@ -78,7 +78,7 @@ If you just want to run it, this is the path.
 You need [Docker](https://docs.docker.com/get-docker/) installed.
 
 ```bash
-git clone https://github.com/SimonBlancoE/discographic.git
+git clone https://git.simonblanco.xyz/octo/discographic.git
 cd discographic
 docker compose up -d
 ```
@@ -154,8 +154,8 @@ npm install
 You need two terminals:
 
 ```bash
-# Terminal 1 - API server
-npm run server
+# Terminal 1 - API server with direct TypeScript execution
+npm run dev:server
 
 # Terminal 2 - Vite dev server with hot reload
 npm run dev
@@ -176,6 +176,10 @@ COOKIE_SECURE=false                       # Set to true behind HTTPS
 ```
 
 Discogs credentials are **not** set via environment variables. Each user adds them inside the app.
+
+## Contributing
+
+Forgejo is the canonical development upstream for Discographic: `https://git.simonblanco.xyz/octo/discographic`. For the TypeScript-only migration rules, verification commands, and untrusted boundary normalization policy, see [CONTRIBUTING.md](./CONTRIBUTING.md). GitHub publication is outside this migration scope.
 
 ## Tech stack
 
