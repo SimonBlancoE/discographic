@@ -16,16 +16,22 @@ type Tsconfig = {
   include?: string[];
 };
 
-const projectFile = (relativePath: string): URL => new URL(`../${relativePath}`, import.meta.url);
+type PostcssConfig = {
+  plugins: Record<string, unknown>;
+};
+
+const disallowedJavaScriptSourcePathspecs = ['*.js', '*.jsx', '*.mjs', '*.cjs'];
+const projectRoot = new URL('../', import.meta.url);
+const projectFile = (relativePath: string): URL => new URL(relativePath, projectRoot);
 const fileExists = (relativePath: string): boolean => existsSync(projectFile(relativePath));
 const readText = (relativePath: string): string => readFileSync(projectFile(relativePath), 'utf8');
 const readJson = <JsonShape>(relativePath: string): JsonShape => JSON.parse(readText(relativePath));
 const getTrackedJavaScriptSources = (): string[] =>
-  execFileSync('git', ['ls-files', '--', '*.js', '*.jsx', '*.mjs', '*.cjs'], {
-    cwd: new URL('../', import.meta.url),
+  execFileSync('git', ['ls-files', '-z', '--', ...disallowedJavaScriptSourcePathspecs], {
+    cwd: projectRoot,
     encoding: 'utf8',
   })
-    .split('\n')
+    .split('\0')
     .filter(Boolean)
     .filter((filePath) => fileExists(filePath))
     .sort();
@@ -75,9 +81,11 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(fileExists('postcss.config.js')).toBe(false);
     expect(fileExists('tailwind.config.js')).toBe(false);
 
-    const postcssConfig = readText('.postcssrc.json');
-    expect(postcssConfig).toContain('"tailwindcss"');
-    expect(postcssConfig).toContain('"autoprefixer"');
+    const postcssConfig = readJson<PostcssConfig>('.postcssrc.json');
+    expect(postcssConfig.plugins).toEqual({
+      tailwindcss: {},
+      autoprefixer: {},
+    });
 
     const tailwindConfig = readText('tailwind.config.ts');
     expect(tailwindConfig).toContain('./src/**/*.{ts,tsx}');
