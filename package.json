@@ -27,8 +27,8 @@
     "build:app": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "preview": "vite preview",
-    "dev:server": "tsx watch server/index.js",
-    "server": "tsx server/index.js",
+    "dev:server": "tsx watch server/index.ts",
+    "server": "tsx server/index.ts",
     "start": "node dist/server/start.js",
     "typecheck": "tsc -p tsconfig.json",
     "scan:js-sources": "tsx scripts/scan-javascript-sources.ts",
@@ -55,6 +55,10 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.19.17",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
