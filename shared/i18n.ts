@@ -1,8 +1,12 @@
 export const LOCALE_STORAGE_KEY = 'discographic-locale';
-const DEFAULT_LOCALE = 'es';
-const SUPPORTED_LOCALES = ['es', 'en'];
+const SUPPORTED_LOCALES = ['es', 'en'] as const;
+export type Locale = (typeof SUPPORTED_LOCALES)[number];
+export type MessageDictionary = Record<string, string>;
+export type MessagesByLocale = Record<Locale, MessageDictionary>;
+export type TranslationVars = Record<string, string | number | boolean | null | undefined>;
+const DEFAULT_LOCALE: Locale = 'es';
 
-export const messages = {
+const rawMessages = {
   es: {
     'app.name': 'Discographic',
     'app.tagline': 'Colección Discogs',
@@ -275,7 +279,7 @@ export const messages = {
     'dashboard.labelsDesc': 'Los labels más repetidos.',
     'dashboard.labelHint': 'Pulsa una barra para ver esos discos en la colección.',
     'dashboard.styles': 'Estilos',
-    'dashboard.stylesDesc': 'Los subgéneros más frecuentes.',
+    'dashboard.stylesDesc': 'Los sub-géneros más frecuentes.',
     'dashboard.styleHint': 'Pulsa una barra para abrir la colección por estilo.',
     'dashboard.growth': 'Crecimiento',
     'dashboard.growthDesc': 'Cómo fue creciendo la biblioteca con el tiempo.',
@@ -289,15 +293,10 @@ export const messages = {
     'dashboard.artistLeaderboardDesc': 'Quiénes ocupan más estantería en la sala.',
     'dashboard.records': '{count} discos',
     'dashboard.decadesTitle': 'Décadas',
-    'dashboard.decadesDesc': 'Distribución por año de edición.',
     'dashboard.formatsTitle': 'Formatos',
-    'dashboard.formatsDesc': 'Vinilo, CD, cassette y compañía.',
     'dashboard.labelsTitle': 'Sellos',
-    'dashboard.labelsDesc': 'Los labels más repetidos.',
     'dashboard.stylesTitle': 'Estilos',
-    'dashboard.stylesDesc': 'Los sub-géneros más frecuentes.',
     'dashboard.growthTitle': 'Crecimiento',
-    'dashboard.growthDesc': 'Cómo fue creciendo la biblioteca con el tiempo.',
     'dashboard.totalRecordsShort': 'Total',
     'dashboard.thisMonth': 'este mes',
     'dashboard.loadError': 'No se pudo cargar el dashboard: {error}',
@@ -763,15 +762,10 @@ export const messages = {
     'dashboard.artistLeaderboardDesc': 'Who takes up the most shelf space in the room.',
     'dashboard.records': '{count} records',
     'dashboard.decadesTitle': 'Decades',
-    'dashboard.decadesDesc': 'Distribution by release year.',
     'dashboard.formatsTitle': 'Formats',
-    'dashboard.formatsDesc': 'Vinyl, CD, cassette, and company.',
     'dashboard.labelsTitle': 'Labels',
-    'dashboard.labelsDesc': 'The most repeated labels.',
     'dashboard.stylesTitle': 'Styles',
-    'dashboard.stylesDesc': 'The most common subgenres.',
     'dashboard.growthTitle': 'Growth',
-    'dashboard.growthDesc': 'How the library grew over time.',
     'dashboard.totalRecordsShort': 'Total',
     'dashboard.thisMonth': 'this month',
     'dashboard.loadError': 'Unable to load dashboard: {error}',
@@ -951,16 +945,19 @@ export const messages = {
     'backend.media.tapeteFailed': 'Unable to generate the mat: {error}',
     'backend.server.internal': 'Internal server error'
   }
-};
+} as const;
 
-export function resolveLocale(input) {
+export const messages: MessagesByLocale = rawMessages;
+export type MessageKey = keyof typeof rawMessages.es;
+
+export function resolveLocale(input: unknown): Locale {
   if (!input) return DEFAULT_LOCALE;
   const normalized = String(input).toLowerCase();
   const match = SUPPORTED_LOCALES.find((locale) => normalized === locale || normalized.startsWith(`${locale}-`));
   return match || DEFAULT_LOCALE;
 }
 
-export function getCurrentLocale() {
+export function getCurrentLocale(): Locale {
   if (typeof window === 'undefined') {
     return DEFAULT_LOCALE;
   }
@@ -970,17 +967,17 @@ export function getCurrentLocale() {
   return resolveLocale(window.navigator.language);
 }
 
-export function persistLocale(locale) {
+export function persistLocale(locale: unknown): void {
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, resolveLocale(locale));
   }
 }
 
-function interpolate(template, vars = {}) {
-  return String(template).replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ''));
+function interpolate(template: string, vars: TranslationVars = {}): string {
+  return String(template).replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? ''));
 }
 
-export function translate(locale, key, vars = {}) {
+export function translate(locale: unknown, key: string, vars: TranslationVars = {}): string {
   const resolved = resolveLocale(locale);
   const message = messages[resolved]?.[key] ?? messages[DEFAULT_LOCALE]?.[key] ?? key;
   return interpolate(message, vars);
