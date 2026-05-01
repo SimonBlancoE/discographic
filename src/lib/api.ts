@@ -70,6 +70,8 @@ type ChangePasswordPayload = {
   newPassword: string;
 };
 
+type QueryValue = string | number | boolean | null | undefined;
+type QueryParams = Record<string, QueryValue>;
 type CollectionQuery = Partial<Record<string, string | number>>;
 
 type AdminUserPayload = {
@@ -103,6 +105,12 @@ type RawWallResponse = {
   releases: WallRelease[];
   filters: CollectionFilterOptions;
 };
+
+function toQueryString(params: QueryParams): string {
+  return new URLSearchParams(
+    Object.fromEntries(Object.entries(params).map(([key, value]) => [key, String(value)]))
+  ).toString();
+}
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const locale = getLocaleHeader();
@@ -155,7 +163,7 @@ export const api = {
   }),
   getStats: async (): Promise<DashboardStats> => normalizeDashboardStats(await request('/stats')),
   getCollection: async (params: CollectionQuery = {}): Promise<CollectionPageResponse> => {
-    const response = await request<RawCollectionResponse>(`/collection?${new URLSearchParams(params as Record<string, string>).toString()}`);
+    const response = await request<RawCollectionResponse>(`/collection?${toQueryString(params)}`);
     const normalized = normalizeCollectionResponse(response);
     return {
       ...normalized,
@@ -202,12 +210,12 @@ export const api = {
   getImportStatus: async (): Promise<ImportSyncState> => normalizeImportSyncState(await request('/import/status')),
   downloadImportTemplate: () => {
     const locale = getLocaleHeader();
-    const query = new URLSearchParams({ locale }).toString();
+    const query = toQueryString({ locale });
     window.open(`${API_BASE}/import/template?${query}`, '_blank', 'noopener');
   },
   fetchTapeteBlob: async (maxSize = 7200, filters: CollectionFilters | Partial<CollectionFilters> = {}) => {
     const locale = getLocaleHeader();
-    const params = new URLSearchParams({ maxSize: String(maxSize), locale, ...filters });
+    const params = toQueryString({ maxSize, locale, ...filters });
     const response = await fetch(`${API_BASE}/media/tapete?${params}`, {
       credentials: 'include',
       headers: {
@@ -222,7 +230,7 @@ export const api = {
   },
   exportCollection: (format: 'csv' | 'xlsx', params: Record<string, string | number> = {}) => {
     const locale = getLocaleHeader();
-    const query = new URLSearchParams({ format, locale, ...Object.fromEntries(Object.entries(params).map(([key, value]) => [key, String(value)])) }).toString();
+    const query = toQueryString({ format, locale, ...params });
     window.open(`${API_BASE}/export?${query}`, '_blank', 'noopener');
   }
 };

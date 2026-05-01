@@ -21,9 +21,21 @@ function truncate(text: string | null | undefined, max = 40): string {
   return `${text.slice(0, max)}...`;
 }
 
+function getResultBoxClass(tone: string): string {
+  switch (tone) {
+    case 'success':
+      return 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100';
+    case 'warning':
+      return 'border-amber-400/30 bg-amber-500/10 text-amber-100';
+    case 'error':
+      return 'border-rose-400/30 bg-rose-500/10 text-rose-100';
+    default:
+      return 'border-white/10 bg-white/5 text-slate-100';
+  }
+}
+
 function ImportButton({ disabled = false }) {
   const { t } = useI18n();
-  // idle | loading | preview | applying | syncing | result
   const [phase, setPhase] = useState<ImportPhase>('idle');
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [error, setError] = useState('');
@@ -151,13 +163,7 @@ function ImportButton({ disabled = false }) {
   const resultHelpKey = getImportResultHelpKey(syncState?.status);
   const visibleFailures = (syncState?.failures || []).slice(0, 5);
   const remainingFailures = Math.max(0, (syncState?.failures?.length || 0) - visibleFailures.length);
-  const resultBoxClass = resultTone === 'success'
-    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'
-    : resultTone === 'warning'
-      ? 'border-amber-400/30 bg-amber-500/10 text-amber-100'
-      : resultTone === 'error'
-        ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
-        : 'border-white/10 bg-white/5 text-slate-100';
+  const resultBoxClass = getResultBoxClass(resultTone);
 
   return (
     <div className="space-y-4">

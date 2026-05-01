@@ -2,7 +2,12 @@ import { api } from '../lib/api';
 import { useI18n } from '../lib/I18nContext';
 import type { CollectionFilters } from '../../shared/collectionFilters.js';
 
-function ExportButton({ filters, disabled = false }: { filters: CollectionFilters & { currency?: string }; disabled?: boolean }) {
+type ExportButtonProps = {
+  filters: CollectionFilters & { currency?: string };
+  disabled?: boolean;
+};
+
+function ExportButton({ filters, disabled = false }: ExportButtonProps) {
   const { t } = useI18n();
 
   return (

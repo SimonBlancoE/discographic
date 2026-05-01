@@ -3,7 +3,6 @@ import type {
   AccountCapabilities,
   AccountResponse,
   AccountState,
-  AuthStatus,
   NormalizedUser,
 } from '../../shared/contracts/account.js';
 import type { CollectionSavedView } from '../../shared/contracts/collectionViews.js';
@@ -228,9 +227,9 @@ export type VinylBadgeGenre = {
 export type SyncCompleteHandler = () => void | Promise<void>;
 
 export type ReleaseTrackRow = {
-  position?: string;
-  title?: string;
-  duration?: string;
+  position?: string | number | null;
+  title?: string | number | null;
+  duration?: string | number | null;
 };
 
 export type ImportServiceTranslator = (key: string, vars?: TranslationVars) => string;

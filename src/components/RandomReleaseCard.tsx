@@ -39,6 +39,18 @@ function RandomReleaseCard() {
     }
   }
 
+  function getShuffleButtonLabel() {
+    if (loading) {
+      return t('random.spin');
+    }
+
+    if (release) {
+      return t('random.another');
+    }
+
+    return t('random.surprise');
+  }
+
   return (
     <section className="glass-panel random-card overflow-hidden p-5">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
@@ -53,7 +65,7 @@ function RandomReleaseCard() {
 
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={pullRandom} disabled={loading} className="primary-button disabled:opacity-60">
-              {loading ? t('random.spin') : release ? t('random.another') : t('random.surprise')}
+              {getShuffleButtonLabel()}
             </button>
             {release ? (
               <Link to={`/release/${release.id}`} className="secondary-button">
