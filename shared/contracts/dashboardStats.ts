@@ -49,6 +49,10 @@ export type DashboardStats = {
   displayCurrency: string | null;
 };
 
+type TopValueCandidate = Omit<TopValueRow, 'id'> & {
+  id: number | null;
+};
+
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
@@ -78,6 +82,10 @@ function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as UnknownRecord)
     : null;
+}
+
+function hasTopValueId(row: TopValueCandidate): row is TopValueRow {
+  return row.id != null;
 }
 
 function normalizeNamedCountRows(rows: unknown): NamedCountRow[] {
@@ -118,7 +126,7 @@ function normalizeGrowthRows(rows: unknown): GrowthRow[] {
 
 function normalizeTopValueRows(rows: unknown): TopValueRow[] {
   return asArray(rows)
-    .map((row) => {
+    .map((row): TopValueCandidate => {
       const source = asRecord(row);
       return {
         id: asNumber(source?.id, null),
@@ -130,7 +138,7 @@ function normalizeTopValueRows(rows: unknown): TopValueRow[] {
         estimated_value: asNullableNumber(source?.estimated_value),
       };
     })
-    .filter((row) => row.id != null) as TopValueRow[];
+    .filter(hasTopValueId);
 }
 
 function normalizeLastSync(lastSync: unknown): DashboardLastSync | null {

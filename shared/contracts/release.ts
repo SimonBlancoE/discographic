@@ -1,4 +1,4 @@
-import { MARKETPLACE_STATUS } from './marketplace.js';
+import { MARKETPLACE_STATUS, type MarketplaceStatus } from './marketplace.js';
 
 type UnknownRecord = Record<string, unknown>;
 type UnknownArray = unknown[];
@@ -33,7 +33,7 @@ export type CollectionRelease = {
   notes_text: string;
   date_added: string | null;
   estimated_value: number | null;
-  marketplace_status: (typeof MARKETPLACE_STATUS)[keyof typeof MARKETPLACE_STATUS];
+  marketplace_status: MarketplaceStatus;
   listing_status: string | null;
   listing_price: number | null;
   listing_currency: string | null;
@@ -75,7 +75,7 @@ export type WallResponse = {
 };
 
 const LOCAL_COVER_VARIANTS = new Set<LocalCoverVariant>(['detail', 'wall', 'poster']);
-const MARKETPLACE_STATUSES = new Set<CollectionRelease['marketplace_status']>(Object.values(MARKETPLACE_STATUS));
+const MARKETPLACE_STATUSES = new Set<MarketplaceStatus>(Object.values(MARKETPLACE_STATUS));
 
 function asArray(value: unknown): unknown[] {
   if (Array.isArray(value)) {
@@ -130,10 +130,16 @@ function asNullableText(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null;
 }
 
-function asMarketplaceStatus(value: unknown): CollectionRelease['marketplace_status'] {
-  return MARKETPLACE_STATUSES.has(value as CollectionRelease['marketplace_status'])
-    ? (value as CollectionRelease['marketplace_status'])
-    : MARKETPLACE_STATUS.PENDING;
+function asReleaseListEntries(value: unknown): ReleaseListEntry[] {
+  return asArray(value) as ReleaseListEntry[];
+}
+
+function isMarketplaceStatus(value: unknown): value is MarketplaceStatus {
+  return MARKETPLACE_STATUSES.has(value as MarketplaceStatus);
+}
+
+function asMarketplaceStatus(value: unknown): MarketplaceStatus {
+  return isMarketplaceStatus(value) ? value : MARKETPLACE_STATUS.PENDING;
 }
 
 function asRecord(value: unknown): UnknownRecord | null {
@@ -150,13 +156,17 @@ function validWallRelease(release: WallRelease): release is WallRelease & { id: 
   return release.id != null;
 }
 
-export function buildLocalCoverUrl(id: unknown, variant: string): string | null {
+function isLocalCoverVariant(value: unknown): value is LocalCoverVariant {
+  return LOCAL_COVER_VARIANTS.has(value as LocalCoverVariant);
+}
+
+export function buildLocalCoverUrl(id: unknown, variant: unknown): string | null {
   const normalizedId = asNumber(id);
-  if (normalizedId == null || !LOCAL_COVER_VARIANTS.has(variant as LocalCoverVariant)) {
+  if (normalizedId == null || !isLocalCoverVariant(variant)) {
     return null;
   }
 
-  return `/api/media/cover/${normalizedId}?variant=${variant as LocalCoverVariant}`;
+  return `/api/media/cover/${normalizedId}?variant=${variant}`;
 }
 
 export function normalizeCollectionRelease(release: unknown = {}): CollectionRelease {
@@ -173,8 +183,8 @@ export function normalizeCollectionRelease(release: unknown = {}): CollectionRel
     year: asNumber(source.year),
     genres: asArray(source.genres),
     styles: asArray(source.styles),
-    formats: asArray(source.formats) as ReleaseListEntry[],
-    labels: asArray(source.labels) as ReleaseListEntry[],
+    formats: asReleaseListEntries(source.formats),
+    labels: asReleaseListEntries(source.labels),
     country: asNullableText(source.country),
     cover_url: asNullableText(source.cover_url),
     rating: asNumber(source.rating, 0) ?? 0,
@@ -223,8 +233,8 @@ export function normalizeWallRelease(release: unknown = {}): WallRelease {
     year: asNumber(source.year),
     genres: asArray(source.genres),
     styles: asArray(source.styles),
-    formats: asArray(source.formats) as ReleaseListEntry[],
-    labels: asArray(source.labels) as ReleaseListEntry[],
+    formats: asReleaseListEntries(source.formats),
+    labels: asReleaseListEntries(source.labels),
     cover_url: asNullableText(source.cover_url),
     wall_cover_url: buildLocalCoverUrl(id, 'wall'),
     poster_cover_url: buildLocalCoverUrl(id, 'poster')
