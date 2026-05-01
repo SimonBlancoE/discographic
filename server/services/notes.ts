@@ -1,7 +1,22 @@
-// @ts-nocheck
+import type Database from 'better-sqlite3';
+
 const DEFAULT_NOTES_FIELD_ID = 3;
 
-function normalizeNoteEntry(entry) {
+export type NormalizedNote = Record<string, unknown> & {
+  field_id?: unknown;
+  value: string;
+};
+
+type NoteRow = {
+  id: number;
+  notes: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeNoteEntry(entry: unknown): NormalizedNote | null {
   if (entry == null) {
     return null;
   }
@@ -11,7 +26,7 @@ function normalizeNoteEntry(entry) {
     return trimmed ? { field_id: null, value: trimmed } : null;
   }
 
-  if (typeof entry !== 'object') {
+  if (!isRecord(entry)) {
     const trimmed = String(entry).trim();
     return trimmed ? { field_id: null, value: trimmed } : null;
   }
@@ -32,40 +47,40 @@ function normalizeNoteEntry(entry) {
   };
 }
 
-export function normalizeNotes(notes) {
+export function normalizeNotes(notes: unknown): NormalizedNote[] {
   if (!notes) {
     return [];
   }
 
   if (Array.isArray(notes)) {
-    return notes.map(normalizeNoteEntry).filter(Boolean);
+    return notes.map(normalizeNoteEntry).filter((note): note is NormalizedNote => Boolean(note));
   }
 
   const normalized = normalizeNoteEntry(notes);
   return normalized ? [normalized] : [];
 }
 
-export function parseStoredNotes(value) {
+export function parseStoredNotes(value: unknown): unknown {
   if (!value) {
     return [];
   }
 
   try {
-    return JSON.parse(value);
+    return JSON.parse(value as string);
   } catch {
     return value;
   }
 }
 
-export function hasMeaningfulNotes(notes) {
+export function hasMeaningfulNotes(notes: unknown): boolean {
   return normalizeNotes(notes).length > 0;
 }
 
-export function notesToText(notes) {
+export function notesToText(notes: unknown): string {
   return normalizeNotes(notes).map((item) => item?.value).filter(Boolean).join(' | ');
 }
 
-export function resolveNoteFieldId(notes, fallback = DEFAULT_NOTES_FIELD_ID) {
+export function resolveNoteFieldId(notes: unknown, fallback: unknown = DEFAULT_NOTES_FIELD_ID): unknown {
   const normalized = normalizeNotes(notes);
 
   if (normalized.some((note) => note.field_id === DEFAULT_NOTES_FIELD_ID)) {
@@ -75,7 +90,11 @@ export function resolveNoteFieldId(notes, fallback = DEFAULT_NOTES_FIELD_ID) {
   return normalized[normalized.length - 1]?.field_id ?? fallback;
 }
 
-export function replaceNoteText(notes, nextText, fieldId = resolveNoteFieldId(notes)) {
+export function replaceNoteText(
+  notes: unknown,
+  nextText: unknown,
+  fieldId: unknown = resolveNoteFieldId(notes),
+): NormalizedNote[] {
   const normalized = normalizeNotes(notes);
   const trimmed = String(nextText || '').trim();
   const nextNotes = normalized.filter((note) => note.field_id !== fieldId);
@@ -90,12 +109,12 @@ export function replaceNoteText(notes, nextText, fieldId = resolveNoteFieldId(no
   ]);
 }
 
-export function countMeaningfulNoteRows(rows) {
+export function countMeaningfulNoteRows(rows: Array<{ notes?: unknown } | null | undefined>): number {
   return rows.filter((row) => hasMeaningfulNotes(parseStoredNotes(row?.notes))).length;
 }
 
-export function cleanupStoredNotes(db) {
-  const rows = db.prepare(`
+export function cleanupStoredNotes(db: Database.Database): number {
+  const rows = db.prepare<[], NoteRow>(`
     SELECT id, notes
     FROM releases
     WHERE notes IS NOT NULL AND notes != ''
@@ -106,7 +125,7 @@ export function cleanupStoredNotes(db) {
   }
 
   const updateNote = db.prepare('UPDATE releases SET notes = ? WHERE id = ?');
-  const cleanupTx = db.transaction((items) => {
+  const cleanupTx = db.transaction((items: NoteRow[]): number => {
     let updated = 0;
 
     for (const row of items) {

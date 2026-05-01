@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { existsSync, mkdirSync } from 'fs';
 import { access, unlink, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
@@ -18,25 +17,44 @@ const COVER_VARIANTS = {
   poster: { width: 96, quality: 58 }
 };
 
+type CoverVariant = keyof typeof COVER_VARIANTS;
+type ReleaseCover = {
+  id: string | number;
+  cover_url?: string | null;
+};
+type Translate = (key: string) => string;
+type RemoteImage = {
+  contentType: string;
+  buffer: Buffer;
+};
+
 if (!existsSync(coversDir)) {
   mkdirSync(coversDir, { recursive: true });
 }
 
-function getUserCoverDir(userId) {
+function getUserCoverDir(userId: string | number): string {
   return join(coversDir, String(userId));
 }
 
-function getCachePath(userId, releaseId, variant) {
+function getCachePath(userId: string | number, releaseId: string | number, variant: string): string {
   return join(getUserCoverDir(userId), `${releaseId}-${variant}.jpg`);
 }
 
-async function ensureDir(path) {
+async function ensureDir(path: string): Promise<void> {
   if (!existsSync(path)) {
     mkdirSync(path, { recursive: true });
   }
 }
 
-export function isAllowedRemoteImageUrl(url) {
+function getVariantConfig(variant: string): (typeof COVER_VARIANTS)[CoverVariant] {
+  return COVER_VARIANTS[variant as CoverVariant] || COVER_VARIANTS.wall;
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
+export function isAllowedRemoteImageUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return parsed.protocol === 'https:' && REMOTE_IMAGE_HOSTS.has(parsed.hostname);
@@ -45,7 +63,7 @@ export function isAllowedRemoteImageUrl(url) {
   }
 }
 
-export async function fetchRemoteImage(url) {
+export async function fetchRemoteImage(url: string): Promise<RemoteImage> {
   const response = await fetch(url, {
     headers: {
       'User-Agent': USER_AGENT
@@ -62,8 +80,18 @@ export async function fetchRemoteImage(url) {
   };
 }
 
-export async function ensureCachedCover({ release, userId, variant, t = null }) {
-  const variantConfig = COVER_VARIANTS[variant] || COVER_VARIANTS.wall;
+export async function ensureCachedCover({
+  release,
+  userId,
+  variant,
+  t = null
+}: {
+  release: ReleaseCover;
+  userId: string | number;
+  variant: string;
+  t?: Translate | null;
+}): Promise<string> {
+  const variantConfig = getVariantConfig(variant);
   const userDir = getUserCoverDir(userId);
   await ensureDir(userDir);
 
@@ -95,12 +123,18 @@ export async function ensureCachedCover({ release, userId, variant, t = null }) 
   return cachePath;
 }
 
-export async function removeCachedCovers({ userId, releaseIds }) {
+export async function removeCachedCovers({
+  userId,
+  releaseIds
+}: {
+  userId: string | number;
+  releaseIds?: Array<string | number> | null;
+}): Promise<void> {
   if (!releaseIds?.length) {
     return;
   }
 
-  const variants = Object.keys(COVER_VARIANTS);
+  const variants = Object.keys(COVER_VARIANTS) as CoverVariant[];
 
   await Promise.all(releaseIds.flatMap((releaseId) =>
     variants.map(async (variant) => {
@@ -108,7 +142,7 @@ export async function removeCachedCovers({ userId, releaseIds }) {
       try {
         await unlink(cachePath);
       } catch (error) {
-        if (error?.code !== 'ENOENT') {
+        if (!hasErrorCode(error, 'ENOENT')) {
           throw error;
         }
       }
@@ -116,21 +150,21 @@ export async function removeCachedCovers({ userId, releaseIds }) {
   ));
 }
 
-function computeOptimalTileSize(numItems, canvasWidth, canvasHeight) {
-  const a = Math.ceil(Math.sqrt(numItems * canvasWidth / canvasHeight));
-  const r = (Math.floor(a * canvasHeight / canvasWidth) * a < numItems)
-    ? canvasHeight / Math.ceil(a * canvasHeight / canvasWidth)
-    : canvasWidth / a;
+function computeOptimalTileSize(numItems: number, canvasWidth: number, canvasHeight: number): number {
+  const candidateColumns = Math.ceil(Math.sqrt(numItems * canvasWidth / canvasHeight));
+  const tileSizeByColumns = (Math.floor(candidateColumns * canvasHeight / canvasWidth) * candidateColumns < numItems)
+    ? canvasHeight / Math.ceil(candidateColumns * canvasHeight / canvasWidth)
+    : canvasWidth / candidateColumns;
 
-  const o = Math.ceil(Math.sqrt(numItems * canvasHeight / canvasWidth));
-  const l = (Math.floor(o * canvasWidth / canvasHeight) * o < numItems)
-    ? canvasWidth / Math.ceil(canvasWidth * o / canvasHeight)
-    : canvasHeight / o;
+  const candidateRows = Math.ceil(Math.sqrt(numItems * canvasHeight / canvasWidth));
+  const tileSizeByRows = (Math.floor(candidateRows * canvasWidth / canvasHeight) * candidateRows < numItems)
+    ? canvasWidth / Math.ceil(canvasWidth * candidateRows / canvasHeight)
+    : canvasHeight / candidateRows;
 
-  return Math.max(r, l);
+  return Math.max(tileSizeByColumns, tileSizeByRows);
 }
 
-export function selectTapeteVariant(rawTileSize) {
+export function selectTapeteVariant(rawTileSize: number): CoverVariant {
   if (rawTileSize > COVER_VARIANTS.wall.width) {
     return 'detail';
   }
@@ -142,7 +176,15 @@ export function selectTapeteVariant(rawTileSize) {
   return 'tapete';
 }
 
-export async function generateTapeteImage({ releases, userId, maxSize }) {
+export async function generateTapeteImage({
+  releases,
+  userId,
+  maxSize
+}: {
+  releases: ReleaseCover[];
+  userId: string | number;
+  maxSize: number;
+}): Promise<Buffer> {
   const rawTileSize = Math.floor(computeOptimalTileSize(releases.length, maxSize, maxSize));
   const variant = selectTapeteVariant(rawTileSize);
   const variantMaxPx = COVER_VARIANTS[variant].width;
@@ -151,7 +193,7 @@ export async function generateTapeteImage({ releases, userId, maxSize }) {
   const rows = Math.ceil(releases.length / cols);
   const canvasWidth = cols * tileSize;
   const canvasHeight = rows * tileSize;
-  const tiles = [];
+  const tiles: Array<string | null> = [];
 
   for (const release of releases) {
     try {
@@ -164,13 +206,14 @@ export async function generateTapeteImage({ releases, userId, maxSize }) {
 
   const compositeInputs = [];
   for (let i = 0; i < tiles.length; i += 1) {
-    if (!tiles[i]) continue;
+    const tilePath = tiles[i];
+    if (!tilePath) continue;
 
     const col = i % cols;
     const row = Math.floor(i / cols);
 
     compositeInputs.push({
-      input: await sharp(tiles[i])
+      input: await sharp(tilePath)
         .resize({ width: tileSize, height: tileSize, fit: 'cover' })
         .toBuffer(),
       left: col * tileSize,

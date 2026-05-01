@@ -1,14 +1,18 @@
-// @ts-nocheck
+import type Database from 'better-sqlite3';
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 
-function hasColumn(db, tableName, columnName) {
+type TableColumn = {
+  name: string;
+};
+
+function hasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
   return db
-    .prepare(`PRAGMA table_info(${tableName})`)
+    .prepare<[], TableColumn>(`PRAGMA table_info(${tableName})`)
     .all()
     .some((column) => column.name === columnName);
 }
 
-function clearLegacyZeroEstimatedValues(db) {
+function clearLegacyZeroEstimatedValues(db: Database.Database): void {
   db.prepare(`
     UPDATE releases
     SET estimated_value = NULL
@@ -16,15 +20,15 @@ function clearLegacyZeroEstimatedValues(db) {
   `).run();
 }
 
-export function migrateMarketplaceStatus(db) {
-  const justAdded = !hasColumn(db, 'releases', 'marketplace_status');
-  if (justAdded) {
+export function migrateMarketplaceStatus(db: Database.Database): void {
+  const marketplaceStatusWasMissing = !hasColumn(db, 'releases', 'marketplace_status');
+  if (marketplaceStatusWasMissing) {
     db.exec(
       `ALTER TABLE releases ADD COLUMN marketplace_status TEXT DEFAULT '${MARKETPLACE_STATUS.PENDING}'`
     );
   }
 
-  if (!justAdded) {
+  if (!marketplaceStatusWasMissing) {
     db.prepare(`
       UPDATE releases
       SET marketplace_status = ?

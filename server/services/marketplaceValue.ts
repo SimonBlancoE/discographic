@@ -1,8 +1,23 @@
-// @ts-nocheck
-import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
+import { MARKETPLACE_STATUS, type MarketplaceStatus } from '../../shared/contracts/marketplace.js';
 import { DEFAULT_CURRENCY } from './exchangeRates.js';
 
-function getErrorMessage(error) {
+type MarketplaceStatsResponse = {
+  lowest_price?: {
+    value?: unknown;
+  } | null;
+} | null | undefined;
+
+type MarketplaceClient = {
+  getMarketplaceStats: (releaseId: number, currency: string) => Promise<MarketplaceStatsResponse>;
+};
+
+type MarketplaceValueResult = {
+  estimatedValue: number | null;
+  marketplaceStatus: MarketplaceStatus;
+  error: string | null;
+};
+
+function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -14,13 +29,17 @@ function getErrorMessage(error) {
   return String(error);
 }
 
-export async function fetchMarketplaceValue(discogs, releaseId, currency = DEFAULT_CURRENCY) {
+export async function fetchMarketplaceValue(
+  discogs: MarketplaceClient,
+  releaseId: number,
+  currency = DEFAULT_CURRENCY,
+): Promise<MarketplaceValueResult> {
   try {
     const stats = await discogs.getMarketplaceStats(releaseId, currency);
     const rawValue = stats?.lowest_price?.value;
     const estimatedValue = rawValue == null ? null : Number(rawValue);
 
-    if (!Number.isFinite(estimatedValue)) {
+    if (estimatedValue === null || !Number.isFinite(estimatedValue)) {
       return {
         estimatedValue: null,
         marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE,
