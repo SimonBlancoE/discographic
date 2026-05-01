@@ -2,18 +2,21 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { extname } from 'node:path';
 
-const disallowedExtensions = new Set(['.js', '.jsx', '.mjs', '.cjs']);
+const DISALLOWED_SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 
-const trackedFiles = execFileSync('git', ['ls-files', '-z'], {
-  encoding: 'utf8',
-});
+function getTrackedFiles(): string[] {
+  return execFileSync('git', ['ls-files', '-z'], {
+    encoding: 'utf8',
+  })
+    .split('\0')
+    .filter(Boolean);
+}
 
-const disallowedFiles = trackedFiles
-  .split('\0')
-  .filter(Boolean)
-  .filter((filePath) => existsSync(filePath))
-  .filter((filePath) => disallowedExtensions.has(extname(filePath)))
-  .sort();
+function isTrackedJavaScriptSource(filePath: string): boolean {
+  return existsSync(filePath) && DISALLOWED_SOURCE_EXTENSIONS.has(extname(filePath));
+}
+
+const disallowedFiles = getTrackedFiles().filter(isTrackedJavaScriptSource).sort();
 
 if (disallowedFiles.length === 0) {
   console.log('No tracked JavaScript source files found.');
