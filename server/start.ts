@@ -1,3 +1,3 @@
-const sourceServerEntry = new URL('../../server/index.js', import.meta.url);
+await import('./index.js');
 
-await import(sourceServerEntry.href);
+export {};

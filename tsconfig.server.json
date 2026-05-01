@@ -3,11 +3,11 @@
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "types": ["node"],
     "noEmit": false,
-    "rootDir": "server",
-    "outDir": "dist/server"
+    "rootDir": ".",
+    "outDir": "dist"
   },
-  "include": ["server/start.ts"]
+  "include": ["server/**/*.ts", "shared/**/*.ts", "types/**/*.d.ts"]
 }

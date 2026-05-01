@@ -39,16 +39,17 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(serverTsconfig.extends).toBe('./tsconfig.json');
     expect(serverTsconfig.compilerOptions).toMatchObject({
       noEmit: false,
-      outDir: 'dist/server',
+      outDir: 'dist',
     });
-    expect(serverTsconfig.include).toContain('server/start.ts');
+    expect(serverTsconfig.include).toContain('server/**/*.ts');
+    expect(serverTsconfig.include).toContain('shared/**/*.ts');
   });
 
   it('wires scripts for direct TypeScript execution, compiled production starts, and migration verification', () => {
     expect(packageJson.scripts.typecheck).toBe('tsc -p tsconfig.json');
     expect(packageJson.scripts.dev).toBe('vite');
-    expect(packageJson.scripts['dev:server']).toBe('tsx watch server/index.js');
-    expect(packageJson.scripts.server).toBe('tsx server/index.js');
+    expect(packageJson.scripts['dev:server']).toBe('tsx watch server/index.ts');
+    expect(packageJson.scripts.server).toBe('tsx server/index.ts');
     expect(packageJson.scripts['build:app']).toBe('vite build');
     expect(packageJson.scripts['build:server']).toBe('tsc -p tsconfig.server.json');
     expect(packageJson.scripts.build).toBe('npm run build:app && npm run build:server');

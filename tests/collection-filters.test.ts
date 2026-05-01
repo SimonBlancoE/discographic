@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCollectionFilters, getActiveCollectionFilters } from '../shared/collectionFilters.js';
 
-// @ts-expect-error Legacy JS server service remains outside issue 11's shared-boundary migration.
 const { buildReleaseFilterWhere, getCollectionFilterOptions } = await import('../server/services/releaseFilters.js') as {
   buildReleaseFilterWhere: (input: {
     userId: number;
