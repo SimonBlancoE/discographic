@@ -1,15 +1,13 @@
 // @ts-nocheck
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { cleanupStoredNotes, normalizeNotes, notesToText, parseStoredNotes } from './services/notes.js';
 import { parseJson, stringifyJson } from './services/jsonStorage.js';
 import { migrateMarketplaceStatus } from './services/dbMigrations.js';
+import { resolveRuntimePaths } from './runtimePaths.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const dataDir = join(__dirname, '..', 'data');
+const { dataDir } = resolveRuntimePaths(import.meta.url);
 
 if (!existsSync(dataDir)) {
   mkdirSync(dataDir, { recursive: true });
