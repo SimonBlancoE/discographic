@@ -25,4 +25,4 @@ Normalize and validate data at the first untrusted boundary, then keep the inter
 - `npm run verify` and `npm run test:upgrade-smoke` will skip the Docker half automatically when `docker` is unavailable on PATH.
 - Use `npm run test:upgrade-smoke:docker` for the final migration verification in a Docker-capable environment; it clears the skip flag and treats Docker as mandatory.
 - Set `DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true` only when you need to force the non-Docker path even on a machine that has Docker.
-- The JavaScript scan is expected to fail until parent issue `#9` removes the remaining versioned JavaScript and JSX files.
+- The JavaScript scan is expected to pass once the tracked source tree is TypeScript-only; treat any reported project-owned `.js`, `.jsx`, `.mjs`, or `.cjs` file as a regression.
