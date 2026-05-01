@@ -130,4 +130,17 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(contributing).toContain('The JavaScript scan is expected to pass once the tracked source tree is TypeScript-only');
     expect(contributing).not.toContain('The JavaScript scan is expected to fail until parent issue `#9` removes the remaining versioned JavaScript and JSX files.');
   });
+
+  it('keeps mutable runtime data out of Docker build artifacts', () => {
+    expect(fileExists('Dockerfile')).toBe(true);
+    expect(fileExists('.dockerignore')).toBe(true);
+
+    const dockerfile = readText('Dockerfile');
+    const dockerignore = readText('.dockerignore');
+
+    expect(dockerfile).toContain('COPY --from=build /app/dist ./dist');
+    expect(dockerfile).toContain('CMD ["npm", "run", "start"]');
+    expect(dockerfile).not.toContain('COPY --from=build /app/data ./data');
+    expect(dockerignore).toContain('data');
+  });
 });
