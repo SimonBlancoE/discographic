@@ -33,6 +33,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "scan:js-sources": "tsx scripts/scan-javascript-sources.ts",
     "test:upgrade-smoke": "tsx scripts/upgrade-smoke.ts",
+    "test:upgrade-smoke:docker": "DISCOGRAPHIC_UPGRADE_SMOKE_REQUIRE_DOCKER=true tsx scripts/upgrade-smoke.ts",
     "verify": "npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke",
     "test": "vitest run",
     "test:instance:start": "bash scripts/test-instance.sh start",

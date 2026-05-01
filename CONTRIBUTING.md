@@ -18,6 +18,9 @@ Normalize and validate data at the first untrusted boundary, then keep the inter
 - Required before review: `npm run typecheck`, `npm run test`, and `npm run build`.
 - Migration gate: `npm run verify`.
 - Upgrade gate for this migration slice: `npm run test:upgrade-smoke`.
+- Docker-enforced self-hosted upgrade gate: `npm run test:upgrade-smoke:docker`.
 - `npm run verify` chains the tracked-file JavaScript source scan, typecheck, tests, build, and upgrade smoke in one command.
-- Set `DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true` only when Docker is unavailable locally and you need to run the non-Docker half of the upgrade smoke. Do not rely on that override for the final migration verification.
+- `npm run verify` and `npm run test:upgrade-smoke` will skip the Docker half automatically when `docker` is unavailable on PATH.
+- Use `npm run test:upgrade-smoke:docker` for the final migration verification in a Docker-capable environment.
+- Set `DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true` only when you need to force the non-Docker path even on a machine that has Docker.
 - The JavaScript scan is expected to fail until parent issue `#9` removes the remaining versioned JavaScript and JSX files.

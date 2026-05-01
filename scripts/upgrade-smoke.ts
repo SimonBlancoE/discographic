@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { resolveDockerSmokePlan } from './upgradeSmokePolicy.js';
 
 type LegacyFixture = {
   tempRoot: string;
@@ -31,6 +32,7 @@ const distStartPath = join(projectRoot, 'dist', 'server', 'start.js');
 const legacyPassword = 'legacy12345';
 const legacyUsername = 'legacy-admin';
 const skipDocker = process.env.DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER === 'true';
+const requireDocker = process.env.DISCOGRAPHIC_UPGRADE_SMOKE_REQUIRE_DOCKER === 'true';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -57,6 +59,10 @@ function runCommandAllowFailure(command: string, args: string[]): void {
     cwd: projectRoot,
     encoding: 'utf8',
   });
+}
+
+function isDockerAvailable(): boolean {
+  return spawnSync('docker', ['--version'], { encoding: 'utf8' }).status === 0;
 }
 
 function ensureBuildArtifacts(): void {
@@ -514,11 +520,6 @@ async function runCompiledStartSmoke(): Promise<void> {
 }
 
 async function runDockerSmoke(): Promise<void> {
-  const dockerVersion = spawnSync('docker', ['--version'], { encoding: 'utf8' });
-  if (dockerVersion.status !== 0) {
-    throw new Error('Docker is required for upgrade smoke but `docker` is not available on PATH.');
-  }
-
   const fixture = await createLegacyFixture();
   const port = await getAvailablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -579,9 +580,19 @@ async function main(): Promise<void> {
   await runCompiledStartSmoke();
   console.log('Compiled-runtime upgrade smoke passed.');
 
-  if (skipDocker) {
-    console.log('Skipping Docker upgrade smoke because DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true.');
+  const dockerPlan = resolveDockerSmokePlan({
+    skipDocker,
+    requireDocker,
+    dockerAvailable: isDockerAvailable(),
+  });
+
+  if (dockerPlan.action === 'skip') {
+    console.log(dockerPlan.message);
     return;
+  }
+
+  if (dockerPlan.action === 'error') {
+    throw new Error(dockerPlan.message);
   }
 
   console.log('Running Docker upgrade smoke against legacy v0.2.2 data fixture...');
