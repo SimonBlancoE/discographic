@@ -34,6 +34,11 @@ const legacyUsername = 'legacy-admin';
 const skipDocker = process.env.DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER === 'true';
 const requireDocker = process.env.DISCOGRAPHIC_UPGRADE_SMOKE_REQUIRE_DOCKER === 'true';
 
+type DockerAvailability = {
+  availableOnPath: boolean;
+  daemonReachable: boolean;
+};
+
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
@@ -61,8 +66,19 @@ function runCommandAllowFailure(command: string, args: string[]): void {
   });
 }
 
-function isDockerAvailable(): boolean {
-  return spawnSync('docker', ['--version'], { encoding: 'utf8' }).status === 0;
+function getDockerAvailability(): DockerAvailability {
+  const versionResult = spawnSync('docker', ['--version'], { encoding: 'utf8' });
+  if (versionResult.status !== 0) {
+    return {
+      availableOnPath: false,
+      daemonReachable: false,
+    };
+  }
+
+  return {
+    availableOnPath: true,
+    daemonReachable: spawnSync('docker', ['info'], { encoding: 'utf8' }).status === 0,
+  };
 }
 
 function ensureBuildArtifacts(): void {
@@ -580,10 +596,12 @@ async function main(): Promise<void> {
   await runCompiledStartSmoke();
   console.log('Compiled-runtime upgrade smoke passed.');
 
+  const dockerAvailability = getDockerAvailability();
   const dockerPlan = resolveDockerSmokePlan({
     skipDocker,
     requireDocker,
-    dockerAvailable: isDockerAvailable(),
+    dockerAvailableOnPath: dockerAvailability.availableOnPath,
+    dockerDaemonReachable: dockerAvailability.daemonReachable,
   });
 
   if (dockerPlan.action === 'skip') {

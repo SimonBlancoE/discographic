@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { resolveDockerSmokePlan } from '../scripts/upgradeSmokePolicy.js';
 
 describe('upgrade smoke docker policy', () => {
-  it('skips unavailable Docker by default but makes the explicit Docker gate authoritative', () => {
+  it('skips unavailable or unusable Docker by default but makes the explicit Docker gate authoritative', () => {
     expect(
       resolveDockerSmokePlan({
         skipDocker: false,
         requireDocker: false,
-        dockerAvailable: false,
+        dockerAvailableOnPath: false,
+        dockerDaemonReachable: false,
       })
     ).toEqual({
       action: 'skip',
@@ -18,7 +19,8 @@ describe('upgrade smoke docker policy', () => {
       resolveDockerSmokePlan({
         skipDocker: false,
         requireDocker: true,
-        dockerAvailable: false,
+        dockerAvailableOnPath: false,
+        dockerDaemonReachable: false,
       })
     ).toEqual({
       action: 'error',
@@ -29,11 +31,48 @@ describe('upgrade smoke docker policy', () => {
       resolveDockerSmokePlan({
         skipDocker: true,
         requireDocker: true,
-        dockerAvailable: false,
+        dockerAvailableOnPath: false,
+        dockerDaemonReachable: false,
       })
     ).toEqual({
       action: 'error',
       message: 'Docker is required for upgrade smoke but `docker` is not available on PATH.',
+    });
+
+    expect(
+      resolveDockerSmokePlan({
+        skipDocker: false,
+        requireDocker: false,
+        dockerAvailableOnPath: true,
+        dockerDaemonReachable: false,
+      })
+    ).toEqual({
+      action: 'skip',
+      message: 'Skipping Docker upgrade smoke because the Docker daemon is not reachable.',
+    });
+
+    expect(
+      resolveDockerSmokePlan({
+        skipDocker: false,
+        requireDocker: true,
+        dockerAvailableOnPath: true,
+        dockerDaemonReachable: false,
+      })
+    ).toEqual({
+      action: 'error',
+      message: 'Docker is required for upgrade smoke but the Docker daemon is not reachable.',
+    });
+
+    expect(
+      resolveDockerSmokePlan({
+        skipDocker: true,
+        requireDocker: true,
+        dockerAvailableOnPath: true,
+        dockerDaemonReachable: false,
+      })
+    ).toEqual({
+      action: 'error',
+      message: 'Docker is required for upgrade smoke but the Docker daemon is not reachable.',
     });
   });
 });
