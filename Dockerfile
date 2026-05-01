@@ -18,7 +18,6 @@ RUN npm ci --omit=dev
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
-COPY --from=build /app/data ./data
 
 EXPOSE 3800
 CMD ["npm", "run", "start"]
