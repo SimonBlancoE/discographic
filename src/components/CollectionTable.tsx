@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getMarketplaceStatusLabelKey, hasPricedMarketplaceValue } from '../../shared/contracts/marketplace.js';
 import type { CollectionRelease } from '../../shared/contracts/release.js';
 import type { Currency } from '../../shared/currency.js';
@@ -179,8 +179,12 @@ function CollectionTable({
   currency?: Currency;
 }) {
   const { t } = useI18n();
-  const sortProps = { sortBy, sortOrder, onSort };
-  const activeColumns = COLUMNS.filter((c) => visibleColumns.includes(c.id));
+  const sortProps = useMemo(() => ({ sortBy, sortOrder, onSort }), [onSort, sortBy, sortOrder]);
+  const visibleColumnSet = useMemo(() => new Set(visibleColumns), [visibleColumns]);
+  const activeColumns = useMemo(
+    () => COLUMNS.filter((column) => visibleColumnSet.has(column.id)),
+    [visibleColumnSet]
+  );
 
   return (
     <div className="glass-panel overflow-hidden">
@@ -212,4 +216,4 @@ function CollectionTable({
   );
 }
 
-export default CollectionTable;
+export default memo(CollectionTable);

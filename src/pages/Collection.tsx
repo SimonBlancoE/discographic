@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import CollectionTable, { type SortOrder, type TableSortColumn } from '../components/CollectionTable';
 import ColumnToggle from '../components/ColumnToggle';
@@ -9,7 +9,8 @@ import { CollectionSkeleton } from '../components/LoadingSkeletons';
 import SearchBar from '../components/SearchBar';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
-import { DEFAULT_VISIBLE, COLUMNS, MANDATORY, type ColumnId } from '../lib/columns';
+import { DEFAULT_VISIBLE, COLUMNS, type ColumnId } from '../lib/columns';
+import { buildCollectionTableVisibleColumns, COLLECTION_PAGE_LIMIT } from '../lib/collectionTableState';
 import { getErrorMessage } from '../lib/errors';
 import { formatNumber } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
@@ -93,19 +94,19 @@ function Collection() {
     setDisplayCurrency(currency || DEFAULT_CURRENCY);
   }, [currency]);
 
-  async function load(
+  const load = useCallback(async (
     nextPage = page,
     nextFilters = filters,
     nextSortBy = sortBy,
     nextSortOrder = sortOrder,
     nextCurrency = displayCurrency,
-  ): Promise<void> {
+  ): Promise<void> => {
     try {
       setLoading(true);
       const response = await api.getCollection({
         ...nextFilters,
         page: nextPage,
-        limit: 20,
+        limit: COLLECTION_PAGE_LIMIT,
         sortBy: nextSortBy,
         sortOrder: nextSortOrder,
         currency: nextCurrency
@@ -116,7 +117,7 @@ function Collection() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [displayCurrency, filters, page, sortBy, sortOrder, t, toast]);
 
   useEffect(() => {
     api.getPreference('collection_visible_columns').then(({ value }) => {
@@ -156,19 +157,19 @@ function Collection() {
 
   const activeFilterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
 
-  function syncFilterParams(nextFilters: CollectionFilters) {
+  const syncFilterParams = useCallback((nextFilters: CollectionFilters) => {
     setSearchParams(new URLSearchParams(getActiveCollectionFilters(nextFilters)));
-  }
+  }, [setSearchParams]);
 
-  function handleFilterChange(key: FilterKey, value: string) {
+  const handleFilterChange = useCallback((key: FilterKey, value: string) => {
     const next = { ...filters, [key]: value };
     setFilters(next);
     setPage(1);
     syncFilterParams(next);
     load(1, next, sortBy, sortOrder, displayCurrency);
-  }
+  }, [displayCurrency, filters, load, sortBy, sortOrder, syncFilterParams]);
 
-  async function handleCurrencyChange(nextCurrency: Currency) {
+  const handleCurrencyChange = useCallback(async (nextCurrency: Currency) => {
     setDisplayCurrency(nextCurrency);
 
     try {
@@ -176,15 +177,15 @@ function Collection() {
     } catch (error) {
       toast.error(t('collection.loadError', { error: getErrorMessage(error, t('client.networkError')) }));
     }
-  }
+  }, [setCurrencyPreference, t, toast]);
 
-  function handleSort(column: TableSortColumn) {
+  const handleSort = useCallback((column: TableSortColumn) => {
     const nextOrder = sortBy === column && sortOrder === 'asc' ? 'desc' : 'asc';
     setSortBy(column);
     setSortOrder(nextOrder);
-  }
+  }, [sortBy, sortOrder]);
 
-  function handleColumnToggle(columnId: ColumnId) {
+  const handleColumnToggle = useCallback((columnId: ColumnId) => {
     setVisibleColumns((prev) => {
       const next = prev.includes(columnId)
         ? prev.filter((id) => id !== columnId)
@@ -206,7 +207,7 @@ function Collection() {
 
       return next;
     });
-  }
+  }, [sortBy, t, toast]);
 
   async function persistSavedViews(nextViews: CollectionSavedView[], successKey?: string) {
     const previousViews = savedViews;
@@ -253,7 +254,7 @@ function Collection() {
     setSavedViewName('');
   }
 
-  function handleApplySavedView(viewId: string) {
+  const handleApplySavedView = useCallback((viewId: string) => {
     const view = savedViews.find((item) => item.id === viewId);
     if (!view) {
       return;
@@ -268,7 +269,7 @@ function Collection() {
     setVisibleColumns(nextVisibleColumns as ColumnId[]);
     syncFilterParams(view.filters);
     load(1, view.filters, view.sortBy as TableSortColumn, view.sortOrder as SortOrder, displayCurrency);
-  }
+  }, [displayCurrency, load, savedViews, syncFilterParams]);
 
   async function handleDeleteSavedView() {
     if (!selectedSavedViewId) {
@@ -280,7 +281,7 @@ function Collection() {
     setSelectedSavedViewId('');
   }
 
-  async function handleUpdate(release: CollectionRelease, patch: UpdateReleasePatch) {
+  const handleUpdate = useCallback(async (release: CollectionRelease, patch: UpdateReleasePatch) => {
     const previous = payload.releases;
     const optimistic = previous.map((item) => {
       if (item.id !== release.id) {
@@ -303,12 +304,16 @@ function Collection() {
       setPayload((current) => ({ ...current, releases: previous }));
       toast.error(t('collection.saveError', { error: getErrorMessage(error, t('client.networkError')) }));
     }
-  }
+  }, [payload.releases, t, toast]);
 
   const totalLabel = t('collection.results', { count: formatNumber(payload.pagination.total || 0) });
   const filterLabel = activeFilterCount
     ? t('collection.activeFilters', { count: formatNumber(activeFilterCount) })
     : t('collection.noFilters');
+  const tableVisibleColumns = useMemo(
+    () => buildCollectionTableVisibleColumns(visibleColumns),
+    [visibleColumns]
+  );
 
   return (
     <div className="space-y-6">
@@ -425,7 +430,7 @@ function Collection() {
       {loading ? (
         <CollectionSkeleton />
       ) : (
-        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} visibleColumns={[...new Set([...MANDATORY, ...visibleColumns])]} currency={displayCurrency} />
+        <CollectionTable releases={payload.releases} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} onUpdate={handleUpdate} visibleColumns={tableVisibleColumns} currency={displayCurrency} />
       )}
 
       <div className="glass-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
