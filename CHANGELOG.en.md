@@ -35,6 +35,8 @@ contracts, and upgrade verification for existing self-hosted installs.
 - **Split app/server build** - `npm run build` compiles Vite first, then the
   backend with `tsc -p tsconfig.server.json`.
 - **Route code splitting** - main bundles are smaller by loading pages on demand.
+- **Collection table rendering stabilized** - handlers, visible columns, and
+  sort props keep stable references to avoid preventable renders.
 - **README and repository metadata** - Forgejo is the canonical development
   upstream; GitHub is the downstream publication channel.
 - **Contribution documentation** - `CONTRIBUTING.md`, PRD, and ADRs document the

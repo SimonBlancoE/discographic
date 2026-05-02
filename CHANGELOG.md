@@ -36,6 +36,8 @@ entre frontend/backend y verificacion de upgrade para instalaciones existentes.
   el backend con `tsc -p tsconfig.server.json`.
 - **Code splitting de rutas** - bundles principales reducidos al cargar paginas
   bajo demanda.
+- **Render de tabla de coleccion estabilizado** - handlers, columnas visibles y
+  props de orden mantienen referencias estables para evitar renders evitables.
 - **README y metadatos de repo** - Forgejo queda como upstream canonico de
   desarrollo; GitHub queda como canal downstream de publicacion.
 - **Documentacion de contribucion** - `CONTRIBUTING.md`, PRD y ADRs documentan
