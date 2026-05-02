@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.3.0] - 2026-05-02
+
+Release focused on the full TypeScript migration, shared frontend/backend
+contracts, and upgrade verification for existing self-hosted installs.
+
+### Added
+
+- **TypeScript-only source tree** - frontend, backend, shared modules, tests,
+  scripts, and supported config migrated to `.ts`/`.tsx` or non-JS formats.
+- **Typed shared contracts** - account, release, marketplace, sync status,
+  dashboard stats, and collection views now have explicit types and normalizers
+  under `shared/contracts/`.
+- **Single verification pipeline** - `npm run verify` runs the JavaScript source
+  scan, typecheck, tests, build, and upgrade smoke.
+- **Upgrade smoke from `v0.2.2`** - exercises compiled runtime and Docker against
+  a legacy fixture to verify data, configuration, and startup paths.
+- **Compiled backend runtime** - production starts from `dist/server/start.js`;
+  development runs TypeScript directly through `tsx`.
+- **Saved collection views** - filters, sort, and columns can be saved as
+  reusable collection views.
+- **Sandcastle for Forgejo** - runner, prompts, and working standards for
+  implementation slices in Forgejo.
+
+### Changed
+
+- **Split app/server build** - `npm run build` compiles Vite first, then the
+  backend with `tsc -p tsconfig.server.json`.
+- **Route code splitting** - main bundles are smaller by loading pages on demand.
+- **README and repository metadata** - Forgejo is the canonical development
+  upstream; GitHub is the downstream publication channel.
+- **Contribution documentation** - `CONTRIBUTING.md`, PRD, and ADRs document the
+  TypeScript-only rules, untrusted-boundary normalization, and verification.
+
+### Fixed
+
+- **Marketplace states preserved** - unknown and failed states no longer collapse
+  to zero, and legacy zero values are cleaned explicitly.
+- **Marketplace errors normalized** - failed responses expose consistent states
+  to the frontend.
+- **Label filter** - long options no longer truncate prematurely.
+- **Docker lockfile** - lockfile synced with current dependencies.
+
+### Tests
+
+- Suite migrated to TypeScript with coverage for shared contracts, runtime
+  paths, TypeScript-only guardrails, code splitting, upgrade smoke, and vinyl
+  badge behavior. Current verification: 183 tests.
+
+[0.3.0]: https://github.com/SimonBlancoE/discographic/compare/v0.2.2...v0.3.0
+
 ## [0.2.2] - 2026-04-22
 
 Visual patch for the feature carousel.

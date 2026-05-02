@@ -7,6 +7,57 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.3.0] - 2026-05-02
+
+Release centrada en la migracion completa a TypeScript, contratos compartidos
+entre frontend/backend y verificacion de upgrade para instalaciones existentes.
+
+### Nuevo
+
+- **Arbol de codigo TypeScript-only** - frontend, backend, shared, tests,
+  scripts y configuracion soportada migrados a `.ts`/`.tsx` o formatos no JS.
+- **Contratos compartidos tipados** - account, release, marketplace, sync
+  status, dashboard stats y collection views tienen tipos y normalizadores
+  explicitos en `shared/contracts/`.
+- **Pipeline de verificacion unico** - `npm run verify` ejecuta scan de fuentes
+  JavaScript, typecheck, tests, build y smoke de upgrade.
+- **Smoke de upgrade desde `v0.2.2`** - prueba runtime compilado y Docker contra
+  una fixture legacy para comprobar datos, configuracion y rutas de arranque.
+- **Runtime backend compilado** - produccion arranca desde `dist/server/start.js`;
+  desarrollo usa `tsx` directamente.
+- **Vistas guardadas de coleccion** - filtros, orden y columnas pueden guardarse
+  como vistas reutilizables.
+- **Sandcastle para Forgejo** - runner, prompts y estandares de trabajo para
+  ejecutar slices de implementacion en Forgejo.
+
+### Cambiado
+
+- **Build separado de app y servidor** - `npm run build` compila Vite y despues
+  el backend con `tsc -p tsconfig.server.json`.
+- **Code splitting de rutas** - bundles principales reducidos al cargar paginas
+  bajo demanda.
+- **README y metadatos de repo** - Forgejo queda como upstream canonico de
+  desarrollo; GitHub queda como canal downstream de publicacion.
+- **Documentacion de contribucion** - `CONTRIBUTING.md`, PRD y ADRs documentan
+  reglas TypeScript-only, normalizacion de fronteras no confiables y verificacion.
+
+### Corregido
+
+- **Estados de marketplace preservados** - estados desconocidos/fallidos dejan
+  de colapsar a cero y los valores legacy se limpian de forma explicita.
+- **Errores de marketplace normalizados** - las respuestas fallidas exponen
+  estados consistentes al frontend.
+- **Filtro de sellos** - opciones largas dejan de truncarse de forma prematura.
+- **Docker lockfile** - lockfile sincronizado con dependencias actuales.
+
+### Tests
+
+- Suite migrada a TypeScript con cobertura de contratos compartidos, rutas de
+  runtime, guardrails TypeScript-only, code splitting, upgrade smoke y badge de
+  vinilo. Verificacion actual: 183 tests.
+
+[0.3.0]: https://github.com/SimonBlancoE/discographic/compare/v0.2.2...v0.3.0
+
 ## [0.2.2] - 2026-04-22
 
 Patch visual para el carrusel del panel informativo.
@@ -164,4 +215,3 @@ exportacion/importacion y un dashboard con graficas y logros.
   AuthContext y Collection por la constante compartida `DEFAULT_CURRENCY`.
 
 [0.1.0]: https://github.com/SimonBlancoE/discographic/releases/tag/v0.1.0
-

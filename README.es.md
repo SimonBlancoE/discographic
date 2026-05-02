@@ -28,7 +28,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 </div>
 
 > [!NOTE]
-> **v0.2.0 disponible** - rendimiento del dashboard y muro de portadas, reconciliación de sync, importaciones localizadas y refactor amplio de módulos compartidos. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
+> **v0.3.0 disponible** - migración completa a TypeScript, contratos compartidos frontend/backend, vistas guardadas de colección, code splitting de rutas y smoke de upgrade verificado desde `v0.2.2`. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
 
 ## ¿Qué es?
 
