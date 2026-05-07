@@ -11,6 +11,7 @@ import { formatCurrency, formatDate, joinNames } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
 import { applyOptimisticReleasePatch } from '../lib/releaseEdits';
+import { shouldShowReleaseListingPrice } from '../lib/releaseDetailPricing';
 import type { ReleaseTrackRow, UpdateReleasePatch } from '../lib/types';
 
 function MetaItem({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -100,6 +101,7 @@ function ReleaseDetail() {
   }
 
   const tracklist = (release.tracklist as ReleaseTrackRow[]) || [];
+  const showListingPrice = shouldShowReleaseListingPrice(release);
 
   return (
     <div className="space-y-6">
@@ -131,6 +133,12 @@ function ReleaseDetail() {
                 <p className="mb-2 text-sm text-slate-400">{t('release.marketplacePrice')}</p>
                 <p className="text-2xl text-brand-100">{release.estimated_value ? formatCurrency(release.estimated_value, currency) : '-'}</p>
               </div>
+              {showListingPrice ? (
+                <div>
+                  <p className="mb-2 text-sm text-slate-400">{t('collection.listingPrice')}</p>
+                  <p className="text-2xl text-brand-100">{formatCurrency(release.listing_price, currency)}</p>
+                </div>
+              ) : null}
             </div>
 
             <label className="mt-6 block">
