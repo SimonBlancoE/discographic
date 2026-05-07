@@ -7,6 +7,7 @@ function normalizeHeader(header) {
 
 const ID_COLUMNS = new Map([
   ['id', 'id'],
+  ['iddiscogs', 'release_id'],
   ['releasediscogs', 'release_id'],
   ['discogsrelease', 'release_id'],
   ['releaseid', 'release_id'],
@@ -15,28 +16,28 @@ const ID_COLUMNS = new Map([
   ['instanceid', 'instance_id'],
 ]);
 
-const EDITABLE_NORMALIZED = new Set(['rating', 'notas', 'notes']);
+const EDITABLE_NORMALIZED = new Set(['rating', 'valoracion', 'valoracin', 'notas', 'notes']);
 
 describe('Import header recognition', () => {
   describe('Spanish export headers', () => {
-    const esHeaders = ['ID', 'Release Discogs', 'Instancia', 'Artista', 'Título', 'Año',
-      'Géneros', 'Estilos', 'Formatos', 'Sellos', 'País', 'Rating',
-      'Notas', 'Fecha agregado', 'Precio mín. EUR', 'En venta', 'Mi precio', 'Pistas'];
+    const esHeaders = ['ID', 'ID Discogs', 'Instancia', 'Artista', 'Título', 'Año',
+      'Géneros', 'Estilos', 'Formatos', 'Sellos', 'País', 'Valoración',
+      'Notas', 'Fecha de alta', 'Precio mín. EUR', 'En venta', 'Mi precio', 'Pistas'];
 
     it('recognizes ID column', () => {
       expect(ID_COLUMNS.has(normalizeHeader('ID'))).toBe(true);
     });
 
-    it('recognizes Release Discogs as release_id', () => {
-      expect(ID_COLUMNS.get(normalizeHeader('Release Discogs'))).toBe('release_id');
+    it('recognizes ID Discogs as release_id', () => {
+      expect(ID_COLUMNS.get(normalizeHeader('ID Discogs'))).toBe('release_id');
     });
 
     it('recognizes Instancia as instance_id', () => {
       expect(ID_COLUMNS.get(normalizeHeader('Instancia'))).toBe('instance_id');
     });
 
-    it('recognizes Rating', () => {
-      expect(EDITABLE_NORMALIZED.has(normalizeHeader('Rating'))).toBe(true);
+    it('recognizes Valoración', () => {
+      expect(EDITABLE_NORMALIZED.has(normalizeHeader('Valoración'))).toBe(true);
     });
 
     it('recognizes Notas', () => {
@@ -45,7 +46,7 @@ describe('Import header recognition', () => {
 
     it('ignores non-editable columns silently', () => {
       const nonEditable = ['Artista', 'Título', 'Año', 'Géneros', 'Estilos',
-        'Formatos', 'Sellos', 'País', 'Fecha agregado', 'Precio mín. EUR',
+        'Formatos', 'Sellos', 'País', 'Fecha de alta', 'Precio mín. EUR',
         'En venta', 'Mi precio', 'Pistas'];
       for (const header of nonEditable) {
         const norm = normalizeHeader(header);
@@ -100,7 +101,7 @@ describe('Import header recognition', () => {
     });
 
     it('file exported in Spanish can be imported by English user', () => {
-      const esIdHeaders = ['ID', 'Release Discogs', 'Instancia'];
+      const esIdHeaders = ['ID', 'ID Discogs', 'Instancia'];
       const matched = esIdHeaders.filter(h => ID_COLUMNS.has(normalizeHeader(h)));
       expect(matched.length).toBeGreaterThanOrEqual(1);
     });

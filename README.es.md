@@ -61,9 +61,9 @@ En lugar de limitarse a mostrar una lista de lanzamientos, ofrece un panel real,
 
 ## Qué incluye
 
-- **Panel principal** - totales de la colección, valor estimado, gráficas y vistas tipo leaderboard.
+- **Panel principal** - totales de la colección, valor estimado, gráficas y rankings.
 - **Navegador de colección** - búsqueda, filtros, ordenación, puntuaciones en línea y notas.
-- **Páginas de detalle** - tracklist, metadatos y exportación en PNG.
+- **Páginas de detalle** - lista de temas, metadatos y exportación en PNG.
 - **Muro de portadas** - generación fluida de pósteres hasta 7200px.
 - **Importación / Exportación** - compatibilidad con Excel y CSV.
 - **Logros** - desbloqueables por niveles e insignias ocultas.
