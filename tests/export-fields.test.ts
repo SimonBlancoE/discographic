@@ -59,9 +59,9 @@ describe('Export serialization — Spanish locale', () => {
     const result = serializeRelease({ ...baseRelease, listing_status: 'For Sale' }, t, 'EUR');
     const keys = Object.keys(result);
     expect(keys).toEqual([
-      'ID', 'Release Discogs', 'Instancia', 'Artista', 'Título', 'Año',
-      'Géneros', 'Estilos', 'Formatos', 'Sellos', 'País', 'Rating',
-      'Notas', 'Fecha agregado', 'Precio mín.', 'En venta', 'Mi precio', 'Pistas'
+      'ID', 'ID Discogs', 'Instancia', 'Artista', 'Título', 'Año',
+      'Géneros', 'Estilos', 'Formatos', 'Sellos', 'País', 'Valoración',
+      'Notas', 'Fecha de alta', 'Precio mín.', 'En venta', 'Mi precio', 'Pistas'
     ]);
   });
 

@@ -47,6 +47,7 @@ function normalizeHeader(header) {
 
 const ID_COLUMNS = new Map([
   ['id', 'id'],
+  ['iddiscogs', 'release_id'],
   ['releasediscogs', 'release_id'],
   ['discogsrelease', 'release_id'],
   ['releaseid', 'release_id'],
@@ -83,7 +84,7 @@ function mapColumns(rows, t) {
     if (ID_COLUMNS.has(normalized)) {
       columnMap[header] = { type: 'id', dbField: ID_COLUMNS.get(normalized) };
       hasId = true;
-    } else if (normalized === 'rating') {
+    } else if (normalized === 'rating' || normalized === 'valoracion' || normalized === 'valoracin') {
       columnMap[header] = { type: 'editable', dbField: 'rating' };
       hasEditable = true;
     } else if (normalized === 'notas' || normalized === 'notes') {

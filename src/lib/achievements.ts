@@ -27,32 +27,32 @@ const ACHIEVEMENT_COPY = {
       collector: {
         title: 'Coleccionista en alza',
         description: 'No solo acumulas discos: estás levantando una colección con peso propio, desde las primeras cajas hasta una estantería que ya impone respeto.',
-        tiers: ['Fácil entrada', 'Gran escalada', 'Cabina seria', 'Archivador feroz', 'Monstruo de estantería', 'Discographic mitológico']
+        tiers: ['Primeros pasos', 'Subida fuerte', 'Cabina seria', 'Archivista feroz', 'Monstruo de estantería', 'Discographic mitológico']
       },
       notes: {
         title: 'Cronista de funda',
         description: 'Cada nota deja contexto, recuerdos y porqués. Lo que otros guardan como inventario, tú lo conviertes en memoria curada.',
-        tiers: ['Fácil entrada', 'Gran escalada', 'Archivo maestro', 'Anotador feroz', 'Memoria total']
+        tiers: ['Primeros pasos', 'Subida fuerte', 'Archivo maestro', 'Anotador feroz', 'Memoria total']
       },
       ratings: {
         title: 'Selector con criterio',
         description: 'Poner estrellas aquí no es trámite: es separar relleno de favoritos y dejar claro qué merece volver a sonar.',
-        tiers: ['Fácil entrada', 'Gran escalada', 'Jurador supremo', 'Tajante profesional', 'Canon absoluto']
+        tiers: ['Primeros pasos', 'Subida fuerte', 'Juez supremo', 'Tajante profesional', 'Canon absoluto']
       },
       market: {
         title: 'Radar de mercado',
         description: 'No te basta con tenerlos; también sigues su pulso económico. Tu colección empieza a comportarse como archivo y como mercado.',
-        tiers: ['Fácil entrada', 'Gran escalada', 'Mercado dominado', 'Mesa de tasación', 'Ticker viviente']
+        tiers: ['Primeros pasos', 'Subida fuerte', 'Mercado dominado', 'Mesa de tasación', 'Termómetro viviente']
       },
       timeline: {
         title: 'Viajero del tiempo',
         description: 'Tu estantería cruza décadas con intención. Cuanto más avanzas, más se parece a un mapa temporal de tus obsesiones.',
-        tiers: ['Fácil entrada', 'Gran escalada', 'Museo personal', 'Curador temporal']
+        tiers: ['Primeros pasos', 'Subida fuerte', 'Museo personal', 'Cronista temporal']
       },
       styles: {
         title: 'Mutante de estilos',
         description: 'Saltas de un sonido a otro sin pedir permiso. La colección gana color porque tu gusto no se deja encerrar en una sola etiqueta.',
-        tiers: ['Fácil entrada', 'Gran escalada', 'Abarca todo', 'Quimera sonora']
+        tiers: ['Primeros pasos', 'Subida fuerte', 'Todoterreno', 'Quimera sonora']
       }
     },
     hidden: {
@@ -64,7 +64,7 @@ const ACHIEVEMENT_COPY = {
       label: ['Sello fijo', 'Un sello aparece tantas veces que ya parece una relación estable, no una coincidencia de catálogo.'],
       loop: ['Loop infinito', 'Un género reina con mano de hierro y vuelve una y otra vez al centro de gravedad de tu estantería.'],
       blackBox: ['Caja negra', 'Has valorado tantos discos que tu criterio ya opera como sistema autónomo. La neutralidad quedó atrás hace tiempo.'],
-      archivedBooth: ['Cabina archivada', 'Notas y ratings se acumulan por todas partes. Tu colección empieza a parecer un puesto de escucha auditado.'],
+      archivedBooth: ['Cabina archivada', 'Notas y valoraciones se acumulan por todas partes. Tu colección empieza a parecer un puesto de escucha auditado.'],
       marathon: ['Maratonista del vinilo', 'La cronología de entradas ya tiene temporadas, capítulos y continuidad. Lo tuyo dejó de ser una racha pasajera.'],
       showcase: ['Vitrina obsesiva', 'Una parte importante de la colección ya está tasada. Tu archivo empieza a lucirse como exposición y balance a la vez.'],
       balance: ['Equilibrista', 'Mantienes una colección grande sin renunciar a documentarla. Sigues ampliando sin perder el pulso del detalle.'],
