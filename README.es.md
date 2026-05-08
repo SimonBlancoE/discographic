@@ -28,7 +28,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 </div>
 
 > [!NOTE]
-> **v0.3.0 disponible** - migración completa a TypeScript, contratos compartidos frontend/backend, vistas guardadas de colección, code splitting de rutas y smoke de upgrade verificado desde `v0.2.2`. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
+> **v0.3.1 disponible** - ahora se muestra el precio de listado en el detalle de cada lanzamiento y se ha pulido la copia en español. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
 
 ## ¿Qué es?
 
