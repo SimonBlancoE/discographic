@@ -28,7 +28,7 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 </div>
 
 > [!NOTE]
-> **v0.3.0 is out** - full TypeScript migration, shared frontend/backend contracts, saved collection views, route code splitting, and verified upgrade smoke from `v0.2.2`. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
+> **v0.3.1 is out** - listing prices now appear on release details and the Spanish copy has been polished. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
 
 ## What is it?
 

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.3.1] - 2026-05-08
+
+Maintenance release with two improvements on top of 0.3.0: listing price on
+release details and polished Spanish translations.
+
+### Fixed
+
+- **Listing price on release details** - the detail view now shows the listing
+  price when available.
+- **Spanish translations polished** - the ES copy was normalized in imports,
+  achievements, and repo metadata for more natural wording.
+
+### Tests
+
+- Release verification focused on the version bump, changelog, and Forgejo /
+  GitHub synchronization.
+
+[0.3.1]: https://github.com/SimonBlancoE/discographic/compare/v0.3.0...v0.3.1
+
 ## [0.3.0] - 2026-05-02
 
 Release focused on the full TypeScript migration, shared frontend/backend

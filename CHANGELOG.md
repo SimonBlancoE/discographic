@@ -7,6 +7,25 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.3.1] - 2026-05-08
+
+Release de mantenimiento con dos mejoras sobre la 0.3.0: mostrar el precio de
+listado en el detalle de lanzamiento y pulir las traducciones en español.
+
+### Corregido
+
+- **Precio de listado en el detalle de lanzamiento** - la pantalla de detalle
+  muestra el precio de listado cuando existe.
+- **Traducciones en español pulidas** - se normalizo la copia ES en imports,
+  logros y metadatos para un lenguaje mas natural.
+
+### Tests
+
+- Verificacion de release centrada en el bump de version, el changelog y la
+  sincronizacion entre Forgejo y GitHub.
+
+[0.3.1]: https://github.com/SimonBlancoE/discographic/compare/v0.3.0...v0.3.1
+
 ## [0.3.0] - 2026-05-02
 
 Release centrada en la migracion completa a TypeScript, contratos compartidos
