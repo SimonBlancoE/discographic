@@ -6,7 +6,7 @@ import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../lib/I18nContext';
 import { formatDate } from '../lib/format';
 import { useToast } from '../lib/ToastContext';
-import type { AccountResponse, NormalizedUser } from '../../shared/contracts/account.js';
+import type { NormalizedUser } from '../../shared/contracts/account.js';
 
 function AdminPanel() {
   const toast = useToast();
@@ -280,6 +280,10 @@ function Settings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  async function refreshAccountViews() {
+    await Promise.allSettled([refreshAccount(), refreshDashboardStats()]);
+  }
+
   useEffect(() => {
     api.getAccount().then((account) => {
       setDiscogsUsername(account.discogsUsername || '');
@@ -297,7 +301,7 @@ function Settings() {
       setTokenPreview(account.tokenPreview);
       setTokenConfigured(account.tokenConfigured);
       setNewToken('');
-      await Promise.allSettled([refreshAccount(), refreshDashboardStats()]);
+      await refreshAccountViews();
       toast.success(account.message || t('settings.saved'));
     } catch (nextError) {
       const message = getErrorMessage(nextError, t('settings.saveError'));
@@ -305,6 +309,20 @@ function Settings() {
       toast.error(message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleResetCollection() {
+    if (!window.confirm(t('settings.resetConfirm'))) return;
+
+    try {
+      const result = await api.resetCollection();
+      await refreshAccountViews();
+      toast.success(result.message || t('settings.saved'));
+    } catch (nextError) {
+      const message = getErrorMessage(nextError, t('client.networkError'));
+      setError(message);
+      toast.error(message);
     }
   }
 
@@ -352,18 +370,7 @@ function Settings() {
         </div>
         <button
           type="button"
-          onClick={async () => {
-            if (!window.confirm(t('settings.resetConfirm'))) return;
-            try {
-              const result = await api.resetCollection();
-              await Promise.allSettled([refreshAccount(), refreshDashboardStats()]);
-              toast.success(result.message || t('settings.saved'));
-            } catch (nextError) {
-              const message = getErrorMessage(nextError, t('client.networkError'));
-              setError(message);
-              toast.error(message);
-            }
-          }}
+          onClick={handleResetCollection}
           className="secondary-button text-rose-300 hover:text-rose-100"
         >
           {t('settings.reset')}

@@ -12,7 +12,7 @@ const authState = vi.hoisted(() => ({
   isAdmin: false,
 }));
 
-const refreshDashboard = vi.hoisted(() => vi.fn());
+const refreshDashboardStats = vi.hoisted(() => vi.fn());
 const toastSuccess = vi.hoisted(() => vi.fn());
 const toastError = vi.hoisted(() => vi.fn());
 const getAccount = vi.hoisted(() => vi.fn());
@@ -26,7 +26,7 @@ vi.mock('../src/lib/AuthContext', () => ({
 
 vi.mock('../src/lib/DashboardStatsContext', () => ({
   useDashboardStats: () => ({
-    refresh: refreshDashboard,
+    refresh: refreshDashboardStats,
   }),
 }));
 
@@ -73,6 +73,30 @@ async function renderSettings() {
   return container;
 }
 
+function requireElement<T extends Element>(element: T | null | undefined, description: string) {
+  if (!element) {
+    throw new Error(`Expected ${description} to exist`);
+  }
+
+  return element;
+}
+
+function getInputByLabel(rendered: HTMLElement, labelText: string) {
+  const label = Array.from(rendered.querySelectorAll('label')).find((nextLabel) =>
+    nextLabel.textContent?.includes(labelText),
+  );
+
+  return requireElement(label?.querySelector('input'), `${labelText} input`);
+}
+
+function getButtonByText(rendered: HTMLElement, buttonText: string) {
+  const button = Array.from(rendered.querySelectorAll('button')).find(
+    (nextButton) => nextButton.textContent === buttonText,
+  );
+
+  return requireElement(button, `${buttonText} button`);
+}
+
 describe('Settings page', () => {
   const originalConfirm = window.confirm;
 
@@ -81,8 +105,8 @@ describe('Settings page', () => {
     authState.refreshAccount.mockReset();
     authState.refreshAccount.mockResolvedValue(undefined);
     authState.isAdmin = false;
-    refreshDashboard.mockReset();
-    refreshDashboard.mockResolvedValue(null);
+    refreshDashboardStats.mockReset();
+    refreshDashboardStats.mockResolvedValue(null);
     toastSuccess.mockReset();
     toastError.mockReset();
     getAccount.mockReset();
@@ -126,44 +150,37 @@ describe('Settings page', () => {
 
   it('refreshes account and dashboard state after saving a changed Discogs account', async () => {
     const rendered = await renderSettings();
-    const usernameInput = rendered.querySelector('input') as HTMLInputElement | null;
-    const accountForm = rendered.querySelector('form') as HTMLFormElement | null;
-
-    expect(usernameInput).not.toBeNull();
-    expect(accountForm).not.toBeNull();
+    const usernameInput = getInputByLabel(rendered, 'settings.discogsUser');
+    const accountForm = requireElement(usernameInput.closest('form'), 'account form');
 
     await act(async () => {
-      usernameInput!.value = 'sonny';
-      usernameInput!.dispatchEvent(new Event('input', { bubbles: true }));
+      usernameInput.value = 'sonny';
+      usernameInput.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     await act(async () => {
-      accountForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      accountForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(updateAccount).toHaveBeenCalledTimes(1);
     expect(authState.refreshAccount).toHaveBeenCalledTimes(1);
-    expect(refreshDashboard).toHaveBeenCalledTimes(1);
+    expect(refreshDashboardStats).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes account and dashboard state after resetting local data', async () => {
     const rendered = await renderSettings();
-    const resetButton = Array.from(rendered.querySelectorAll('button')).find(
-      (button) => button.textContent === 'settings.reset',
-    );
-
-    expect(resetButton).toBeDefined();
+    const resetButton = getButtonByText(rendered, 'settings.reset');
 
     await act(async () => {
-      resetButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      resetButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(resetCollection).toHaveBeenCalledTimes(1);
     expect(authState.refreshAccount).toHaveBeenCalledTimes(1);
-    expect(refreshDashboard).toHaveBeenCalledTimes(1);
+    expect(refreshDashboardStats).toHaveBeenCalledTimes(1);
   });
 });
