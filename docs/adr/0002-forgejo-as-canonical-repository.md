@@ -1,3 +1,0 @@
-# Forgejo as canonical repository
-
-Forgejo (`octo/discographic`) is the canonical repository and issue tracker for Discographic development. GitHub is a publication target used only after a version has been tested and verified in Forgejo and is ready for broad user-facing release. TypeScript migration work and its verification happen in Forgejo first; publishing the migrated version to GitHub is a later release step, not part of the migration scope. Project metadata and contribution guidance should point contributors and coding agents at Forgejo for day-to-day work, while GitHub remains a downstream distribution channel.

@@ -38,8 +38,8 @@ release details and polished Spanish translations.
 
 ### Tests
 
-- Release verification focused on the version bump, changelog, and Forgejo /
-  GitHub synchronization.
+- Release verification focused on the version bump, changelog, and repository
+  synchronization.
 
 [0.3.1]: https://github.com/SimonBlancoE/discographic/compare/v0.3.0...v0.3.1
 
@@ -63,8 +63,8 @@ contracts, and upgrade verification for existing self-hosted installs.
   development runs TypeScript directly through `tsx`.
 - **Saved collection views** - filters, sort, and columns can be saved as
   reusable collection views.
-- **Sandcastle for Forgejo** - runner, prompts, and working standards for
-  implementation slices in Forgejo.
+- **Implementation planning support** - runner, prompts, and working standards
+  for implementation slices.
 
 ### Changed
 
@@ -73,8 +73,8 @@ contracts, and upgrade verification for existing self-hosted installs.
 - **Route code splitting** - main bundles are smaller by loading pages on demand.
 - **Collection table rendering stabilized** - handlers, visible columns, and
   sort props keep stable references to avoid preventable renders.
-- **README and repository metadata** - Forgejo is the canonical development
-  upstream; GitHub is the downstream publication channel.
+- **README and repository metadata** - public repository metadata and release
+  guidance were documented alongside the migration scope.
 - **Contribution documentation** - `CONTRIBUTING.md`, PRD, and ADRs document the
   TypeScript-only rules, untrusted-boundary normalization, and verification.
 

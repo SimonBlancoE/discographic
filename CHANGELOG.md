@@ -40,7 +40,7 @@ listado en el detalle de lanzamiento y pulir las traducciones en español.
 ### Tests
 
 - Verificacion de release centrada en el bump de version, el changelog y la
-  sincronizacion entre Forgejo y GitHub.
+  sincronizacion del repositorio.
 
 [0.3.1]: https://github.com/SimonBlancoE/discographic/compare/v0.3.0...v0.3.1
 
@@ -64,8 +64,8 @@ entre frontend/backend y verificacion de upgrade para instalaciones existentes.
   desarrollo usa `tsx` directamente.
 - **Vistas guardadas de coleccion** - filtros, orden y columnas pueden guardarse
   como vistas reutilizables.
-- **Sandcastle para Forgejo** - runner, prompts y estandares de trabajo para
-  ejecutar slices de implementacion en Forgejo.
+- **Soporte de planificacion de implementacion** - runner, prompts y estandares
+  de trabajo para ejecutar slices de implementacion.
 
 ### Cambiado
 
@@ -75,8 +75,8 @@ entre frontend/backend y verificacion de upgrade para instalaciones existentes.
   bajo demanda.
 - **Render de tabla de coleccion estabilizado** - handlers, columnas visibles y
   props de orden mantienen referencias estables para evitar renders evitables.
-- **README y metadatos de repo** - Forgejo queda como upstream canonico de
-  desarrollo; GitHub queda como canal downstream de publicacion.
+- **README y metadatos de repo** - se documento la metadata publica del
+  repositorio y la guia de release junto al alcance de la migracion.
 - **Documentacion de contribucion** - `CONTRIBUTING.md`, PRD y ADRs documentan
   reglas TypeScript-only, normalizacion de fronteras no confiables y verificacion.
 

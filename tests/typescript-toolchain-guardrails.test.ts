@@ -101,9 +101,9 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(getTrackedJavaScriptSources()).toEqual([]);
   });
 
-  it('marks Forgejo as the canonical upstream in package metadata', () => {
-    expect(packageJson.repository.url).toBe('git+https://git.simonblanco.xyz/octo/discographic.git');
-    expect(packageJson.homepage).toBe('https://git.simonblanco.xyz/octo/discographic');
+  it('marks GitHub as the public repository in package metadata', () => {
+    expect(packageJson.repository.url).toBe('git+https://github.com/SimonBlancoE/discographic.git');
+    expect(packageJson.homepage).toBe('https://github.com/SimonBlancoE/discographic');
   });
 
   it('documents TypeScript-only contribution guardrails and required verification', () => {
@@ -113,11 +113,11 @@ describe('TypeScript migration toolchain guardrails', () => {
     const readme = readText('README.md');
     const contributing = readText('CONTRIBUTING.md');
 
-    expect(readme).toContain('https://git.simonblanco.xyz/octo/discographic.git');
+    expect(readme).toContain('https://github.com/SimonBlancoE/discographic.git');
     expect(readme).toContain('CONTRIBUTING.md');
 
-    expect(contributing).toContain('Forgejo');
-    expect(contributing).toContain('GitHub publication');
+    expect(contributing).toContain('GitHub');
+    expect(contributing).toContain('Direct contributions are not accepted');
     expect(contributing).toContain('TypeScript-only');
     expect(contributing).toContain('untrusted boundary');
     expect(contributing).toContain('npm run typecheck');
