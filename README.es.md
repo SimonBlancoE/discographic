@@ -28,7 +28,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 </div>
 
 > [!NOTE]
-> **v0.3.1 disponible** - ahora se muestra el precio de listado en el detalle de cada lanzamiento y se ha pulido la copia en español. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
+> **v0.3.2 disponible** - el README aclara ahora el feedback, las contribuciones y la instancia manual de QA. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
 
 ## ¿Qué es Discographic?
 
@@ -182,6 +182,8 @@ Las credenciales de Discogs **no** se configuran con variables de entorno. Cada 
 ## Contribuir
 
 No se aceptan contribuciones directas como norma general, pero cualquier tipo de feedback es muy bienvenido y se agradece de verdad, incluidos los issues y los pull requests.
+
+Si abres un pull request, revisa antes [CONTRIBUTING.md](./CONTRIBUTING.md) para ver las normas del proyecto y los comandos de verificacion.
 
 ## Stack técnico
 
