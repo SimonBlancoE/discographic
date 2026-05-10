@@ -13,6 +13,7 @@ import {
 const getRadarForUser = vi.hoisted(() => vi.fn());
 const getSettingForUser = vi.hoisted(() => vi.fn());
 const updateRadarReleaseForUser = vi.hoisted(() => vi.fn());
+const getDiscogsClientForUser = vi.hoisted(() => vi.fn());
 const getExchangeSnapshot = vi.hoisted(() => vi.fn());
 const parseRadarWantlistWorkbook = vi.hoisted(() => vi.fn());
 const buildRadarWantlistPreview = vi.hoisted(() => vi.fn());
@@ -38,6 +39,11 @@ vi.mock('../server/services/radarWantlistImport.js', () => ({
   parseRadarWantlistWorkbook,
   buildRadarWantlistPreview,
   applyRadarWantlistImport,
+}));
+
+vi.mock('../server/middleware/auth.js', () => ({
+  requireAuth: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  getDiscogsClientForUser,
 }));
 
 const { default: radarRouter } = await import('../server/routes/radar.js');
@@ -108,6 +114,7 @@ describe('radar route', () => {
     getSettingForUser.mockReset();
     getRadarForUser.mockReset();
     updateRadarReleaseForUser.mockReset();
+    getDiscogsClientForUser.mockReset();
     getExchangeSnapshot.mockReset();
     parseRadarWantlistWorkbook.mockReset();
     buildRadarWantlistPreview.mockReset();
@@ -233,7 +240,15 @@ describe('radar route', () => {
       resolved: false,
     });
 
-    await expect(response.json()).resolves.toMatchObject({
+    const payload = await response.json();
+
+    expect(getDiscogsClientForUser).not.toHaveBeenCalled();
+    expect(payload.items[0]?.marketplace).not.toHaveProperty('listing_status');
+    expect(payload.items[0]?.marketplace).not.toHaveProperty('listing_price');
+    expect(payload.items[0]?.marketplace).not.toHaveProperty('listing_currency');
+    expect(payload.items[0]?.marketplace).not.toHaveProperty('listing_price_eur');
+
+    expect(payload).toMatchObject({
       items: [
         {
           id: 1,
@@ -248,8 +263,6 @@ describe('radar route', () => {
           },
           marketplace: {
             estimated_price: 24,
-            listing_price: 30,
-            listing_price_eur: 25,
           },
           display_currency: 'USD',
         },
