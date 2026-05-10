@@ -71,6 +71,16 @@ Si usas Discogs a diario, y sobre todo si vendes discos allí, tu opinión es mu
 - **Logros** - desbloqueables por niveles e insignias ocultas.
 - **Selector aleatorio** - para cuando quieres que la app elija el disco de esta noche.
 
+## Guardrails de Radar v1
+
+Radar v1 es un espacio local para revisar la Wantlist, no una capa de automatizacion del Marketplace.
+
+- Usa solo estadisticas de Marketplace a nivel release y decisiones locales.
+- No implementa recomendaciones por vendedor, compras combinadas, logica de envio, disponibilidad a nivel listing, filtrado exacto por condicion, trabajos programados, alertas automaticas, historial de precios ni scoring complejo.
+- No escribe de vuelta a Discogs las decisiones de Radar, las notas ni la pertenencia a la Wantlist en v1.
+- La condicion minima se guarda como preferencia de cara al futuro y en v1 es solo informativa.
+- La antigua direccion de "Wantlist Price Alerts" queda sustituida por el PRD de Radar v1 salvo que se recupere de forma explicita en un plan posterior.
+
 ## Inicio rápido
 
 Si solo quieres ponerla en marcha, este es el camino.

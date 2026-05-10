@@ -82,11 +82,9 @@ describe('radar storage', () => {
       'source_last_seen_at',
       'marketplace_status',
       'estimated_price',
-      'listing_status',
-      'listing_price',
-      'listing_currency',
-      'listing_price_eur',
       'marketplace_last_checked_at',
+      'marketplace_last_unavailable_at',
+      'marketplace_available_again_at',
       'created_at',
       'updated_at',
     ]));
@@ -187,10 +185,6 @@ describe('radar storage', () => {
           marketplace: {
             status: MARKETPLACE_STATUS.PRICED,
             estimated_price: 25,
-            listing_status: null,
-            listing_price: null,
-            listing_currency: null,
-            listing_price_eur: null,
             last_checked_at: null,
           },
           timestamps: {

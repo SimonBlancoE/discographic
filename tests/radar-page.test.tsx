@@ -107,7 +107,7 @@ const messages = {
   'radar.state.resolved': 'Resolved',
   'radar.state.missingFromSource': 'Missing from source',
   'radar.minimumCondition': 'Minimum condition',
-  'radar.minimumCondition.info': 'Informational only in Radar v1.',
+  'radar.minimumCondition.info': 'Saved for future listing filters. Informational only in Radar v1.',
   'radar.minimumCondition.none': 'No preference',
   'radar.minimumCondition.M': 'Mint (M)',
   'radar.minimumCondition.NM': 'Near Mint (NM)',
@@ -321,10 +321,6 @@ describe('Radar page', () => {
             marketplace: {
               status: 'pending',
               estimated_price: null,
-              listing_status: null,
-              listing_price: null,
-              listing_currency: null,
-              listing_price_eur: null,
               last_checked_at: null,
             },
             timestamps: {
@@ -425,10 +421,6 @@ describe('Radar page', () => {
             marketplace: {
               status: 'pending',
               estimated_price: null,
-              listing_status: null,
-              listing_price: null,
-              listing_currency: null,
-              listing_price_eur: null,
               last_checked_at: null,
             },
             timestamps: {
@@ -577,10 +569,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'priced',
             estimated_price: 16,
-            listing_status: 'For Sale',
-            listing_price: 16,
-            listing_currency: 'EUR',
-            listing_price_eur: 16,
             last_checked_at: '2026-05-10T00:00:00Z',
           },
           timestamps: {
@@ -620,10 +608,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'priced',
             estimated_price: 15,
-            listing_status: 'For Sale',
-            listing_price: 15,
-            listing_currency: 'EUR',
-            listing_price_eur: 15,
             last_checked_at: '2026-05-10T00:00:00Z',
           },
           timestamps: {
@@ -663,10 +647,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'priced',
             estimated_price: 14,
-            listing_status: 'For Sale',
-            listing_price: 14,
-            listing_currency: 'EUR',
-            listing_price_eur: 14,
             last_checked_at: '2026-05-10T00:00:00Z',
           },
           timestamps: {
@@ -997,10 +977,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'priced',
             estimated_price: 24,
-            listing_status: 'For Sale',
-            listing_price: 30,
-            listing_currency: 'EUR',
-            listing_price_eur: 25,
             last_checked_at: '2026-05-10T00:00:00Z',
           },
           timestamps: {
@@ -1055,10 +1031,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'priced',
             estimated_price: 24,
-            listing_status: 'For Sale',
-            listing_price: 30,
-            listing_currency: 'EUR',
-            listing_price_eur: 25,
             last_checked_at: '2026-05-10T00:00:00Z',
           },
           timestamps: {

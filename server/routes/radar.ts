@@ -269,7 +269,6 @@ function serializeRadarRelease(
     marketplace: {
       ...item.marketplace,
       estimated_price: convertNullableAmount(item.marketplace.estimated_price, DEFAULT_CURRENCY, displayCurrency, rates),
-      listing_price: convertNullableAmount(item.marketplace.listing_price_eur, DEFAULT_CURRENCY, displayCurrency, rates),
     },
     display_currency: displayCurrency,
   };
