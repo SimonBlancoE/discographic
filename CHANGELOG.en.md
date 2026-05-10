@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.3.3] - 2026-05-10
+
+Documentation and metadata cleanup release.
+
+### Changed
+
+- **Public repository references corrected** - README clone instructions,
+  package metadata, contribution guidance, planning docs, and guardrail tests
+  now point only to the public GitHub repository.
+- **Private development details removed** - repo-facing documentation no longer
+  mentions private remotes, private upstream naming, or downstream publication
+  wording.
+
+[0.3.3]: https://github.com/SimonBlancoE/discographic/compare/v0.3.2...v0.3.3
+
 ## [0.3.2] - 2026-05-10
 
 Documentation release for clearer project guidance.

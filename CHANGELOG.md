@@ -7,6 +7,22 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.3.3] - 2026-05-10
+
+Release de limpieza de documentacion y metadata.
+
+### Cambiado
+
+- **Referencias publicas del repositorio corregidas** - las instrucciones de
+  clonado del README, la metadata del paquete, la guia de contribucion, la
+  documentacion de planificacion y los tests de guardrails apuntan ahora solo
+  al repositorio publico de GitHub.
+- **Detalles privados de desarrollo eliminados** - la documentacion visible del
+  repo ya no menciona remotos privados, nombres de upstream privados ni
+  lenguaje de publicacion downstream.
+
+[0.3.3]: https://github.com/SimonBlancoE/discographic/compare/v0.3.2...v0.3.3
+
 ## [0.3.2] - 2026-05-10
 
 Release de documentacion para aclarar la guia publica del proyecto.
