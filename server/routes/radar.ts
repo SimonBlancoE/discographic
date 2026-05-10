@@ -33,6 +33,17 @@ import {
   getPendingRadarEnrichmentCount,
   getPendingRadarEnrichmentRows,
 } from '../services/radarEnrichmentQueue.js';
+import {
+  cleanupExpiredRadarWantlistPreviews,
+  clearRadarEnrichmentRunning,
+  deleteStoredRadarWantlistPreview,
+  getRadarEnrichmentState as getStoredRadarEnrichmentState,
+  getStoredRadarWantlistPreview,
+  isRadarEnrichmentRunning,
+  markRadarEnrichmentRunning,
+  setRadarEnrichmentState as storeRadarEnrichmentState,
+  storeRadarWantlistPreview,
+} from '../services/radarRuntimeState.js';
 import { getRadarAvailabilityTransition } from '../services/radarStorage.js';
 import { syncRadarWantlist } from '../services/radarWantlist.js';
 import { applyRadarWantlistImport, buildRadarWantlistPreview, parseRadarWantlistWorkbook } from '../services/radarWantlistImport.js';
@@ -42,9 +53,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 const WANTLIST_TEMPLATE_BASENAME = 'discographic-radar-wantlist-template';
 const ENRICH_BATCH_SIZE = 30;
 const WANTLIST_PREVIEW_TTL_MS = 10 * 60 * 1000;
-const enrichRunning = new Set<number>();
-const enrichStates = new Map<number, MutableRadarEnrichmentState>();
-const wantlistPreviewCache = new Map<string, CachedWantlistPreview>();
 
 type Translate = (key: string) => string;
 type ExchangeRates = Parameters<typeof convertAmountWithRates>[3];
@@ -122,12 +130,7 @@ function sendXlsxTemplate(res: Response, data: WantlistTemplateRow[], sheetName:
 }
 
 function cleanWantlistPreviewCache(): void {
-  const now = Date.now();
-  for (const [previewId, cached] of wantlistPreviewCache) {
-    if (cached.expiresAt < now) {
-      wantlistPreviewCache.delete(previewId);
-    }
-  }
+  cleanupExpiredRadarWantlistPreviews();
 }
 
 function resolveTemplateFormat(format: unknown): RadarWantlistTemplateFormat {
@@ -215,7 +218,7 @@ function cacheWantlistPreview(userId: number, preview: RadarWantlistPreviewRespo
   cleanWantlistPreviewCache();
 
   const previewId = crypto.randomBytes(16).toString('hex');
-  wantlistPreviewCache.set(previewId, {
+  storeRadarWantlistPreview(previewId, {
     userId,
     displayCurrency: getDisplayCurrency(userId),
     preview,
@@ -226,14 +229,14 @@ function cacheWantlistPreview(userId: number, preview: RadarWantlistPreviewRespo
 }
 
 function getCachedWantlistPreview(previewId: string, userId: number): CachedWantlistPreview | null {
-  const cached = wantlistPreviewCache.get(previewId);
+  const cached = getStoredRadarWantlistPreview<RadarWantlistPreviewResponse>(previewId);
 
   if (!cached || cached.userId !== userId) {
     return null;
   }
 
   if (cached.expiresAt < Date.now()) {
-    wantlistPreviewCache.delete(previewId);
+    deleteStoredRadarWantlistPreview(previewId);
     return null;
   }
 
@@ -341,19 +344,19 @@ function createIdleState(locale?: string): MutableRadarEnrichmentState {
 }
 
 function getEnrichState(userId: number, locale?: string): MutableRadarEnrichmentState {
-  const current = enrichStates.get(userId);
+  const current = getStoredRadarEnrichmentState<MutableRadarEnrichmentState>(userId);
 
   if (current) {
     return current;
   }
 
   const initial = createIdleState(locale);
-  enrichStates.set(userId, initial);
+  storeRadarEnrichmentState(userId, initial);
   return initial;
 }
 
 function setEnrichState(userId: number, locale: string | undefined, patch: Partial<MutableRadarEnrichmentState>): void {
-  enrichStates.set(userId, {
+  storeRadarEnrichmentState(userId, {
     ...getEnrichState(userId, locale),
     ...patch,
   });
@@ -402,11 +405,9 @@ function getCompletionMessage({
 }
 
 async function runRadarEnrich({ userId, locale, discogs }: RadarEnrichInput): Promise<void> {
-  if (enrichRunning.has(userId)) {
+  if (!markRadarEnrichmentRunning(userId)) {
     return;
   }
-
-  enrichRunning.add(userId);
 
   try {
     const pendingRows = getPendingRadarEnrichmentRows(db, userId);
@@ -437,11 +438,11 @@ async function runRadarEnrich({ userId, locale, discogs }: RadarEnrichInput): Pr
       finishedAt: null,
     });
 
-    for (let offset = 0; offset < pendingRows.length && enrichRunning.has(userId); offset += ENRICH_BATCH_SIZE) {
+    for (let offset = 0; offset < pendingRows.length && isRadarEnrichmentRunning(userId); offset += ENRICH_BATCH_SIZE) {
       const rows = pendingRows.slice(offset, offset + ENRICH_BATCH_SIZE);
 
       for (const row of rows) {
-        if (!enrichRunning.has(userId)) {
+        if (!isRadarEnrichmentRunning(userId)) {
           break;
         }
 
@@ -489,7 +490,7 @@ async function runRadarEnrich({ userId, locale, discogs }: RadarEnrichInput): Pr
     }
 
     const finalPending = getPendingRadarEnrichmentCount(db, userId);
-    const wasStopped = !enrichRunning.has(userId) && finalPending > 0;
+    const wasStopped = !isRadarEnrichmentRunning(userId) && finalPending > 0;
 
     setEnrichState(userId, locale, {
       status: wasStopped ? RADAR_ENRICH_STATUS.STOPPED : RADAR_ENRICH_STATUS.COMPLETED,
@@ -511,7 +512,7 @@ async function runRadarEnrich({ userId, locale, discogs }: RadarEnrichInput): Pr
       finishedAt: new Date().toISOString(),
     });
   } finally {
-    enrichRunning.delete(userId);
+    clearRadarEnrichmentRunning(userId);
   }
 }
 
@@ -627,7 +628,7 @@ router.post('/wantlist/apply', async (req, res) => {
       return res.status(410).json({ error: req.t('backend.radarImport.previewExpired') });
     }
 
-    wantlistPreviewCache.delete(previewId);
+    deleteStoredRadarWantlistPreview(previewId);
 
     const rates = await getDisplayRates(cached.displayCurrency);
     const applied = applyRadarWantlistImport(db, userId, toRadarWantlistApplyRows(cached, rates));
@@ -652,7 +653,7 @@ router.post('/wantlist/apply', async (req, res) => {
 router.post('/enrich', async (req, res) => {
   const userId = req.session.userId as number;
 
-  if (enrichRunning.has(userId)) {
+  if (isRadarEnrichmentRunning(userId)) {
     return res.status(409).json({ error: req.t('backend.radar.activeEnrich') });
   }
 
@@ -673,7 +674,7 @@ router.post('/enrich/stop', (req, res) => {
   const pending = getPendingRadarEnrichmentCount(db, userId);
   const currentState = getEnrichState(userId, req.locale);
 
-  enrichRunning.delete(userId);
+  clearRadarEnrichmentRunning(userId);
   setEnrichState(userId, req.locale, {
     status: RADAR_ENRICH_STATUS.STOPPED,
     pending,

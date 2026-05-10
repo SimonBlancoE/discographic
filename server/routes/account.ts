@@ -5,6 +5,7 @@ import { COLLECTION_SAVED_VIEWS_KEY } from '../../shared/contracts/collectionVie
 import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { normalizeCurrency } from '../../shared/currency.js';
+import { resetRadarRuntimeState } from '../services/radarRuntimeState.js';
 
 const router = express.Router();
 
@@ -48,6 +49,7 @@ router.put('/', (req, res) => {
   const tokenChanged = Boolean(discogsToken) && discogsToken !== currentAccount?.discogs_token;
   const shouldResetCache = !currentAccount || currentAccount.discogs_username !== discogsUsername || tokenChanged;
   if (shouldResetCache) {
+    resetRadarRuntimeState(req.session.userId);
     clearUserCollectionData(req.session.userId);
   }
 
@@ -62,6 +64,7 @@ router.put('/', (req, res) => {
 });
 
 router.post('/reset', (req, res) => {
+  resetRadarRuntimeState(req.session.userId);
   clearUserCollectionData(req.session.userId);
   return res.json({ ok: true, message: req.t('backend.account.reset') });
 });
