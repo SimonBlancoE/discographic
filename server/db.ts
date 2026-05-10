@@ -5,6 +5,7 @@ import { join } from 'path';
 import { cleanupStoredNotes, normalizeNotes, notesToText, parseStoredNotes } from './services/notes.js';
 import { parseJson, stringifyJson } from './services/jsonStorage.js';
 import { migrateMarketplaceStatus } from './services/dbMigrations.js';
+import { resetRadarRuntimeState } from './services/radarRuntimeState.js';
 import { clearRadarRows, getRadarSnapshot, migrateRadarStorage, updateRadarLocalDecision } from './services/radarStorage.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
 
@@ -314,6 +315,7 @@ export function listUsers() {
 }
 
 export function deleteUser(id) {
+  resetRadarRuntimeState(id);
   db.prepare('DELETE FROM discogs_accounts WHERE user_id = ?').run(id);
   clearRadarRows(db, id);
   db.prepare('DELETE FROM releases WHERE user_id = ?').run(id);
@@ -363,6 +365,7 @@ export function upsertDiscogsAccount(userId, discogsUsername, discogsToken) {
 }
 
 export function clearUserCollectionData(userId) {
+  resetRadarRuntimeState(userId);
   clearRadarRows(db, userId);
   db.prepare('DELETE FROM releases WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM sync_log WHERE user_id = ?').run(userId);
