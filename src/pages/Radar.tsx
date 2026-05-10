@@ -4,6 +4,8 @@ import {
   RADAR_MINIMUM_CONDITION,
   RADAR_PRIORITY,
   normalizeRadarResponse,
+  type RadarLocalDecisionPayload,
+  type RadarMinimumCondition,
   type RadarPriority,
   type RadarRelease,
   type RadarResponse,
@@ -45,11 +47,13 @@ const RADAR_MINIMUM_CONDITION_OPTIONS = [
 type RadarReleaseDraft = {
   priority: RadarPriority;
   targetPrice: string;
-  minimumCondition: string;
+  minimumCondition: RadarMinimumCondition | '';
   note: string;
   hidden: boolean;
   resolved: boolean;
 };
+
+type RadarSaveHandler = (id: number, payload: RadarLocalDecisionPayload) => Promise<void>;
 
 function createEmptyRadarResponse(): RadarResponse {
   return normalizeRadarResponse({});
@@ -66,24 +70,30 @@ function createReleaseDraft(item: RadarRelease): RadarReleaseDraft {
   };
 }
 
+function createReleasePayload(draft: RadarReleaseDraft): RadarLocalDecisionPayload {
+  return {
+    local: {
+      priority: draft.priority,
+      target_price: draft.targetPrice.trim() ? Number(draft.targetPrice) : null,
+      minimum_condition: draft.minimumCondition || null,
+      note: draft.note,
+      hidden: draft.hidden,
+      resolved: draft.resolved,
+    },
+  };
+}
+
+type RadarReleaseCardProps = {
+  item: RadarRelease;
+  t: Translate;
+  onSave: RadarSaveHandler;
+};
+
 function RadarReleaseCard({
   item,
   t,
   onSave,
-}: {
-  item: RadarRelease;
-  t: Translate;
-  onSave: (id: number, payload: {
-    local: {
-      priority: RadarPriority;
-      target_price: number | null;
-      minimum_condition: string | null;
-      note: string;
-      hidden: boolean;
-      resolved: boolean;
-    };
-  }) => Promise<void>;
-}) {
+}: RadarReleaseCardProps) {
   const [draft, setDraft] = useState(() => createReleaseDraft(item));
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -105,16 +115,7 @@ function RadarReleaseCard({
     setSaveFailed(false);
 
     try {
-      await onSave(item.id, {
-        local: {
-          priority: draft.priority,
-          target_price: draft.targetPrice.trim() ? Number(draft.targetPrice) : null,
-          minimum_condition: draft.minimumCondition || null,
-          note: draft.note,
-          hidden: draft.hidden,
-          resolved: draft.resolved,
-        },
-      });
+      await onSave(item.id, createReleasePayload(draft));
     } catch {
       setSaveFailed(true);
     } finally {
@@ -123,7 +124,7 @@ function RadarReleaseCard({
   }
 
   return (
-    <li key={releaseKey} className="rounded-3xl border border-white/10 bg-slate-950/30 p-5">
+    <li className="rounded-3xl border border-white/10 bg-slate-950/30 p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
           <p className="font-display text-2xl text-white">
@@ -183,7 +184,10 @@ function RadarReleaseCard({
           <select
             name={`radar-minimum-condition-${releaseKey}`}
             value={draft.minimumCondition}
-            onChange={(event) => setDraft((current) => ({ ...current, minimumCondition: event.target.value }))}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              minimumCondition: event.target.value as RadarMinimumCondition | '',
+            }))}
             className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
           >
             <option value="">{t('radar.minimumCondition.none')}</option>
@@ -254,16 +258,7 @@ function renderRadarContent(
   loading: boolean,
   loadFailed: boolean,
   t: Translate,
-  onSave: (id: number, payload: {
-    local: {
-      priority: RadarPriority;
-      target_price: number | null;
-      minimum_condition: string | null;
-      note: string;
-      hidden: boolean;
-      resolved: boolean;
-    };
-  }) => Promise<void>,
+  onSave: RadarSaveHandler,
 ) {
   if (loading) {
     return (
@@ -348,19 +343,7 @@ function Radar() {
     };
   }, [accountUnavailable, capabilities.canUseRadar]);
 
-  async function saveRadarRelease(
-    id: number,
-    payload: {
-      local: {
-        priority: RadarPriority;
-        target_price: number | null;
-        minimum_condition: string | null;
-        note: string;
-        hidden: boolean;
-        resolved: boolean;
-      };
-    },
-  ) {
+  async function saveRadarRelease(id: number, payload: RadarLocalDecisionPayload) {
     const nextRadar = await api.updateRadarRelease(id, payload);
     setRadar(nextRadar);
   }

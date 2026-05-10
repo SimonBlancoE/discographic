@@ -4,6 +4,11 @@ import {
   RADAR_MINIMUM_CONDITION,
   RADAR_PRIORITY,
   normalizeRadarResponse,
+  type RadarLocalDecisionUpdate,
+  type RadarMinimumCondition,
+  type RadarPriority,
+  type RadarRelease,
+  type RadarResponse,
 } from '../../shared/contracts/radar.js';
 import { getRadarForUser, getSettingForUser, updateRadarReleaseForUser } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -17,6 +22,11 @@ import {
 const router = express.Router();
 
 router.use(requireAuth);
+
+type ExchangeRates = Parameters<typeof convertAmountWithRates>[3];
+
+const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
+const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -36,94 +46,125 @@ function asBoolean(value: unknown): boolean | null {
   return null;
 }
 
-function getDisplayCurrency(userId: number) {
+function isRadarPriority(value: unknown): value is RadarPriority {
+  return RADAR_PRIORITIES.has(value as RadarPriority);
+}
+
+function isRadarMinimumCondition(value: unknown): value is RadarMinimumCondition {
+  return RADAR_MINIMUM_CONDITIONS.has(value as RadarMinimumCondition);
+}
+
+function parseRadarPriority(value: unknown): RadarPriority {
+  if (!isRadarPriority(value)) {
+    throw new Error('priority is required');
+  }
+
+  return value;
+}
+
+function parseRadarMinimumCondition(value: unknown): RadarMinimumCondition | null {
+  if (value == null || value === '') {
+    return null;
+  }
+
+  if (!isRadarMinimumCondition(value)) {
+    throw new Error('minimum_condition is invalid');
+  }
+
+  return value;
+}
+
+function parseRadarNote(value: unknown): string {
+  if (value != null && typeof value !== 'string') {
+    throw new Error('note must be a string');
+  }
+
+  return typeof value === 'string' ? value : '';
+}
+
+function getDisplayCurrency(userId: number): string {
   return normalizeCurrency(getSettingForUser(userId, 'currency') ?? DEFAULT_CURRENCY);
 }
 
-async function getDisplayRates(displayCurrency: string) {
+async function getDisplayRates(displayCurrency: string): Promise<ExchangeRates> {
   const snapshot = await getExchangeSnapshot([displayCurrency]);
   return snapshot.rates;
 }
 
-async function serializeRadar(userId: number, displayCurrency = getDisplayCurrency(userId)) {
+function convertNullableAmount(
+  amount: number | null,
+  fromCurrency: string,
+  toCurrency: string,
+  rates: ExchangeRates,
+): number | null {
+  return amount == null ? null : convertAmountWithRates(amount, fromCurrency, toCurrency, rates);
+}
+
+function serializeRadarRelease(
+  item: RadarRelease,
+  displayCurrency: string,
+  rates: ExchangeRates,
+): RadarRelease {
+  return {
+    ...item,
+    local: {
+      ...item.local,
+      target_price: convertNullableAmount(item.local.target_price_eur, DEFAULT_CURRENCY, displayCurrency, rates),
+    },
+    marketplace: {
+      ...item.marketplace,
+      estimated_price: convertNullableAmount(item.marketplace.estimated_price, DEFAULT_CURRENCY, displayCurrency, rates),
+      listing_price: convertNullableAmount(item.marketplace.listing_price_eur, DEFAULT_CURRENCY, displayCurrency, rates),
+    },
+    display_currency: displayCurrency,
+  };
+}
+
+async function serializeRadar(userId: number, displayCurrency = getDisplayCurrency(userId)): Promise<RadarResponse> {
   const radar = getRadarForUser(userId);
   const rates = await getDisplayRates(displayCurrency);
 
   return normalizeRadarResponse({
-    items: radar.items.map((item) => ({
-      ...item,
-      local: {
-        ...item.local,
-        target_price: item.local.target_price_eur == null
-          ? null
-          : convertAmountWithRates(item.local.target_price_eur, DEFAULT_CURRENCY, displayCurrency, rates),
-      },
-      marketplace: {
-        ...item.marketplace,
-        estimated_price: item.marketplace.estimated_price == null
-          ? null
-          : convertAmountWithRates(item.marketplace.estimated_price, DEFAULT_CURRENCY, displayCurrency, rates),
-        listing_price: item.marketplace.listing_price_eur == null
-          ? null
-          : convertAmountWithRates(item.marketplace.listing_price_eur, DEFAULT_CURRENCY, displayCurrency, rates),
-      },
-      display_currency: displayCurrency,
-    })),
+    items: radar.items.map((item) => serializeRadarRelease(item, displayCurrency, rates)),
     summary: radar.summary,
   });
 }
 
-async function parseRadarUpdatePayload(userId: number, payload: unknown) {
-  const source = asRecord(payload);
-  const local = asRecord(source?.local) ?? source ?? {};
-
-  const priority = local.priority;
-  if (!Object.values(RADAR_PRIORITY).includes(priority as (typeof RADAR_PRIORITY)[keyof typeof RADAR_PRIORITY])) {
-    throw new Error('priority is required');
+async function parseTargetPriceEur(userId: number, value: unknown): Promise<number | null> {
+  if (value == null || value === '') {
+    return null;
   }
 
-  const minimumCondition = local.minimum_condition;
-  const normalizedMinimumCondition = minimumCondition == null || minimumCondition === ''
-    ? null
-    : minimumCondition;
-  if (
-    normalizedMinimumCondition != null &&
-    !Object.values(RADAR_MINIMUM_CONDITION).includes(
-      normalizedMinimumCondition as (typeof RADAR_MINIMUM_CONDITION)[keyof typeof RADAR_MINIMUM_CONDITION],
-    )
-  ) {
-    throw new Error('minimum_condition is invalid');
+  const parsedTargetPrice = Number(value);
+  if (!Number.isFinite(parsedTargetPrice) || parsedTargetPrice < 0) {
+    throw new Error('target_price must be a non-negative number');
   }
 
+  const displayCurrency = getDisplayCurrency(userId);
+  const rates = await getDisplayRates(displayCurrency);
+  return convertAmountWithRates(parsedTargetPrice, displayCurrency, DEFAULT_CURRENCY, rates);
+}
+
+async function parseRadarUpdatePayload(userId: number, payload: unknown): Promise<RadarLocalDecisionUpdate> {
+  const source = asRecord(payload) ?? {};
+  const local = asRecord(source.local) ?? source;
+
+  const priority = parseRadarPriority(local.priority);
+  const minimumCondition = parseRadarMinimumCondition(local.minimum_condition);
   const hidden = asBoolean(local.hidden);
   const resolved = asBoolean(local.resolved);
   if (hidden == null || resolved == null) {
     throw new Error('hidden and resolved are required');
   }
 
-  const note = local.note;
-  if (note != null && typeof note !== 'string') {
-    throw new Error('note must be a string');
-  }
-
-  const rawTargetPrice = local.target_price;
-  let targetPriceEur: number | null = null;
-  if (rawTargetPrice != null && rawTargetPrice !== '') {
-    const parsedTargetPrice = Number(rawTargetPrice);
-    if (!Number.isFinite(parsedTargetPrice) || parsedTargetPrice < 0) {
-      throw new Error('target_price must be a non-negative number');
-    }
-
-    const displayCurrency = getDisplayCurrency(userId);
-    const rates = await getDisplayRates(displayCurrency);
-    targetPriceEur = convertAmountWithRates(parsedTargetPrice, displayCurrency, DEFAULT_CURRENCY, rates);
-  }
+  const note = parseRadarNote(local.note);
+  const targetPriceEur = await parseTargetPriceEur(userId, local.target_price);
 
   return {
     priority,
     targetPriceEur,
-    minimumCondition: normalizedMinimumCondition,
-    note: typeof note === 'string' ? note : '',
+    minimumCondition,
+    note,
     hidden,
     resolved,
   };

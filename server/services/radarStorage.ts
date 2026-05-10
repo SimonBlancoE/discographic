@@ -6,7 +6,7 @@ import {
   RADAR_PRIORITY,
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
-  type RadarMinimumCondition,
+  type RadarLocalDecisionUpdate,
   type RadarPriority,
   type RadarResponse,
   type RadarSourceOrigin,
@@ -62,15 +62,9 @@ type RadarSummaryParams = {
 
 type RadarSummaryRow = Record<keyof RadarResponse['summary'], number | null>;
 
-type RadarLocalDecisionUpdate = {
+type StoredRadarLocalDecisionUpdate = RadarLocalDecisionUpdate & {
   userId: number;
   radarId: number;
-  priority: RadarPriority;
-  targetPriceEur: number | null;
-  minimumCondition: RadarMinimumCondition | null;
-  note: string;
-  hidden: boolean;
-  resolved: boolean;
 };
 
 const RADAR_TABLE = 'radar_releases';
@@ -277,7 +271,7 @@ export function updateRadarLocalDecision(
     note,
     hidden,
     resolved,
-  }: RadarLocalDecisionUpdate,
+  }: StoredRadarLocalDecisionUpdate,
 ): boolean {
   const normalizedPriority = Object.values(RADAR_PRIORITY).includes(priority)
     ? priority
