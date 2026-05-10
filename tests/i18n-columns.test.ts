@@ -77,6 +77,17 @@ const CLIENT_KEYS = [
   'client.tapeteError'
 ];
 
+const RADAR_KEYS = [
+  'nav.radar',
+  'radar.eyebrow',
+  'radar.blockedTitle',
+  'radar.blockedBody',
+  'radar.openSettings',
+  'radar.accountUnavailable',
+  'radar.emptyTitle',
+  'radar.emptyBody'
+];
+
 const VISUAL_I18N_KEYS = [
   'app.badgeLabel',
   'dashboard.feature.previous',
@@ -206,6 +217,13 @@ describe('i18n keys for import/media/client fallbacks', () => {
 
   it('all client fallback keys exist in both locales', () => {
     for (const key of CLIENT_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('all Radar page keys exist in both locales', () => {
+    for (const key of RADAR_KEYS) {
       expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
       expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
     }

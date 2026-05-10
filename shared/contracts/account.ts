@@ -140,15 +140,15 @@ function buildCapabilities({
   tokenConfigured: boolean | null;
   accountUnavailable: boolean;
 }): AccountCapabilities {
-  const hasDiscogs = loggedIn && tokenConfigured === true && !accountUnavailable;
+  const hasConfiguredDiscogsAccount = loggedIn && tokenConfigured === true && !accountUnavailable;
   const canManageAccount = loggedIn && !accountUnavailable;
 
   return {
-    canUseCollection: hasDiscogs,
-    canUseRadar: hasDiscogs,
-    canSyncDiscogs: hasDiscogs,
-    canImport: hasDiscogs,
-    canExport: hasDiscogs,
+    canUseCollection: hasConfiguredDiscogsAccount,
+    canUseRadar: hasConfiguredDiscogsAccount,
+    canSyncDiscogs: hasConfiguredDiscogsAccount,
+    canImport: hasConfiguredDiscogsAccount,
+    canExport: hasConfiguredDiscogsAccount,
     canManageAccount,
     canAdminUsers: loggedIn && isAdmin
   };
