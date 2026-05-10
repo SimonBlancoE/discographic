@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
+import { useDashboardStats } from '../lib/DashboardStatsContext';
 import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../lib/I18nContext';
 import { formatDate } from '../lib/format';
@@ -271,6 +272,7 @@ function Settings() {
   const toast = useToast();
   const { t } = useI18n();
   const { logout, refreshAccount, isAdmin } = useAuth();
+  const { refresh: refreshDashboardStats } = useDashboardStats();
   const [discogsUsername, setDiscogsUsername] = useState('');
   const [newToken, setNewToken] = useState('');
   const [tokenPreview, setTokenPreview] = useState<string | null>(null);
@@ -295,8 +297,8 @@ function Settings() {
       setTokenPreview(account.tokenPreview);
       setTokenConfigured(account.tokenConfigured);
       setNewToken('');
+      await Promise.allSettled([refreshAccount(), refreshDashboardStats()]);
       toast.success(account.message || t('settings.saved'));
-      await refreshAccount();
     } catch (nextError) {
       const message = getErrorMessage(nextError, t('settings.saveError'));
       setError(message);
@@ -354,6 +356,7 @@ function Settings() {
             if (!window.confirm(t('settings.resetConfirm'))) return;
             try {
               const result = await api.resetCollection();
+              await Promise.allSettled([refreshAccount(), refreshDashboardStats()]);
               toast.success(result.message || t('settings.saved'));
             } catch (nextError) {
               const message = getErrorMessage(nextError, t('client.networkError'));
