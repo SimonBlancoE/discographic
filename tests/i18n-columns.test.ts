@@ -84,6 +84,17 @@ const RADAR_KEYS = [
   'radar.blockedBody',
   'radar.openSettings',
   'radar.accountUnavailable',
+  'radar.loading',
+  'radar.loadFailed',
+  'radar.summary.total',
+  'radar.summary.active',
+  'radar.summary.hidden',
+  'radar.summary.resolved',
+  'radar.summary.missingFromSource',
+  'radar.summary.priced',
+  'radar.summary.pending',
+  'radar.summary.failed',
+  'radar.summary.unavailable',
   'radar.emptyTitle',
   'radar.emptyBody'
 ];
