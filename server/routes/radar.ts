@@ -1,13 +1,67 @@
-import express from 'express';
+import express, { type Response } from 'express';
 import multer from 'multer';
 import { stringify } from 'csv-stringify/sync';
 import * as XLSX from 'xlsx';
 import { requireAuth } from '../middleware/auth.js';
 import { getRadarForUser } from '../db.js';
 import { buildRadarWantlistPreview, parseRadarWantlistWorkbook } from '../services/radarWantlistImport.js';
+import type { RadarWantlistTemplateFormat } from '../../shared/contracts/radar.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const WANTLIST_TEMPLATE_BASENAME = 'discographic-radar-wantlist-template';
+
+type Translate = (key: string) => string;
+
+type WantlistTemplateRow = {
+  release_id: number;
+  artist: string;
+  title: string;
+  year: number;
+  notes: string;
+  date_added: string;
+  target_price: number;
+  minimum_condition: string;
+  priority: string;
+};
+
+function buildWantlistTemplateData(t: Translate): WantlistTemplateRow[] {
+  return [
+    {
+      release_id: 12231071,
+      artist: t('backend.radarImport.templateArtistSample'),
+      title: t('backend.radarImport.templateTitleSample'),
+      year: 1980,
+      notes: t('backend.radarImport.templateNotesSample'),
+      date_added: '2026-05-10',
+      target_price: 18,
+      minimum_condition: 'VG+',
+      priority: 'high',
+    },
+  ];
+}
+
+function sendCsvTemplate(res: Response, data: WantlistTemplateRow[]) {
+  const csv = stringify(data, { header: true });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${WANTLIST_TEMPLATE_BASENAME}.csv"`);
+  res.send(`\uFEFF${csv}`);
+}
+
+function sendXlsxTemplate(res: Response, data: WantlistTemplateRow[], sheetName: string) {
+  const sheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${WANTLIST_TEMPLATE_BASENAME}.xlsx"`);
+  res.send(buffer);
+}
+
+function resolveTemplateFormat(format: unknown): RadarWantlistTemplateFormat {
+  return format === 'csv' ? 'csv' : 'xlsx';
+}
 
 router.use(requireAuth);
 
@@ -16,37 +70,15 @@ router.get('/', (req, res) => {
 });
 
 router.get('/wantlist/template', (req, res) => {
-  const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
-  const data = [
-    {
-      release_id: 12231071,
-      artist: req.t('backend.radarImport.templateArtistSample'),
-      title: req.t('backend.radarImport.templateTitleSample'),
-      year: 1980,
-      notes: req.t('backend.radarImport.templateNotesSample'),
-      date_added: '2026-05-10',
-      target_price: 18,
-      minimum_condition: 'VG+',
-      priority: 'high',
-    },
-  ];
+  const format = resolveTemplateFormat(req.query.format);
+  const data = buildWantlistTemplateData(req.t);
 
   if (format === 'csv') {
-    const csv = stringify(data, { header: true });
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="discographic-radar-wantlist-template.csv"');
-    res.send(`\uFEFF${csv}`);
+    sendCsvTemplate(res, data);
     return;
   }
 
-  const sheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, req.t('backend.radarImport.templateSheetName'));
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename="discographic-radar-wantlist-template.xlsx"');
-  res.send(buffer);
+  sendXlsxTemplate(res, data, req.t('backend.radarImport.templateSheetName'));
 });
 
 router.post('/wantlist/preview', upload.single('file'), (req, res) => {

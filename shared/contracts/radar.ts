@@ -77,6 +77,57 @@ export type RadarResponse = {
   summary: RadarSummary;
 };
 
+export type RadarWantlistTemplateFormat = 'csv' | 'xlsx';
+
+export type RadarWantlistColumnKey =
+  | 'release_id'
+  | 'artist'
+  | 'title'
+  | 'year'
+  | 'notes'
+  | 'date_added'
+  | 'target_price'
+  | 'minimum_condition'
+  | 'priority';
+
+export type RadarWantlistPreviewColumn = {
+  header: string;
+  key: RadarWantlistColumnKey;
+  required: boolean;
+};
+
+export type RadarWantlistPreviewRow = {
+  row: number;
+  release_id: number;
+  artist: string | null;
+  title: string | null;
+  year: number | null;
+  notes: string | null;
+  date_added: string | null;
+  target_price: number | null;
+  minimum_condition: string | null;
+  priority: RadarPriority | null;
+};
+
+export type RadarWantlistPreviewError = {
+  row: number;
+  column: string;
+  value: string;
+  reason: string;
+};
+
+export type RadarWantlistPreviewResponse = {
+  summary: {
+    totalRows: number;
+    validRows: number;
+    invalidRows: number;
+  };
+  mappedColumns: RadarWantlistPreviewColumn[];
+  ignoredColumns: string[];
+  rows: RadarWantlistPreviewRow[];
+  errors: RadarWantlistPreviewError[];
+};
+
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
