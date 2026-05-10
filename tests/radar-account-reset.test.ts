@@ -57,7 +57,6 @@ vi.mock('../server/middleware/auth.js', () => ({
 const { default: radarRouter } = await import('../server/routes/radar.js');
 const { default: accountRouter } = await import('../server/routes/account.js');
 const {
-  clearRadarEnrichmentRunning,
   markRadarEnrichmentRunning,
   resetRadarRuntimeState,
   setRadarEnrichmentState,
@@ -83,6 +82,9 @@ describe('Radar account reset workflow', () => {
     getPendingRadarEnrichmentCount.mockReset();
     getPendingRadarEnrichmentRows.mockReset();
 
+    clearUserCollectionData.mockImplementation((userId: number) => {
+      resetRadarRuntimeState(userId);
+    });
     getSettingForUser.mockReturnValue('EUR');
     getDiscogsAccount.mockReturnValue({
       user_id: 1,
@@ -255,7 +257,5 @@ describe('Radar account reset workflow', () => {
       total: 0,
       pending: 0,
     });
-
-    clearRadarEnrichmentRunning(1);
   });
 });

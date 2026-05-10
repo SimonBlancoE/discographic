@@ -10,7 +10,6 @@ import {
   RADAR_PRIORITY,
   normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
-  type RadarEnrichmentStatus,
   type RadarLocalDecisionUpdate,
   type RadarMinimumCondition,
   type RadarPriority,
@@ -44,6 +43,10 @@ import {
   setRadarEnrichmentState as storeRadarEnrichmentState,
   storeRadarWantlistPreview,
 } from '../services/radarRuntimeState.js';
+import type {
+  RadarRuntimeEnrichmentState,
+  StoredRadarWantlistPreview,
+} from '../services/radarRuntimeState.js';
 import { getRadarAvailabilityTransition } from '../services/radarStorage.js';
 import { syncRadarWantlist } from '../services/radarWantlist.js';
 import { applyRadarWantlistImport, buildRadarWantlistPreview, parseRadarWantlistWorkbook } from '../services/radarWantlistImport.js';
@@ -56,11 +59,6 @@ const WANTLIST_PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 type Translate = (key: string) => string;
 type ExchangeRates = Parameters<typeof convertAmountWithRates>[3];
-type MutableRadarEnrichmentState = Omit<
-  RadarEnrichmentStatus,
-  'isRunning' | 'isTerminal' | 'progressPercent'
->;
-
 type RadarEnrichInput = {
   userId: number;
   locale: string | undefined;
@@ -79,13 +77,6 @@ type WantlistTemplateRow = {
   target_price: number;
   minimum_condition: string;
   priority: string;
-};
-
-type CachedWantlistPreview = {
-  userId: number;
-  displayCurrency: string;
-  preview: RadarWantlistPreviewResponse;
-  expiresAt: number;
 };
 
 type RadarWantlistApplyRows = Parameters<typeof applyRadarWantlistImport>[2];
@@ -228,8 +219,8 @@ function cacheWantlistPreview(userId: number, preview: RadarWantlistPreviewRespo
   return previewId;
 }
 
-function getCachedWantlistPreview(previewId: string, userId: number): CachedWantlistPreview | null {
-  const cached = getStoredRadarWantlistPreview<RadarWantlistPreviewResponse>(previewId);
+function getCachedWantlistPreview(previewId: string, userId: number): StoredRadarWantlistPreview | null {
+  const cached = getStoredRadarWantlistPreview(previewId);
 
   if (!cached || cached.userId !== userId) {
     return null;
@@ -244,7 +235,7 @@ function getCachedWantlistPreview(previewId: string, userId: number): CachedWant
 }
 
 function toRadarWantlistApplyRows(
-  cached: CachedWantlistPreview,
+  cached: StoredRadarWantlistPreview,
   rates: ExchangeRates,
 ): RadarWantlistApplyRows {
   return cached.preview.rows.map((row) => ({
@@ -331,7 +322,7 @@ function radarT(locale: string | undefined, key: string, vars?: Record<string, s
   return translate(locale || 'es', key, vars);
 }
 
-function createIdleState(locale?: string): MutableRadarEnrichmentState {
+function createIdleState(locale?: string): RadarRuntimeEnrichmentState {
   return {
     status: RADAR_ENRICH_STATUS.IDLE,
     current: 0,
@@ -343,8 +334,8 @@ function createIdleState(locale?: string): MutableRadarEnrichmentState {
   };
 }
 
-function getEnrichState(userId: number, locale?: string): MutableRadarEnrichmentState {
-  const current = getStoredRadarEnrichmentState<MutableRadarEnrichmentState>(userId);
+function getEnrichState(userId: number, locale?: string): RadarRuntimeEnrichmentState {
+  const current = getStoredRadarEnrichmentState(userId);
 
   if (current) {
     return current;
@@ -355,7 +346,11 @@ function getEnrichState(userId: number, locale?: string): MutableRadarEnrichment
   return initial;
 }
 
-function setEnrichState(userId: number, locale: string | undefined, patch: Partial<MutableRadarEnrichmentState>): void {
+function setEnrichState(
+  userId: number,
+  locale: string | undefined,
+  patch: Partial<RadarRuntimeEnrichmentState>,
+): void {
   storeRadarEnrichmentState(userId, {
     ...getEnrichState(userId, locale),
     ...patch,
