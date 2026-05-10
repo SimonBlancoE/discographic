@@ -33,13 +33,34 @@ function countJsonValues(rows, mapValue) {
 
 function buildRadarDashboardSummary(radar) {
   const items = Array.isArray(radar?.items) ? radar.items : [];
-
-  return {
+  const summary = {
     totalWanted: Number(radar?.summary?.total) || 0,
-    activeOpportunities: items.filter((item) => item?.opportunity?.default_visible && item?.opportunity?.reasons?.length > 0).length,
-    belowTarget: items.filter((item) => item?.opportunity?.default_visible && item?.opportunity?.reasons?.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET)).length,
-    alreadyOwned: items.filter((item) => item?.opportunity?.default_visible && item?.opportunity?.is_in_collection).length,
+    activeOpportunities: 0,
+    belowTarget: 0,
+    alreadyOwned: 0
   };
+
+  for (const item of items) {
+    const opportunity = item?.opportunity;
+
+    if (!opportunity?.default_visible) {
+      continue;
+    }
+
+    if (opportunity.reasons?.length > 0) {
+      summary.activeOpportunities += 1;
+    }
+
+    if (opportunity.reasons?.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET)) {
+      summary.belowTarget += 1;
+    }
+
+    if (opportunity.is_in_collection) {
+      summary.alreadyOwned += 1;
+    }
+  }
+
+  return summary;
 }
 
 router.get('/', async (req, res) => {

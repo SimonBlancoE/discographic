@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import type { Server } from 'http';
+import { RADAR_OPPORTUNITY_REASON } from '../shared/contracts/radar.js';
 
 const getSettingForUser = vi.hoisted(() => vi.fn());
 const getRadarForUser = vi.hoisted(() => vi.fn());
@@ -53,21 +54,27 @@ describe('stats route', () => {
       items: [
         {
           opportunity: {
-            reasons: ['below_target'],
+            reasons: [RADAR_OPPORTUNITY_REASON.BELOW_TARGET],
             default_visible: true,
             is_in_collection: false,
           },
         },
         {
           opportunity: {
-            reasons: ['high_priority_available', 'already_in_collection'],
+            reasons: [
+              RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE,
+              RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
+            ],
             default_visible: true,
             is_in_collection: true,
           },
         },
         {
           opportunity: {
-            reasons: ['below_target', 'already_in_collection'],
+            reasons: [
+              RADAR_OPPORTUNITY_REASON.BELOW_TARGET,
+              RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
+            ],
             default_visible: false,
             is_in_collection: true,
           },
