@@ -12,6 +12,39 @@ type DiscogsWantlistRow = {
   dateAdded: string | null;
 };
 
+type ExistingRadarRelease = {
+  source_status: string | null;
+};
+
+type MappedWantlistRows = {
+  rowsByReleaseId: Map<number, DiscogsWantlistRow>;
+  ignored: number;
+};
+
+type InsertReleaseParams = [
+  number,
+  number,
+  string,
+  string,
+  number | null,
+  string | null,
+  string | null,
+  string,
+  string,
+];
+
+type UpdateReleaseParams = [
+  string,
+  string,
+  number | null,
+  string | null,
+  string | null,
+  string,
+  string,
+  number,
+  number,
+];
+
 function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as UnknownRecord)
@@ -35,7 +68,14 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function mapWantlistRow(row: unknown): DiscogsWantlistRow | null {
+function artistNamesFromBasicInformation(basicInformation: UnknownRecord): string {
+  return asArray(basicInformation.artists)
+    .map((entry) => asText(asRecord(entry)?.name))
+    .filter((value): value is string => Boolean(value))
+    .join(', ');
+}
+
+function toWantlistRow(row: unknown): DiscogsWantlistRow | null {
   const source = asRecord(row) ?? {};
   const basicInformation = asRecord(source.basic_information) ?? {};
   const releaseId = asNumber(source.id) ?? asNumber(basicInformation.id);
@@ -44,10 +84,7 @@ function mapWantlistRow(row: unknown): DiscogsWantlistRow | null {
     return null;
   }
 
-  const artist = asArray(basicInformation.artists)
-    .map((entry) => asText(asRecord(entry)?.name))
-    .filter((value): value is string => Boolean(value))
-    .join(', ');
+  const artist = artistNamesFromBasicInformation(basicInformation);
 
   return {
     releaseId,
@@ -59,42 +96,40 @@ function mapWantlistRow(row: unknown): DiscogsWantlistRow | null {
   };
 }
 
-export function syncRadarWantlist(
-  db: Database.Database,
-  userId: number,
-  wantlistRows: unknown[],
-  syncedAt = new Date().toISOString(),
-): RadarSyncResult {
-  const syncTx = db.transaction((
-    targetUserId: number,
-    rows: unknown[],
-    targetSyncedAt: string,
-  ): RadarSyncResult => {
-    const mappedRows = new Map<number, DiscogsWantlistRow>();
-    let ignored = 0;
+function mapWantlistRows(rows: unknown[]): MappedWantlistRows {
+  const rowsByReleaseId = new Map<number, DiscogsWantlistRow>();
+  let ignored = 0;
 
-    for (const row of rows) {
-      const mapped = mapWantlistRow(row);
+  for (const row of rows) {
+    const mapped = toWantlistRow(row);
 
-      if (!mapped) {
-        ignored += 1;
-        continue;
-      }
-
-      if (mappedRows.has(mapped.releaseId)) {
-        ignored += 1;
-      }
-
-      mappedRows.set(mapped.releaseId, mapped);
+    if (!mapped) {
+      ignored += 1;
+      continue;
     }
 
-    const selectExisting = db.prepare<[number, number], { source_status: string | null }>(`
+    if (rowsByReleaseId.has(mapped.releaseId)) {
+      ignored += 1;
+    }
+
+    rowsByReleaseId.set(mapped.releaseId, mapped);
+  }
+
+  return {
+    rowsByReleaseId,
+    ignored,
+  };
+}
+
+function prepareSyncStatements(db: Database.Database) {
+  return {
+    selectExisting: db.prepare<[number, number], ExistingRadarRelease>(`
       SELECT source_status
       FROM radar_releases
       WHERE user_id = ? AND release_id = ?
-    `);
+    `),
 
-    const insertRelease = db.prepare(`
+    insertRelease: db.prepare<InsertReleaseParams>(`
       INSERT INTO radar_releases (
         user_id,
         release_id,
@@ -108,9 +143,9 @@ export function syncRadarWantlist(
         source_last_seen_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-    `);
+    `),
 
-    const updateRelease = db.prepare(`
+    updateRelease: db.prepare<UpdateReleaseParams>(`
       UPDATE radar_releases
       SET title = ?,
           artist = ?,
@@ -122,32 +157,27 @@ export function syncRadarWantlist(
           source_last_seen_at = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE user_id = ? AND release_id = ?
-    `);
+    `),
+  };
+}
 
-    let added = 0;
-    let updated = 0;
-    let reactivated = 0;
+function upsertWantlistRows(
+  statements: ReturnType<typeof prepareSyncStatements>,
+  targetUserId: number,
+  rowsByReleaseId: Map<number, DiscogsWantlistRow>,
+  targetSyncedAt: string,
+): Pick<RadarSyncResult, 'added' | 'updated' | 'reactivated'> {
+  let added = 0;
+  let updated = 0;
+  let reactivated = 0;
 
-    for (const mapped of mappedRows.values()) {
-      const existing = selectExisting.get(targetUserId, mapped.releaseId);
+  for (const mapped of rowsByReleaseId.values()) {
+    const existing = statements.selectExisting.get(targetUserId, mapped.releaseId);
 
-      if (!existing) {
-        insertRelease.run(
-          targetUserId,
-          mapped.releaseId,
-          mapped.title,
-          mapped.artist,
-          mapped.year,
-          mapped.coverUrl,
-          mapped.dateAdded,
-          RADAR_SOURCE_STATUS.ACTIVE,
-          targetSyncedAt,
-        );
-        added += 1;
-        continue;
-      }
-
-      updateRelease.run(
+    if (!existing) {
+      statements.insertRelease.run(
+        targetUserId,
+        mapped.releaseId,
         mapped.title,
         mapped.artist,
         mapped.year,
@@ -155,55 +185,99 @@ export function syncRadarWantlist(
         mapped.dateAdded,
         RADAR_SOURCE_STATUS.ACTIVE,
         targetSyncedAt,
-        targetUserId,
-        mapped.releaseId,
       );
-
-      if (existing.source_status === RADAR_SOURCE_STATUS.MISSING) {
-        reactivated += 1;
-      } else {
-        updated += 1;
-      }
+      added += 1;
+      continue;
     }
 
-    let markedMissing = 0;
+    statements.updateRelease.run(
+      mapped.title,
+      mapped.artist,
+      mapped.year,
+      mapped.coverUrl,
+      mapped.dateAdded,
+      RADAR_SOURCE_STATUS.ACTIVE,
+      targetSyncedAt,
+      targetUserId,
+      mapped.releaseId,
+    );
 
-    if (mappedRows.size > 0) {
-      const releaseIds = Array.from(mappedRows.keys());
-      const placeholders = releaseIds.map(() => '?').join(', ');
-      const updateMissing = db.prepare(`
-        UPDATE radar_releases
-        SET source_status = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
-          AND source_discogs = 1
-          AND source_status != ?
-          AND release_id NOT IN (${placeholders})
-      `);
-
-      markedMissing = updateMissing.run(
-        RADAR_SOURCE_STATUS.MISSING,
-        targetUserId,
-        RADAR_SOURCE_STATUS.MISSING,
-        ...releaseIds,
-      ).changes;
+    if (existing.source_status === RADAR_SOURCE_STATUS.MISSING) {
+      reactivated += 1;
     } else {
-      markedMissing = db.prepare(`
-        UPDATE radar_releases
-        SET source_status = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
-          AND source_discogs = 1
-          AND source_status != ?
-      `).run(
-        RADAR_SOURCE_STATUS.MISSING,
-        targetUserId,
-        RADAR_SOURCE_STATUS.MISSING,
-      ).changes;
+      updated += 1;
     }
+  }
+
+  return {
+    added,
+    updated,
+    reactivated,
+  };
+}
+
+function markMissingDiscogsRows(
+  db: Database.Database,
+  targetUserId: number,
+  syncedReleaseIds: number[],
+): number {
+  if (syncedReleaseIds.length === 0) {
+    return db.prepare<[string, number, string]>(`
+      UPDATE radar_releases
+      SET source_status = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ?
+        AND source_discogs = 1
+        AND source_status != ?
+    `).run(
+      RADAR_SOURCE_STATUS.MISSING,
+      targetUserId,
+      RADAR_SOURCE_STATUS.MISSING,
+    ).changes;
+  }
+
+  const placeholders = syncedReleaseIds.map(() => '?').join(', ');
+
+  return db.prepare<[string, number, string, ...number[]]>(`
+    UPDATE radar_releases
+    SET source_status = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE user_id = ?
+      AND source_discogs = 1
+      AND source_status != ?
+      AND release_id NOT IN (${placeholders})
+  `).run(
+    RADAR_SOURCE_STATUS.MISSING,
+    targetUserId,
+    RADAR_SOURCE_STATUS.MISSING,
+    ...syncedReleaseIds,
+  ).changes;
+}
+
+export function syncRadarWantlist(
+  db: Database.Database,
+  userId: number,
+  wantlistRows: unknown[],
+  syncedAt = new Date().toISOString(),
+): RadarSyncResult {
+  const syncTx = db.transaction((
+    targetUserId: number,
+    rows: unknown[],
+    targetSyncedAt: string,
+  ): RadarSyncResult => {
+    const { rowsByReleaseId, ignored } = mapWantlistRows(rows);
+    const statements = prepareSyncStatements(db);
+    const { added, updated, reactivated } = upsertWantlistRows(
+      statements,
+      targetUserId,
+      rowsByReleaseId,
+      targetSyncedAt,
+    );
+    const syncedReleaseIds = Array.from(rowsByReleaseId.keys());
+    const markedMissing = markMissingDiscogsRows(db, targetUserId, syncedReleaseIds);
 
     return {
-      totalFetched: mappedRows.size,
+      totalFetched: rowsByReleaseId.size,
       added,
       updated,
       reactivated,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MARKETPLACE_STATUS,
   normalizeRadarResponse,
+  normalizeRadarSyncResponse,
   RADAR_PRIORITY,
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
@@ -130,6 +131,44 @@ describe('radar contract', () => {
       pending: 7,
       failed: 8,
       unavailable: 9,
+    });
+  });
+
+  it('normalizes sync responses into stable Radar data and counts', () => {
+    const normalized = normalizeRadarSyncResponse({
+      result: {
+        totalFetched: '4',
+        added: '2',
+        updated: '1',
+        reactivated: '0',
+        markedMissing: '1',
+        ignored: 'bad',
+      },
+    });
+
+    expect(normalized).toEqual({
+      radar: {
+        items: [],
+        summary: {
+          total: 0,
+          active: 0,
+          hidden: 0,
+          resolved: 0,
+          missingFromSource: 0,
+          priced: 0,
+          pending: 0,
+          failed: 0,
+          unavailable: 0,
+        },
+      },
+      result: {
+        totalFetched: 4,
+        added: 2,
+        updated: 1,
+        reactivated: 0,
+        markedMissing: 1,
+        ignored: 0,
+      },
     });
   });
 });
