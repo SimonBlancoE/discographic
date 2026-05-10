@@ -45,6 +45,17 @@ const messages = {
   'radar.summary.pending': 'Pending',
   'radar.summary.failed': 'Failed',
   'radar.summary.unavailable': 'Unavailable',
+  'radar.filtersTitle': 'Filters',
+  'radar.filter.all': 'All wanted releases',
+  'radar.filter.opportunities': 'Active opportunities',
+  'radar.filter.belowTarget': 'Below target',
+  'radar.filter.highPriority': 'High priority',
+  'radar.filter.inCollection': 'Already in collection',
+  'radar.filter.hiddenResolved': 'Hidden or resolved',
+  'radar.filter.pending': 'Pending update',
+  'radar.filter.failed': 'Update errors',
+  'radar.filterEmptyTitle': 'No releases match this filter',
+  'radar.filterEmptyBody': 'Try another Radar filter to inspect a different slice of your wanted releases.',
   'radar.enrichTitle': 'Radar Marketplace',
   'radar.enrichBody': 'Enrich wanted releases with release-level minimum price data and preserve pending, failed, and no-price states so retryable rows stay truthful.',
   'radar.enrichState.idle': 'Ready',
@@ -88,6 +99,12 @@ const messages = {
   'radar.priority.normal': 'Normal',
   'radar.priority.high': 'High',
   'radar.targetPrice': 'Target price',
+  'radar.state.pending': 'Pending update',
+  'radar.state.unavailable': 'No price available',
+  'radar.state.failed': 'Update failed',
+  'radar.state.hidden': 'Hidden',
+  'radar.state.resolved': 'Resolved',
+  'radar.state.missingFromSource': 'Missing from source',
   'radar.minimumCondition': 'Minimum condition',
   'radar.minimumCondition.info': 'Informational only in Radar v1.',
   'radar.minimumCondition.none': 'No preference',
@@ -100,9 +117,9 @@ const messages = {
   'radar.minimumCondition.F': 'Fair (F)',
   'radar.minimumCondition.P': 'Poor (P)',
   'radar.opportunity.below_target': 'Below target price',
-  'radar.opportunity.high_priority_available': 'High priority with Marketplace price',
+  'radar.opportunity.high_priority_available': 'High priority with copy available',
   'radar.opportunity.available_again': 'Available again',
-  'radar.opportunity.already_in_collection': 'Already in Local collection',
+  'radar.opportunity.already_in_collection': 'Already in your collection',
   'radar.note': 'Note',
   'radar.hidden': 'Hidden',
   'radar.resolved': 'Resolved',
@@ -450,7 +467,7 @@ describe('Radar page', () => {
     expect(text).toContain('New Artist');
   });
 
-  it('shows explicit opportunity reasons and excludes hidden or resolved rows from the default list', async () => {
+  it('shows explicit opportunity reasons and keeps hidden or resolved rows out of the opportunities filter', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
       items: [
@@ -597,7 +614,15 @@ describe('Radar page', () => {
       },
     });
 
-    const text = (await renderRadar()).textContent ?? '';
+    const rendered = await renderRadar();
+    const opportunitiesButton = rendered.querySelector('button[data-radar-filter="opportunities"]') as HTMLButtonElement | null;
+
+    await act(async () => {
+      opportunitiesButton?.click();
+      await Promise.resolve();
+    });
+
+    const text = rendered.textContent ?? '';
 
     expect(text).toContain('Visible Opportunity');
     expect(text).toContain(messages['radar.opportunity.below_target']);
@@ -607,6 +632,300 @@ describe('Radar page', () => {
     expect(text).not.toContain('Resolved Opportunity');
     expect(text).toContain(messages['radar.summary.hidden']);
     expect(text).toContain(messages['radar.summary.resolved']);
+  });
+
+  it('filters Radar rows from the normalized list contract and shows natural state labels', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        {
+          id: 11,
+          user_id: 1,
+          release_id: 511,
+          title: 'Below Target',
+          artist: 'Artist A',
+          year: 1997,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'high',
+            target_price: 18,
+            target_price_eur: 18,
+            minimum_condition: null,
+            note: '',
+            hidden: false,
+            resolved: false,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T00:00:00Z',
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 16,
+            listing_status: 'For Sale',
+            listing_price: 16,
+            listing_currency: 'EUR',
+            listing_price_eur: 16,
+            last_checked_at: '2026-05-10T00:00:00Z',
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: ['below_target', 'high_priority_available', 'already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+          },
+          display_currency: 'EUR',
+        },
+        {
+          id: 12,
+          user_id: 1,
+          release_id: 512,
+          title: 'Pending Hidden',
+          artist: 'Artist B',
+          year: 2001,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'high',
+            target_price: null,
+            target_price_eur: null,
+            minimum_condition: null,
+            note: '',
+            hidden: true,
+            resolved: false,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T00:00:00Z',
+          },
+          marketplace: {
+            status: 'pending',
+            estimated_price: null,
+            listing_status: null,
+            listing_price: null,
+            listing_currency: null,
+            listing_price_eur: null,
+            last_checked_at: null,
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: [],
+            default_visible: false,
+            is_in_collection: false,
+          },
+          display_currency: 'EUR',
+        },
+        {
+          id: 13,
+          user_id: 1,
+          release_id: 513,
+          title: 'Resolved Error',
+          artist: 'Artist C',
+          year: 2004,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'normal',
+            target_price: null,
+            target_price_eur: null,
+            minimum_condition: null,
+            note: '',
+            hidden: false,
+            resolved: true,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T00:00:00Z',
+          },
+          marketplace: {
+            status: 'failed',
+            estimated_price: null,
+            listing_status: null,
+            listing_price: null,
+            listing_currency: null,
+            listing_price_eur: null,
+            last_checked_at: '2026-05-10T00:00:00Z',
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: [],
+            default_visible: false,
+            is_in_collection: false,
+          },
+          display_currency: 'EUR',
+        },
+        {
+          id: 14,
+          user_id: 1,
+          release_id: 514,
+          title: 'No Price',
+          artist: 'Artist D',
+          year: 2009,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'normal',
+            target_price: null,
+            target_price_eur: null,
+            minimum_condition: null,
+            note: '',
+            hidden: false,
+            resolved: false,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'missing',
+            last_seen_at: '2026-05-09T00:00:00Z',
+          },
+          marketplace: {
+            status: 'unavailable',
+            estimated_price: null,
+            listing_status: null,
+            listing_price: null,
+            listing_currency: null,
+            listing_price_eur: null,
+            last_checked_at: '2026-05-10T00:00:00Z',
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: [],
+            default_visible: false,
+            is_in_collection: false,
+          },
+          display_currency: 'EUR',
+        },
+        {
+          id: 15,
+          user_id: 1,
+          release_id: 515,
+          title: 'Back Again',
+          artist: 'Artist E',
+          year: 2015,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'normal',
+            target_price: null,
+            target_price_eur: null,
+            minimum_condition: null,
+            note: '',
+            hidden: false,
+            resolved: false,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T00:00:00Z',
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 20,
+            listing_status: 'For Sale',
+            listing_price: 20,
+            listing_currency: 'EUR',
+            listing_price_eur: 20,
+            last_checked_at: '2026-05-10T00:00:00Z',
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: ['available_again'],
+            default_visible: true,
+            is_in_collection: false,
+          },
+          display_currency: 'EUR',
+        },
+      ],
+      summary: {
+        total: 5,
+        active: 2,
+        hidden: 1,
+        resolved: 1,
+        missingFromSource: 1,
+        priced: 2,
+        pending: 1,
+        failed: 1,
+        unavailable: 1,
+      },
+    });
+
+    const rendered = await renderRadar();
+    const text = () => rendered.textContent ?? '';
+    const clickFilter = async (filter: string) => {
+      const button = rendered.querySelector(`button[data-radar-filter="${filter}"]`) as HTMLButtonElement | null;
+      expect(button).not.toBeNull();
+
+      await act(async () => {
+        button?.click();
+        await Promise.resolve();
+      });
+    };
+
+    expect(text()).toContain('Below Target');
+    expect(text()).toContain('Pending Hidden');
+    expect(text()).toContain('Resolved Error');
+    expect(text()).toContain('No Price');
+    expect(text()).toContain('Back Again');
+    expect(text()).toContain(messages['radar.opportunity.below_target']);
+    expect(text()).toContain(messages['radar.opportunity.high_priority_available']);
+    expect(text()).toContain(messages['radar.opportunity.available_again']);
+    expect(text()).toContain(messages['radar.opportunity.already_in_collection']);
+    expect(text()).toContain(messages['radar.state.pending']);
+    expect(text()).toContain(messages['radar.state.failed']);
+    expect(text()).toContain(messages['radar.state.unavailable']);
+    expect(text()).toContain(messages['radar.state.hidden']);
+    expect(text()).toContain(messages['radar.state.resolved']);
+    expect(text()).toContain(messages['radar.state.missingFromSource']);
+
+    await clickFilter('opportunities');
+    expect(text()).toContain('Below Target');
+    expect(text()).toContain('Back Again');
+    expect(text()).not.toContain('Pending Hidden');
+    expect(text()).not.toContain('Resolved Error');
+
+    await clickFilter('below_target');
+    expect(text()).toContain('Below Target');
+    expect(text()).not.toContain('Back Again');
+
+    await clickFilter('high_priority');
+    expect(text()).toContain('Below Target');
+    expect(text()).toContain('Pending Hidden');
+    expect(text()).not.toContain('Resolved Error');
+
+    await clickFilter('in_collection');
+    expect(text()).toContain('Below Target');
+    expect(text()).not.toContain('Back Again');
+
+    await clickFilter('hidden_resolved');
+    expect(text()).toContain('Pending Hidden');
+    expect(text()).toContain('Resolved Error');
+    expect(text()).not.toContain('Below Target');
+
+    await clickFilter('pending');
+    expect(text()).toContain('Pending Hidden');
+    expect(text()).not.toContain('Resolved Error');
+
+    await clickFilter('failed');
+    expect(text()).toContain('Resolved Error');
+    expect(text()).not.toContain('Pending Hidden');
   });
 
   it('shows Wantlist template actions, preview validation, and applies the preview into Radar', async () => {
