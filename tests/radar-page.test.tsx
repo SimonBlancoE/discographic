@@ -93,6 +93,10 @@ const messages = {
   'radar.minimumCondition.G': 'Good (G)',
   'radar.minimumCondition.F': 'Fair (F)',
   'radar.minimumCondition.P': 'Poor (P)',
+  'radar.opportunity.below_target': 'Below target price',
+  'radar.opportunity.high_priority_available': 'High priority with Marketplace price',
+  'radar.opportunity.available_again': 'Available again',
+  'radar.opportunity.already_in_collection': 'Already in Local collection',
   'radar.note': 'Note',
   'radar.hidden': 'Hidden',
   'radar.resolved': 'Resolved',
@@ -221,6 +225,11 @@ describe('Radar page', () => {
             timestamps: {
               created_at: '2026-05-10T12:00:00Z',
               updated_at: '2026-05-10T12:00:00Z',
+            },
+            opportunity: {
+              reasons: [],
+              default_visible: true,
+              is_in_collection: false,
             },
             display_currency: 'EUR',
           },
@@ -364,6 +373,165 @@ describe('Radar page', () => {
     expect(text).toContain('New Artist');
   });
 
+  it('shows explicit opportunity reasons and excludes hidden or resolved rows from the default list', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          user_id: 1,
+          release_id: 401,
+          title: 'Visible Opportunity',
+          artist: 'Artist A',
+          year: 1999,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'high',
+            target_price: 18,
+            target_price_eur: 18,
+            minimum_condition: null,
+            note: '',
+            hidden: false,
+            resolved: false,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T00:00:00Z',
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 16,
+            listing_status: 'For Sale',
+            listing_price: 16,
+            listing_currency: 'EUR',
+            listing_price_eur: 16,
+            last_checked_at: '2026-05-10T00:00:00Z',
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: ['below_target', 'high_priority_available', 'already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+          },
+          display_currency: 'EUR',
+        },
+        {
+          id: 2,
+          user_id: 1,
+          release_id: 402,
+          title: 'Hidden Opportunity',
+          artist: 'Artist B',
+          year: 2001,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'high',
+            target_price: null,
+            target_price_eur: null,
+            minimum_condition: null,
+            note: '',
+            hidden: true,
+            resolved: false,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T00:00:00Z',
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 15,
+            listing_status: 'For Sale',
+            listing_price: 15,
+            listing_currency: 'EUR',
+            listing_price_eur: 15,
+            last_checked_at: '2026-05-10T00:00:00Z',
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: ['high_priority_available'],
+            default_visible: false,
+            is_in_collection: false,
+          },
+          display_currency: 'EUR',
+        },
+        {
+          id: 3,
+          user_id: 1,
+          release_id: 403,
+          title: 'Resolved Opportunity',
+          artist: 'Artist C',
+          year: 2002,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'normal',
+            target_price: null,
+            target_price_eur: null,
+            minimum_condition: null,
+            note: '',
+            hidden: false,
+            resolved: true,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T00:00:00Z',
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 14,
+            listing_status: 'For Sale',
+            listing_price: 14,
+            listing_currency: 'EUR',
+            listing_price_eur: 14,
+            last_checked_at: '2026-05-10T00:00:00Z',
+          },
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T00:00:00Z',
+          },
+          opportunity: {
+            reasons: ['available_again'],
+            default_visible: false,
+            is_in_collection: false,
+          },
+          display_currency: 'EUR',
+        },
+      ],
+      summary: {
+        total: 3,
+        active: 1,
+        hidden: 1,
+        resolved: 1,
+        missingFromSource: 0,
+        priced: 3,
+        pending: 0,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
+
+    const text = (await renderRadar()).textContent ?? '';
+
+    expect(text).toContain('Visible Opportunity');
+    expect(text).toContain(messages['radar.opportunity.below_target']);
+    expect(text).toContain(messages['radar.opportunity.high_priority_available']);
+    expect(text).toContain(messages['radar.opportunity.already_in_collection']);
+    expect(text).not.toContain('Hidden Opportunity');
+    expect(text).not.toContain('Resolved Opportunity');
+    expect(text).toContain(messages['radar.summary.hidden']);
+    expect(text).toContain(messages['radar.summary.resolved']);
+  });
+
   it('shows Wantlist template actions and preview validation when a file is uploaded', async () => {
     authState.capabilities.canUseRadar = true;
 
@@ -485,13 +653,18 @@ describe('Radar page', () => {
             listing_price_eur: 25,
             last_checked_at: '2026-05-10T00:00:00Z',
           },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T01:00:00Z',
+            timestamps: {
+              created_at: '2026-05-10T00:00:00Z',
+              updated_at: '2026-05-10T01:00:00Z',
+            },
+            opportunity: {
+              reasons: [],
+              default_visible: true,
+              is_in_collection: false,
+            },
+            display_currency: 'USD',
           },
-          display_currency: 'USD',
-        },
-      ],
+        ],
       summary: {
         total: 1,
         active: 1,
@@ -541,6 +714,11 @@ describe('Radar page', () => {
           timestamps: {
             created_at: '2026-05-10T00:00:00Z',
             updated_at: '2026-05-10T02:00:00Z',
+          },
+          opportunity: {
+            reasons: [],
+            default_visible: true,
+            is_in_collection: false,
           },
           display_currency: 'USD',
         },

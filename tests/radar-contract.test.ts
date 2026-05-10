@@ -64,12 +64,17 @@ describe('radar contract', () => {
             listing_price_eur: '11.5',
             last_checked_at: 5,
           },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: 1,
-          },
-          display_currency: 3,
+        timestamps: {
+          created_at: '2026-05-10T00:00:00Z',
+          updated_at: 1,
         },
+        opportunity: {
+          reasons: ['below_target', 'mystery'],
+          default_visible: 1,
+          is_in_collection: 0,
+        },
+        display_currency: 3,
+      },
         {
           title: 'drop me',
         },
@@ -123,6 +128,11 @@ describe('radar contract', () => {
         timestamps: {
           created_at: '2026-05-10T00:00:00Z',
           updated_at: null,
+        },
+        opportunity: {
+          reasons: ['below_target'],
+          default_visible: true,
+          is_in_collection: false,
         },
         display_currency: null,
       },
@@ -204,6 +214,11 @@ describe('radar contract', () => {
           marketplace: {
             status: MARKETPLACE_STATUS.PRICED,
           },
+          opportunity: {
+            reasons: ['available_again', 'already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+          },
           display_currency: 'USD',
         },
       ],
@@ -211,6 +226,11 @@ describe('radar contract', () => {
 
     expect(normalized.items[0]?.local.minimum_condition).toBe(RADAR_MINIMUM_CONDITION.NEAR_MINT);
     expect(normalized.items[0]?.local.target_price).toBe(12);
+    expect(normalized.items[0]?.opportunity).toEqual({
+      reasons: ['available_again', 'already_in_collection'],
+      default_visible: true,
+      is_in_collection: true,
+    });
     expect(normalized.items[0]?.display_currency).toBe('USD');
   });
 

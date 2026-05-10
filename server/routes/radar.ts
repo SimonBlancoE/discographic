@@ -31,6 +31,7 @@ import {
   getPendingRadarEnrichmentCount,
   getPendingRadarEnrichmentRows,
 } from '../services/radarEnrichmentQueue.js';
+import { getRadarAvailabilityTransition } from '../services/radarStorage.js';
 import { syncRadarWantlist } from '../services/radarWantlist.js';
 import { buildRadarWantlistPreview, parseRadarWantlistWorkbook } from '../services/radarWantlistImport.js';
 
@@ -376,17 +377,33 @@ async function runRadarEnrich({ userId, locale, discogs }: RadarEnrichInput): Pr
 
         const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
         const estimatedPrice = getEstimatedPrice(marketplace);
+        const availabilityTransition = getRadarAvailabilityTransition(
+          row.marketplace_status,
+          marketplace.marketplaceStatus,
+        );
 
         db.prepare(`
           UPDATE radar_releases
           SET estimated_price = ?,
               marketplace_status = ?,
               marketplace_last_checked_at = CURRENT_TIMESTAMP,
+              marketplace_last_unavailable_at = CASE
+                WHEN ? = 1 THEN CURRENT_TIMESTAMP
+                ELSE marketplace_last_unavailable_at
+              END,
+              marketplace_available_again_at = CASE
+                WHEN ? = 1 THEN CURRENT_TIMESTAMP
+                WHEN ? = 1 THEN NULL
+                ELSE marketplace_available_again_at
+              END,
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND user_id = ?
         `).run(
           estimatedPrice,
           marketplace.marketplaceStatus,
+          availabilityTransition.markUnavailableNow ? 1 : 0,
+          availabilityTransition.markAvailableAgainNow ? 1 : 0,
+          availabilityTransition.clearAvailableAgain ? 1 : 0,
           row.id,
           userId,
         );

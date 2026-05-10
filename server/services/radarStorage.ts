@@ -2,11 +2,13 @@ import type Database from 'better-sqlite3';
 import {
   MARKETPLACE_STATUS,
   normalizeRadarResponse,
+  RADAR_OPPORTUNITY_REASON,
   RADAR_MINIMUM_CONDITION,
   RADAR_PRIORITY,
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
   type RadarLocalDecisionUpdate,
+  type RadarOpportunityReason,
   type RadarPriority,
   type RadarResponse,
   type RadarSourceOrigin,
@@ -47,6 +49,8 @@ type RadarRow = {
   listing_currency: string | null;
   listing_price_eur: number | null;
   marketplace_last_checked_at: string | null;
+  marketplace_last_unavailable_at: string | null;
+  marketplace_available_again_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -65,6 +69,12 @@ type RadarSummaryRow = Record<keyof RadarResponse['summary'], number | null>;
 type StoredRadarLocalDecisionUpdate = RadarLocalDecisionUpdate & {
   userId: number;
   radarId: number;
+};
+
+type RadarAvailabilityTransition = {
+  markUnavailableNow: boolean;
+  markAvailableAgainNow: boolean;
+  clearAvailableAgain: boolean;
 };
 
 const RADAR_TABLE = 'radar_releases';
@@ -90,6 +100,8 @@ const RADAR_COLUMN_DEFINITIONS: RadarColumnDefinition[] = [
   { name: 'listing_currency', sqlType: 'TEXT DEFAULT NULL' },
   { name: 'listing_price_eur', sqlType: 'REAL DEFAULT NULL' },
   { name: 'marketplace_last_checked_at', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'marketplace_last_unavailable_at', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'marketplace_available_again_at', sqlType: 'TEXT DEFAULT NULL' },
   { name: 'created_at', sqlType: 'TEXT DEFAULT CURRENT_TIMESTAMP' },
   { name: 'updated_at', sqlType: 'TEXT DEFAULT CURRENT_TIMESTAMP' },
 ];
@@ -120,15 +132,29 @@ const RADAR_SELECT_COLUMNS = [
   'listing_currency',
   'listing_price_eur',
   'marketplace_last_checked_at',
+  'marketplace_last_unavailable_at',
+  'marketplace_available_again_at',
   'created_at',
   'updated_at',
 ].join(',\n      ');
+
+const RADAR_PRIORITY_RANK: Record<RadarPriority, number> = {
+  [RADAR_PRIORITY.HIGH]: 0,
+  [RADAR_PRIORITY.NORMAL]: 1,
+  [RADAR_PRIORITY.LOW]: 2,
+};
 
 function hasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
   return db
     .prepare<[], TableColumn>(`PRAGMA table_info(${tableName})`)
     .all()
     .some((column) => column.name === columnName);
+}
+
+function tableExists(db: Database.Database, tableName: string): boolean {
+  return Boolean(
+    db.prepare('SELECT name FROM sqlite_master WHERE type = ? AND name = ?').get('table', tableName),
+  );
 }
 
 function addColumnIfMissing(
@@ -161,7 +187,101 @@ function deriveSourceOrigin(sourceDiscogs: number | null, sourceFile: number | n
   return RADAR_SOURCE_ORIGIN.NONE;
 }
 
-function toRadarItem(row: RadarRow) {
+function hasAvailableMarketplacePrice(row: RadarRow): boolean {
+  return row.marketplace_status === MARKETPLACE_STATUS.PRICED
+    && Number.isFinite(row.estimated_price)
+    && (row.estimated_price ?? 0) > 0;
+}
+
+function isBelowTarget(row: RadarRow): boolean {
+  return hasAvailableMarketplacePrice(row)
+    && Number.isFinite(row.local_target_price_eur)
+    && row.local_target_price_eur != null
+    && row.estimated_price != null
+    && row.estimated_price < row.local_target_price_eur;
+}
+
+function isAvailableAgain(row: RadarRow): boolean {
+  return hasAvailableMarketplacePrice(row) && typeof row.marketplace_available_again_at === 'string';
+}
+
+function getOpportunityReasons(row: RadarRow, ownedReleaseIds: ReadonlySet<number>): RadarOpportunityReason[] {
+  const reasons: RadarOpportunityReason[] = [];
+
+  if (isBelowTarget(row)) {
+    reasons.push(RADAR_OPPORTUNITY_REASON.BELOW_TARGET);
+  }
+
+  if (row.local_priority === RADAR_PRIORITY.HIGH && hasAvailableMarketplacePrice(row)) {
+    reasons.push(RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE);
+  }
+
+  if (isAvailableAgain(row)) {
+    reasons.push(RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN);
+  }
+
+  if (ownedReleaseIds.has(row.release_id)) {
+    reasons.push(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION);
+  }
+
+  return reasons;
+}
+
+function isDefaultVisible(row: RadarRow): boolean {
+  return row.local_hidden !== 1
+    && row.local_resolved !== 1
+    && row.source_status !== RADAR_SOURCE_STATUS.MISSING;
+}
+
+function getSortBucket(
+  row: RadarRow,
+  reasons: RadarOpportunityReason[],
+  defaultVisible: boolean,
+): number {
+  if (!defaultVisible) {
+    return 99;
+  }
+
+  if (reasons.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET)) {
+    return 0;
+  }
+
+  if (reasons.includes(RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE)) {
+    return 1;
+  }
+
+  if (reasons.includes(RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN)) {
+    return 2;
+  }
+
+  if (reasons.includes(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION)) {
+    return 3;
+  }
+
+  if (
+    row.marketplace_status === MARKETPLACE_STATUS.PENDING
+    || row.marketplace_status === MARKETPLACE_STATUS.FAILED
+    || row.marketplace_status === MARKETPLACE_STATUS.UNAVAILABLE
+  ) {
+    return 4;
+  }
+
+  return 5;
+}
+
+function getTimestampRank(value: string | null): number {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toRadarItem(row: RadarRow, ownedReleaseIds: ReadonlySet<number>) {
+  const reasons = getOpportunityReasons(row, ownedReleaseIds);
+  const defaultVisible = isDefaultVisible(row);
+
   return {
     id: row.id,
     user_id: row.user_id,
@@ -197,6 +317,11 @@ function toRadarItem(row: RadarRow) {
       created_at: row.created_at,
       updated_at: row.updated_at,
     },
+    opportunity: {
+      reasons,
+      default_visible: defaultVisible,
+      is_in_collection: ownedReleaseIds.has(row.release_id),
+    },
   };
 }
 
@@ -206,6 +331,21 @@ function normalizeLegacyMarketplaceStatus(db: Database.Database): void {
     SET marketplace_status = ?
     WHERE marketplace_status = 'ready'
   `).run(MARKETPLACE_STATUS.PRICED);
+}
+
+export function getRadarAvailabilityTransition(
+  previousStatus: string | null,
+  nextStatus: string,
+): RadarAvailabilityTransition {
+  const nextUnavailable = nextStatus === MARKETPLACE_STATUS.UNAVAILABLE;
+  const nextPriced = nextStatus === MARKETPLACE_STATUS.PRICED;
+  const wasUnavailable = previousStatus === MARKETPLACE_STATUS.UNAVAILABLE;
+
+  return {
+    markUnavailableNow: nextUnavailable,
+    markAvailableAgainNow: wasUnavailable && nextPriced,
+    clearAvailableAgain: nextUnavailable,
+  };
 }
 
 export function migrateRadarStorage(db: Database.Database): void {
@@ -236,6 +376,8 @@ export function migrateRadarStorage(db: Database.Database): void {
       listing_currency TEXT DEFAULT NULL,
       listing_price_eur REAL DEFAULT NULL,
       marketplace_last_checked_at TEXT DEFAULT NULL,
+      marketplace_last_unavailable_at TEXT DEFAULT NULL,
+      marketplace_available_again_at TEXT DEFAULT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
@@ -316,6 +458,15 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
     WHERE user_id = @userId
     ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
   `).all({ userId });
+  const ownedReleaseIds = tableExists(db, 'releases')
+    ? new Set(
+      db.prepare<[{ userId: number }], { release_id: number }>(`
+        SELECT DISTINCT release_id
+        FROM releases
+        WHERE user_id = @userId
+      `).all({ userId }).map((row) => row.release_id),
+    )
+    : new Set<number>();
 
   const summary = db.prepare<
     [RadarSummaryParams],
@@ -344,9 +495,35 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
     failedStatus: MARKETPLACE_STATUS.FAILED,
     unavailableStatus: MARKETPLACE_STATUS.UNAVAILABLE,
   });
+  const items = rows
+    .map((row) => {
+      const item = toRadarItem(row, ownedReleaseIds);
+      return {
+        item,
+        bucket: getSortBucket(row, item.opportunity.reasons, item.opportunity.default_visible),
+        priority: RADAR_PRIORITY_RANK[item.local.priority as RadarPriority] ?? RADAR_PRIORITY_RANK[RADAR_PRIORITY.NORMAL],
+        dateRank: getTimestampRank(item.date_added ?? item.timestamps.updated_at ?? item.timestamps.created_at),
+      };
+    })
+    .sort((left, right) => {
+      if (left.bucket !== right.bucket) {
+        return left.bucket - right.bucket;
+      }
+
+      if (left.priority !== right.priority) {
+        return left.priority - right.priority;
+      }
+
+      if (left.dateRank !== right.dateRank) {
+        return right.dateRank - left.dateRank;
+      }
+
+      return (right.item.id ?? 0) - (left.item.id ?? 0);
+    })
+    .map(({ item }) => item);
 
   return normalizeRadarResponse({
-    items: rows.map(toRadarItem),
+    items,
     summary,
   });
 }

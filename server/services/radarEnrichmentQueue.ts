@@ -8,6 +8,7 @@ type PendingEnrichmentCountRow = {
 export type PendingRadarEnrichmentRow = {
   id: number;
   release_id: number;
+  marketplace_status: string;
 };
 
 function quoteSqlString(value: string): string {
@@ -31,7 +32,7 @@ export function getPendingRadarEnrichmentRows(
   userId: number,
 ): PendingRadarEnrichmentRow[] {
   return database.prepare<[number], PendingRadarEnrichmentRow>(`
-    SELECT id, release_id
+    SELECT id, release_id, marketplace_status
     FROM radar_releases
     WHERE user_id = ? AND (${RADAR_ENRICH_CONDITION})
     ORDER BY date_added DESC, id DESC
