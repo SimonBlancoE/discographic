@@ -7,6 +7,7 @@ import VinylBadge from './components/VinylBadge';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Collection = lazy(() => import('./pages/Collection'));
+const Radar = lazy(() => import('./pages/Radar'));
 const CollectionWall = lazy(() => import('./pages/CollectionWall'));
 const ReleaseDetail = lazy(() => import('./pages/ReleaseDetail'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -42,6 +43,7 @@ function AppLayoutFrame() {
             <nav className="flex flex-wrap gap-2">
               <NavLink to="/" end className={({ isActive }) => `nav-pill ${isActive ? 'nav-pill-active' : ''}`}>{t('nav.dashboard')}</NavLink>
               <NavLink to="/collection" className={({ isActive }) => `nav-pill ${isActive ? 'nav-pill-active' : ''}`}>{t('nav.collection')}</NavLink>
+              <NavLink to="/radar" className={({ isActive }) => `nav-pill ${isActive ? 'nav-pill-active' : ''}`}>{t('nav.radar')}</NavLink>
               <NavLink to="/wall" className={({ isActive }) => `nav-pill ${isActive ? 'nav-pill-active' : ''}`}>{t('nav.wall')}</NavLink>
               <NavLink to="/settings" className={({ isActive }) => `nav-pill ${isActive ? 'nav-pill-active' : ''}`}>{t('nav.settings')}</NavLink>
             </nav>
@@ -64,6 +66,7 @@ function AppLayoutFrame() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/collection" element={<Collection />} />
+              <Route path="/radar" element={<Radar />} />
               <Route path="/wall" element={<CollectionWall />} />
               <Route path="/release/:id" element={<ReleaseDetail />} />
               <Route path="/settings" element={<Settings />} />

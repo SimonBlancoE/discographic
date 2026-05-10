@@ -35,6 +35,7 @@ export type AccountResponse = {
 
 export type AccountCapabilities = {
   canUseCollection: boolean;
+  canUseRadar: boolean;
   canSyncDiscogs: boolean;
   canImport: boolean;
   canExport: boolean;
@@ -144,6 +145,7 @@ function buildCapabilities({
 
   return {
     canUseCollection: hasDiscogs,
+    canUseRadar: hasDiscogs,
     canSyncDiscogs: hasDiscogs,
     canImport: hasDiscogs,
     canExport: hasDiscogs,

@@ -5,6 +5,7 @@ const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8
 const lazyPages = [
   'Dashboard',
   'Collection',
+  'Radar',
   'CollectionWall',
   'ReleaseDetail',
   'Settings',
@@ -24,5 +25,11 @@ describe('App route code splitting', () => {
     expect(appSource).toContain("import { lazy, Suspense } from 'react'");
     expect(appSource).toContain('<Suspense fallback={<AppLoading />}>');
     expect(appSource).toContain("t('app.loading')");
+  });
+
+  it('exposes Radar as its own navigation entry and route', () => {
+    expect(appSource).toContain("to=\"/radar\"");
+    expect(appSource).toContain("t('nav.radar')");
+    expect(appSource).toContain('<Route path="/radar" element={<Radar />} />');
   });
 });
