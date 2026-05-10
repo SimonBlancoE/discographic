@@ -28,7 +28,7 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 </div>
 
 > [!NOTE]
-> **v0.3.2 is out** - the README now clarifies feedback, contribution, and manual QA instance guidance. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
+> **v0.3.3 is out** - public repository metadata and documentation now point only to GitHub. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
 
 ## What is Discographic?
 

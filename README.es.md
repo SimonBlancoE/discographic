@@ -28,7 +28,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 </div>
 
 > [!NOTE]
-> **v0.3.2 disponible** - el README aclara ahora el feedback, las contribuciones y la instancia manual de QA. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
+> **v0.3.3 disponible** - la metadata publica del repositorio y la documentacion apuntan ahora solo a GitHub. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
 
 ## ¿Qué es Discographic?
 
