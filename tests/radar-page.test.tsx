@@ -89,7 +89,7 @@ const messages = {
   'radar.priority.high': 'High',
   'radar.targetPrice': 'Target price',
   'radar.minimumCondition': 'Minimum condition',
-  'radar.minimumCondition.info': 'Informational only in Radar v1.',
+  'radar.minimumCondition.info': 'Saved for future listing filters. Informational only in Radar v1.',
   'radar.minimumCondition.none': 'No preference',
   'radar.minimumCondition.M': 'Mint (M)',
   'radar.minimumCondition.NM': 'Near Mint (NM)',

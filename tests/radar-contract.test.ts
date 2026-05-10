@@ -120,10 +120,6 @@ describe('radar contract', () => {
         marketplace: {
           status: MARKETPLACE_STATUS.PENDING,
           estimated_price: 15.2,
-          listing_status: null,
-          listing_price: 12.1,
-          listing_currency: null,
-          listing_price_eur: 11.5,
           last_checked_at: null,
         },
         timestamps: {
