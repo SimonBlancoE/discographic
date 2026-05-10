@@ -14,8 +14,13 @@ const getRadarForUser = vi.hoisted(() => vi.fn());
 const getSettingForUser = vi.hoisted(() => vi.fn());
 const updateRadarReleaseForUser = vi.hoisted(() => vi.fn());
 const getExchangeSnapshot = vi.hoisted(() => vi.fn());
+const parseRadarWantlistWorkbook = vi.hoisted(() => vi.fn());
+const buildRadarWantlistPreview = vi.hoisted(() => vi.fn());
+const applyRadarWantlistImport = vi.hoisted(() => vi.fn());
+const mockDb = vi.hoisted(() => ({}));
 
 vi.mock('../server/db.js', () => ({
+  default: mockDb,
   getRadarForUser,
   getSettingForUser,
   updateRadarReleaseForUser,
@@ -28,6 +33,12 @@ vi.mock('../server/services/exchangeRates.js', async () => {
     getExchangeSnapshot,
   };
 });
+
+vi.mock('../server/services/radarWantlistImport.js', () => ({
+  parseRadarWantlistWorkbook,
+  buildRadarWantlistPreview,
+  applyRadarWantlistImport,
+}));
 
 const { default: radarRouter } = await import('../server/routes/radar.js');
 
@@ -98,6 +109,9 @@ describe('radar route', () => {
     getRadarForUser.mockReset();
     updateRadarReleaseForUser.mockReset();
     getExchangeSnapshot.mockReset();
+    parseRadarWantlistWorkbook.mockReset();
+    buildRadarWantlistPreview.mockReset();
+    applyRadarWantlistImport.mockReset();
 
     getSettingForUser.mockReturnValue('USD');
     getExchangeSnapshot.mockResolvedValue({
@@ -110,6 +124,49 @@ describe('radar route', () => {
     });
     getRadarForUser.mockReturnValue(createRadarSnapshot());
     updateRadarReleaseForUser.mockReturnValue(true);
+    parseRadarWantlistWorkbook.mockReturnValue([{}]);
+    buildRadarWantlistPreview.mockReturnValue({
+      previewId: null,
+      summary: {
+        totalRows: 2,
+        validRows: 1,
+        invalidRows: 1,
+      },
+      mappedColumns: [
+        { header: 'release_id', key: 'release_id', required: true },
+        { header: 'target_price', key: 'target_price', required: false },
+      ],
+      ignoredColumns: [],
+      rows: [
+        {
+          row: 2,
+          release_id: 303,
+          artist: 'Editable Release',
+          title: 'Artist C',
+          year: 1998,
+          notes: 'Watch copy',
+          date_added: '2026-05-10',
+          target_price: 12.5,
+          minimum_condition: RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS,
+          priority: RADAR_PRIORITY.HIGH,
+        },
+      ],
+      errors: [
+        {
+          row: 3,
+          column: 'release_id',
+          value: 'bad',
+          reason: 'Release ID must be a positive integer.',
+        },
+      ],
+    });
+    applyRadarWantlistImport.mockReturnValue({
+      totalRows: 1,
+      imported: 1,
+      skipped: 0,
+      added: 0,
+      updated: 1,
+    });
 
     const app = express();
     app.use(express.json());
@@ -198,6 +255,63 @@ describe('radar route', () => {
         },
       ],
       summary: createSummary(),
+    });
+  });
+
+  it('applies a validated wantlist preview using display-currency target prices and returns the refreshed Radar snapshot', async () => {
+    const form = new FormData();
+    form.append('file', new Blob(['release_id,target_price\n303,12.5\n']), 'wantlist.csv');
+
+    const previewResponse = await fetch(`${baseUrl}/api/radar/wantlist/preview`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(previewResponse.status).toBe(200);
+    const previewPayload = await previewResponse.json();
+    expect(previewPayload.previewId).toEqual(expect.any(String));
+
+    const applyResponse = await fetch(`${baseUrl}/api/radar/wantlist/apply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ previewId: previewPayload.previewId }),
+    });
+
+    expect(applyResponse.status).toBe(200);
+    expect(applyRadarWantlistImport).toHaveBeenCalledWith(
+      mockDb,
+      1,
+      [
+        expect.objectContaining({
+          release_id: 303,
+          target_price_eur: 10.42,
+        }),
+      ],
+    );
+
+    await expect(applyResponse.json()).resolves.toMatchObject({
+      ok: true,
+      result: {
+        totalRows: 2,
+        imported: 1,
+        skipped: 1,
+        added: 0,
+        updated: 1,
+      },
+      radar: {
+        items: [
+          {
+            id: 1,
+            local: {
+              target_price: 12.5,
+              target_price_eur: 10.42,
+            },
+            display_currency: 'USD',
+          },
+        ],
+      },
     });
   });
 });

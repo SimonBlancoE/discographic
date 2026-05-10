@@ -16,6 +16,7 @@ const authState = vi.hoisted(() => ({
 const getRadar = vi.hoisted(() => vi.fn());
 const syncRadar = vi.hoisted(() => vi.fn());
 const previewRadarWantlist = vi.hoisted(() => vi.fn());
+const applyRadarWantlistPreview = vi.hoisted(() => vi.fn());
 const downloadRadarWantlistTemplate = vi.hoisted(() => vi.fn());
 const updateRadarRelease = vi.hoisted(() => vi.fn());
 const getRadarStatus = vi.hoisted(() => vi.fn());
@@ -76,6 +77,11 @@ const messages = {
   'radar.import.ignoredColumns': 'Ignored columns',
   'radar.import.previewRows': 'Preview rows',
   'radar.import.rowError': 'Row 3, column Prioridad: \"urgent\" - Priority must be low, normal, or high.',
+  'radar.import.apply': 'Import valid rows',
+  'radar.import.applying': 'Importing preview...',
+  'radar.import.applySummary': 'Imported 1 valid rows. Skipped 1 invalid rows.',
+  'radar.import.applyBreakdown': '1 new · 0 merged',
+  'radar.import.applyFailed': 'Radar could not import this preview: boom',
   'radar.openDiscogs': 'Open on Discogs',
   'radar.priority': 'Priority',
   'radar.priority.low': 'Low',
@@ -116,6 +122,7 @@ vi.mock('../src/lib/api', () => ({
     getRadar,
     syncRadar,
     previewRadarWantlist,
+    applyRadarWantlistPreview,
     downloadRadarWantlistTemplate,
     updateRadarRelease,
     getRadarStatus,
@@ -152,6 +159,7 @@ describe('Radar page', () => {
     getRadar.mockReset();
     syncRadar.mockReset();
     previewRadarWantlist.mockReset();
+    applyRadarWantlistPreview.mockReset();
     downloadRadarWantlistTemplate.mockReset();
     updateRadarRelease.mockReset();
     getRadarStatus.mockReset();
@@ -247,6 +255,7 @@ describe('Radar page', () => {
       },
     });
     previewRadarWantlist.mockResolvedValue({
+      previewId: 'preview-1',
       summary: {
         totalRows: 2,
         validRows: 1,
@@ -279,6 +288,69 @@ describe('Radar page', () => {
           reason: 'Priority must be low, normal, or high.',
         },
       ],
+    });
+    applyRadarWantlistPreview.mockResolvedValue({
+      ok: true,
+      radar: {
+        items: [
+          {
+            id: 8,
+            user_id: 1,
+            release_id: 12345,
+            title: 'Computer World',
+            artist: 'Kraftwerk',
+            year: 1981,
+            cover_url: null,
+            date_added: '2026-05-10',
+            local: {
+              priority: 'high',
+              target_price: 18,
+              target_price_eur: 18,
+              minimum_condition: 'VG+',
+              note: 'Need clean copy',
+              hidden: false,
+              resolved: false,
+            },
+            source: {
+              origin: 'file',
+              status: 'active',
+              last_seen_at: '2026-05-10T12:00:00Z',
+            },
+            marketplace: {
+              status: 'pending',
+              estimated_price: null,
+              listing_status: null,
+              listing_price: null,
+              listing_currency: null,
+              listing_price_eur: null,
+              last_checked_at: null,
+            },
+            timestamps: {
+              created_at: '2026-05-10T12:00:00Z',
+              updated_at: '2026-05-10T12:00:00Z',
+            },
+            display_currency: 'EUR',
+          },
+        ],
+        summary: {
+          total: 1,
+          active: 1,
+          hidden: 0,
+          resolved: 0,
+          missingFromSource: 0,
+          priced: 0,
+          pending: 1,
+          failed: 0,
+          unavailable: 0,
+        },
+      },
+      result: {
+        totalRows: 2,
+        imported: 1,
+        skipped: 1,
+        added: 1,
+        updated: 0,
+      },
     });
     updateRadarRelease.mockResolvedValue({
       items: [],
@@ -364,7 +436,7 @@ describe('Radar page', () => {
     expect(text).toContain('New Artist');
   });
 
-  it('shows Wantlist template actions and preview validation when a file is uploaded', async () => {
+  it('shows Wantlist template actions, preview validation, and applies the preview into Radar', async () => {
     authState.capabilities.canUseRadar = true;
 
     const rendered = await renderRadar();
@@ -412,6 +484,23 @@ describe('Radar page', () => {
     expect(text).toContain('Color');
     expect(text).toContain('Kraftwerk');
     expect(text).toContain(messages['radar.import.rowError']);
+
+    const applyButton = Array.from(rendered.querySelectorAll('button')).find(
+      (button) => button.textContent === messages['radar.import.apply'],
+    );
+
+    expect(applyButton).not.toBeNull();
+
+    await act(async () => {
+      applyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(applyRadarWantlistPreview).toHaveBeenCalledWith('preview-1');
+    expect(rendered.textContent ?? '').toContain(messages['radar.import.applySummary']);
+    expect(rendered.textContent ?? '').toContain(messages['radar.import.applyBreakdown']);
+    expect(rendered.textContent ?? '').toContain('Computer World');
   });
 
   it('shows stopped Radar enrichment state after a run has been halted', async () => {

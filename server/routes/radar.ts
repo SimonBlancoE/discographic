@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import express, { type Response } from 'express';
 import multer from 'multer';
 import { stringify } from 'csv-stringify/sync';
@@ -15,6 +16,7 @@ import {
   type RadarPriority,
   type RadarRelease,
   type RadarResponse,
+  type RadarWantlistPreviewResponse,
   type RadarWantlistTemplateFormat,
 } from '../../shared/contracts/radar.js';
 import { translate } from '../../shared/i18n.js';
@@ -32,14 +34,16 @@ import {
   getPendingRadarEnrichmentRows,
 } from '../services/radarEnrichmentQueue.js';
 import { syncRadarWantlist } from '../services/radarWantlist.js';
-import { buildRadarWantlistPreview, parseRadarWantlistWorkbook } from '../services/radarWantlistImport.js';
+import { applyRadarWantlistImport, buildRadarWantlistPreview, parseRadarWantlistWorkbook } from '../services/radarWantlistImport.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const WANTLIST_TEMPLATE_BASENAME = 'discographic-radar-wantlist-template';
 const ENRICH_BATCH_SIZE = 30;
+const WANTLIST_PREVIEW_TTL_MS = 10 * 60 * 1000;
 const enrichRunning = new Set<number>();
 const enrichStates = new Map<number, MutableRadarEnrichmentState>();
+const wantlistPreviewCache = new Map<string, CachedWantlistPreview>();
 
 type Translate = (key: string) => string;
 type ExchangeRates = Parameters<typeof convertAmountWithRates>[3];
@@ -66,6 +70,13 @@ type WantlistTemplateRow = {
   target_price: number;
   minimum_condition: string;
   priority: string;
+};
+
+type CachedWantlistPreview = {
+  userId: number;
+  displayCurrency: string;
+  preview: RadarWantlistPreviewResponse;
+  expiresAt: number;
 };
 
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
@@ -105,6 +116,15 @@ function sendXlsxTemplate(res: Response, data: WantlistTemplateRow[], sheetName:
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${WANTLIST_TEMPLATE_BASENAME}.xlsx"`);
   res.send(buffer);
+}
+
+function cleanWantlistPreviewCache(): void {
+  const now = Date.now();
+  for (const [previewId, cached] of wantlistPreviewCache) {
+    if (cached.expiresAt < now) {
+      wantlistPreviewCache.delete(previewId);
+    }
+  }
 }
 
 function resolveTemplateFormat(format: unknown): RadarWantlistTemplateFormat {
@@ -504,10 +524,81 @@ router.post('/wantlist/preview', upload.single('file'), (req, res) => {
     }
 
     const rows = parseRadarWantlistWorkbook(req.file.buffer, req.file.originalname, req.t);
-    return res.json(buildRadarWantlistPreview(rows, req.t));
+    const preview = buildRadarWantlistPreview(rows, req.t);
+
+    if (preview.summary.validRows === 0) {
+      return res.json(preview);
+    }
+
+    cleanWantlistPreviewCache();
+    const previewId = crypto.randomBytes(16).toString('hex');
+    const userId = req.session.userId as number;
+
+    wantlistPreviewCache.set(previewId, {
+      userId,
+      displayCurrency: getDisplayCurrency(userId),
+      preview,
+      expiresAt: Date.now() + WANTLIST_PREVIEW_TTL_MS,
+    });
+
+    return res.json({
+      ...preview,
+      previewId,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : req.t('backend.server.internal');
     return res.status(400).json({ error: message });
+  }
+});
+
+router.post('/wantlist/apply', async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    if (userId == null) {
+      return res.status(401).json({ error: req.t('backend.auth.required') });
+    }
+
+    const previewId = typeof req.body?.previewId === 'string' ? req.body.previewId : '';
+    if (!previewId) {
+      return res.status(400).json({ error: req.t('backend.radarImport.previewIdRequired') });
+    }
+
+    const cached = wantlistPreviewCache.get(previewId);
+    if (!cached || cached.userId !== userId || cached.expiresAt < Date.now()) {
+      return res.status(410).json({ error: req.t('backend.radarImport.previewExpired') });
+    }
+
+    wantlistPreviewCache.delete(previewId);
+
+    const rates = await getDisplayRates(cached.displayCurrency);
+    const applied = applyRadarWantlistImport(
+      db,
+      userId,
+      cached.preview.rows.map((row) => ({
+        ...row,
+        target_price_eur: convertNullableAmount(
+          row.target_price,
+          cached.displayCurrency,
+          DEFAULT_CURRENCY,
+          rates,
+        ),
+      })),
+    );
+
+    return res.json({
+      ok: true,
+      radar: await serializeRadar(userId),
+      result: {
+        totalRows: cached.preview.summary.totalRows,
+        imported: applied.imported,
+        skipped: cached.preview.summary.invalidRows,
+        added: applied.added,
+        updated: applied.updated,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : req.t('backend.server.internal');
+    return res.status(500).json({ error: message });
   }
 });
 

@@ -20,6 +20,8 @@ import {
   normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   normalizeRadarSyncResponse,
+  normalizeRadarWantlistApplyResponse,
+  normalizeRadarWantlistPreviewResponse,
   type RadarEnrichmentStatus,
   type RadarLocalDecisionPayload,
   type RadarResponse,
@@ -44,6 +46,7 @@ import type {
   MeResponse,
   MessageResponse,
   PreferenceResponse,
+  RadarWantlistApplyResponse,
   RadarWantlistPreviewResponse,
   RadarWantlistTemplateFormat,
   UpdateReleasePatch,
@@ -188,7 +191,14 @@ export const api = {
   previewRadarWantlist: (file: File): Promise<RadarWantlistPreviewResponse> => {
     const form = new FormData();
     form.append('file', file);
-    return request('/radar/wantlist/preview', { method: 'POST', body: form });
+    return request('/radar/wantlist/preview', { method: 'POST', body: form })
+      .then((response) => normalizeRadarWantlistPreviewResponse(response));
+  },
+  applyRadarWantlistPreview: async (previewId: string): Promise<RadarWantlistApplyResponse> => {
+    return normalizeRadarWantlistApplyResponse(await request('/radar/wantlist/apply', {
+      method: 'POST',
+      body: JSON.stringify({ previewId }),
+    }));
   },
   downloadRadarWantlistTemplate: (format: RadarWantlistTemplateFormat) => {
     const locale = getLocaleHeader();
