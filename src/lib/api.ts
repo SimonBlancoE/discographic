@@ -164,6 +164,11 @@ export const api = {
   }),
   getStats: async (): Promise<DashboardStats> => normalizeDashboardStats(await request('/stats')),
   getRadar: async (): Promise<RadarResponse> => normalizeRadarResponse(await request('/radar')),
+  updateRadarRelease: async (id: string | number, payload: JsonObject): Promise<RadarResponse> =>
+    normalizeRadarResponse(await request(`/radar/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })),
   getCollection: async (params: CollectionQuery = {}): Promise<CollectionPageResponse> => {
     const response = await request<RawCollectionResponse>(`/collection?${toQueryString(params)}`);
     const normalized = normalizeCollectionResponse(response);
