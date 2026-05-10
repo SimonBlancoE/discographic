@@ -7,9 +7,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://git.simonblanco.xyz/octo/discographic.git"
+    "url": "git+https://github.com/SimonBlancoE/discographic.git"
   },
-  "homepage": "https://git.simonblanco.xyz/octo/discographic",
+  "homepage": "https://github.com/SimonBlancoE/discographic",
   "keywords": [
     "discogs",
     "vinyl",

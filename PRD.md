@@ -10,9 +10,9 @@ The user-facing risk is indirect but real: future changes can accidentally break
 
 Migrate Discographic to a TypeScript-only source tree before the previously planned product issues proceed. All versioned project-owned application code, tests, supported tool configuration, and scripts must become TypeScript (`.ts`/`.tsx`) or non-JavaScript formats such as shell or JSON. Generated JavaScript from build output and dependency JavaScript are allowed, but they are not maintained source.
 
-The migration must preserve behavior and update safety. Existing self-hosted installations must be able to update from the last canonical JavaScript version in Forgejo to the migrated TypeScript version without losing **Local collection** data, Discogs configuration, preferences, cached covers, or **Database schema lifecycle** continuity.
+The migration must preserve behavior and update safety. Existing self-hosted installations must be able to update from the last JavaScript release to the migrated TypeScript version without losing **Local collection** data, Discogs configuration, preferences, cached covers, or **Database schema lifecycle** continuity.
 
-Forgejo is the canonical repository and issue tracker for this work. GitHub remains a downstream publication target only after the migrated version has been tested and verified in Forgejo.
+Public repository metadata and contribution guidance should point to the public GitHub repository. Private development remotes are operational details and must not appear in public repo-facing files.
 
 ## User Stories
 
@@ -45,8 +45,8 @@ Forgejo is the canonical repository and issue tracker for this work. GitHub rema
 27. As a developer, I want project-owned tool configuration to avoid JavaScript exceptions, so that the TypeScript-only rule is not undermined by config files.
 28. As a maintainer, I want `CONTRIBUTING.md` to describe the TypeScript-only policy, so that human contributors know the rules before opening changes.
 29. As a maintainer, I want `AGENTS.md` to give concise operational rules for coding agents, so that LLM contributors do not create JavaScript files or bypass verification.
-30. As a maintainer, I want Forgejo identified as the canonical repository, so that issues, PRs, metadata, and contribution guidance point to the correct upstream.
-31. As a maintainer, I want GitHub publication excluded from the migration, so that public release happens only after Forgejo verification.
+30. As a maintainer, I want public repository metadata to point to GitHub, so that users see a public clone and contribution surface.
+31. As a maintainer, I want private development remotes excluded from public repo-facing files, so that operational details do not leak into published documentation.
 32. As a maintainer, I want the migration split into reviewable vertical slices, so that the full migration can be reviewed without one oversized change.
 33. As a maintainer, I want the final cleanup slice to block product issues, so that Account state, Release shape, sync, marketplace, Local collection, and import work start after the compiler guardrails exist.
 34. As a maintainer, I want generated JavaScript to remain outside maintained source, so that build artifacts do not confuse contributors or agents.
@@ -77,14 +77,14 @@ Forgejo is the canonical repository and issue tracker for this work. GitHub rema
 - The migration is behavior-preserving: user workflows, API semantics, database schema semantics, and UI behavior must not change.
 - Small extractions are allowed only when needed to type existing behavior honestly.
 - Domain ambiguities found during migration should be documented and split into follow-up work unless they block the migration.
-- Existing self-hosted installations must update safely from the last canonical JavaScript version in Forgejo.
+- Existing self-hosted installations must update safely from the last JavaScript release.
 - The upgrade path must preserve Local collection data, Discogs configuration, preferences, cached covers, and Database schema lifecycle continuity.
 - Docker and Node start paths should remain operationally equivalent from the user's perspective.
-- `CONTRIBUTING.md` must orient human contributors around the TypeScript-only policy, Forgejo as canonical repo, and required verification.
+- `CONTRIBUTING.md` must orient human contributors around the TypeScript-only policy, public contribution expectations, and required verification.
 - `AGENTS.md` must give coding agents short operational rules for TypeScript-only source, untrusted boundaries, and verification.
 - Automated verification must include a source-file scan, typecheck, test run, and build.
-- Forgejo is the canonical development repository and issue tracker.
-- GitHub publication is a later release step after Forgejo verification and is outside the migration scope.
+- Public repository metadata and contribution guidance point to GitHub.
+- Private development remotes are not documented in public repo-facing files.
 - The migration should be split into reviewable vertical slices: toolchain and guardrails, shared contracts, backend, frontend, tests/config cleanup, and upgrade verification.
 - The final cleanup and verification slice should block the existing product issues for Account state, Release shape, Local collection, Marketplace enrichment, Discogs sync run, and Import workflow.
 
@@ -98,7 +98,7 @@ Forgejo is the canonical repository and issue tracker for this work. GitHub rema
 - Backend service tests should cover Database schema lifecycle, marketplace values, enrichment queue behavior, import sync state, collection reconciliation, notes normalization, exchange rates, cover media, and route-facing behavior after conversion.
 - Frontend-related tests should cover routes/code splitting, columns, wall grid, import sync UI helpers, vinyl badge behavior, and any existing component-level contract behavior after conversion.
 - Express request augmentation should be tested indirectly through real middleware/route behavior rather than by testing declaration files directly.
-- Upgrade smoke testing should run the migrated app against persisted data representing the last canonical JavaScript version in Forgejo.
+- Upgrade smoke testing should run the migrated app against persisted data representing the last JavaScript release.
 - Upgrade smoke testing should verify healthcheck, account/settings availability, Local collection reads, Dashboard basics, cached-cover continuity where practical, and preservation of Discogs configuration.
 - Docker build and start behavior should be verified because self-hosted users depend on that path.
 - Final verification should run source scan, typecheck, tests, and build through one command.
@@ -122,8 +122,8 @@ Forgejo is the canonical repository and issue tracker for this work. GitHub rema
 
 ## Further Notes
 
-- This PRD is based on the TypeScript-only source tree ADR, the Forgejo canonical repository ADR, and the Discographic domain context.
+- This PRD is based on the TypeScript-only source tree ADR, the public repository metadata ADR, and the Discographic domain context.
 - The current source tree contains 106 project-owned JavaScript/JSX files outside dependencies, build output, local worktrees, and runtime data.
 - The highest-risk boundaries are the shared contracts that shape Account state, Release shape, sync/import status, marketplace semantics, and Database schema lifecycle behavior.
 - The migration should precede the existing product issues so future work starts from compiler-enforced contracts.
-- Forgejo should receive the implementation issues and dependency links after this PRD is broken into tracer-bullet slices.
+- Implementation issues should be created only in the appropriate private planning surface, not in public repo-facing documentation.

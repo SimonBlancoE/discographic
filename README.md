@@ -80,7 +80,7 @@ If you just want to run it, this is the path.
 You need [Docker](https://docs.docker.com/get-docker/) installed.
 
 ```bash
-git clone https://git.simonblanco.xyz/octo/discographic.git
+git clone https://github.com/SimonBlancoE/discographic.git
 cd discographic
 docker compose up -d
 ```

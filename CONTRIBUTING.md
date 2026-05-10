@@ -1,6 +1,6 @@
 # Contributing
 
-Forgejo at `https://git.simonblanco.xyz/octo/discographic` is the canonical development upstream for Discographic. Open issues, branches, and pull requests there. GitHub publication can continue as a downstream mirror, but it is outside the TypeScript migration scope.
+Discographic uses GitHub as its public repository. Direct contributions are not accepted as a standing policy, but feedback, issues, and pull requests are welcome and appreciated.
 
 ## TypeScript-only policy
 
