@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.3.2] - 2026-05-10
+
+Documentation release for clearer project guidance.
+
+### Changed
+
+- **README project intro clarified** - the opening section is now titled
+  "What is Discographic?" and asks Discogs users, especially sellers, to share
+  feedback because seller workflows need input from people who use them.
+- **Manual test instance separated** - the ephemeral QA instance instructions
+  are now shown as a callout so they are not confused with normal setup.
+- **Contribution expectations clarified** - the README now says direct
+  contributions are not accepted as a standing policy, while feedback, issues,
+  and pull requests remain welcome and appreciated.
+
+[0.3.2]: https://github.com/SimonBlancoE/discographic/compare/v0.3.1...v0.3.2
+
 ## [0.3.1] - 2026-05-08
 
 Maintenance release with two improvements on top of 0.3.0: listing price on

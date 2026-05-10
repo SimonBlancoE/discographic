@@ -7,6 +7,24 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.3.2] - 2026-05-10
+
+Release de documentacion para aclarar la guia publica del proyecto.
+
+### Cambiado
+
+- **Introduccion del README aclarada** - la seccion inicial ahora se llama
+  "Que es Discographic?" y pide feedback a usuarios de Discogs, especialmente
+  a vendedores, porque esos flujos necesitan la opinion de quienes los usan.
+- **Instancia manual de pruebas separada** - las instrucciones de la instancia
+  efimera de QA ahora aparecen como aviso para que no se confundan con la
+  instalacion normal.
+- **Expectativas de contribucion aclaradas** - el README explica que no se
+  aceptan contribuciones directas como norma general, pero que el feedback,
+  los issues y los pull requests son bienvenidos y se agradecen.
+
+[0.3.2]: https://github.com/SimonBlancoE/discographic/compare/v0.3.1...v0.3.2
+
 ## [0.3.1] - 2026-05-08
 
 Release de mantenimiento con dos mejoras sobre la 0.3.0: mostrar el precio de

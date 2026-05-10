@@ -28,7 +28,7 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 </div>
 
 > [!NOTE]
-> **v0.3.1 is out** - listing prices now appear on release details and the Spanish copy has been polished. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
+> **v0.3.2 is out** - the README now clarifies feedback, contribution, and manual QA instance guidance. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
 
 ## What is Discographic?
 
@@ -183,6 +183,8 @@ Discogs credentials are **not** set via environment variables. Each user adds th
 ## Contributing
 
 Direct contributions are not accepted as a standing policy, but all kinds of feedback are very welcome and appreciated, including issues and pull requests.
+
+If you do open a pull request, please check [CONTRIBUTING.md](./CONTRIBUTING.md) first for the project guardrails and verification commands.
 
 ## Tech stack
 
