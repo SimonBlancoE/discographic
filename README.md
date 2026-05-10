@@ -30,11 +30,13 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 > [!NOTE]
 > **v0.3.1 is out** - listing prices now appear on release details and the Spanish copy has been polished. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
 
-## What is it?
+## What is Discographic?
 
 Discographic is a self-hosted web app for browsing and managing your Discogs collection in a way that actually feels useful day to day.
 
 Instead of just showing a raw list of releases, it gives you a proper dashboard, a searchable collection browser, a visual cover wall, exports, notes, ratings, and a local cache so the app stays fast once your library is synced. It works well for a solo collector, and it also makes sense for a small group of friends sharing the same instance.
+
+If you use Discogs every day, especially if you sell records there, your feedback is welcome. Open issues with anything that gets in the way or anything you would like to see improved. I am not a seller myself, so that kind of input helps a lot.
 
 ## Why use it?
 
@@ -85,24 +87,25 @@ docker compose up -d
 
 Then open **http://localhost:3800** in your browser.
 
-### Ephemeral manual test instance
-
-If you want a throwaway instance for QA with seeded users and no persistent data:
-
-```bash
-npm run test:instance:start -- --host 127.0.0.1 --port 3801
-```
-
-That command starts a disposable Docker instance with these users already created:
-
-- **Admin** - `admin-demo` / `demo12345`
-- **User** - `user-demo` / `demo12345`
-
-All data lives in memory only. When you finish testing, destroy everything with:
-
-```bash
-npm run test:instance:stop -- --host 127.0.0.1 --port 3801
-```
+> [!IMPORTANT]
+> ### Ephemeral manual test instance
+>
+> This is a throwaway QA-only instance. It is not part of the normal setup flow and it does not keep persistent data.
+>
+> ```bash
+> npm run test:instance:start -- --host 127.0.0.1 --port 3801
+> ```
+>
+> That command starts a disposable Docker instance with these users already created:
+>
+> - **Admin** - `admin-demo` / `demo12345`
+> - **User** - `user-demo` / `demo12345`
+>
+> All data lives in memory only. When you finish testing, destroy everything with:
+>
+> ```bash
+> npm run test:instance:stop -- --host 127.0.0.1 --port 3801
+> ```
 
 ### 2. Create your first user
 
@@ -179,7 +182,7 @@ Discogs credentials are **not** set via environment variables. Each user adds th
 
 ## Contributing
 
-Forgejo is the canonical development upstream for Discographic: `https://git.simonblanco.xyz/octo/discographic`. For the TypeScript-only migration rules, verification commands, and untrusted boundary normalization policy, see [CONTRIBUTING.md](./CONTRIBUTING.md). GitHub publication is outside this migration scope.
+Direct contributions are not accepted as a standing policy, but all kinds of feedback are very welcome and appreciated, including issues and pull requests.
 
 ## Tech stack
 
