@@ -5,6 +5,7 @@ import { join } from 'path';
 import { cleanupStoredNotes, normalizeNotes, notesToText, parseStoredNotes } from './services/notes.js';
 import { parseJson, stringifyJson } from './services/jsonStorage.js';
 import { migrateMarketplaceStatus } from './services/dbMigrations.js';
+import { clearRadarRows, getRadarSnapshot, migrateRadarStorage } from './services/radarStorage.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
 
 const { dataDir } = resolveRuntimePaths(import.meta.url);
@@ -258,6 +259,7 @@ migrateUsersRole();
 migrateListingColumns();
 migrateLastSeenSyncId();
 migrateMarketplaceStatus(db);
+migrateRadarStorage(db);
 createIndexes();
 cleanupStoredNotes(db);
 
@@ -313,6 +315,7 @@ export function listUsers() {
 
 export function deleteUser(id) {
   db.prepare('DELETE FROM discogs_accounts WHERE user_id = ?').run(id);
+  clearRadarRows(db, id);
   db.prepare('DELETE FROM releases WHERE user_id = ?').run(id);
   db.prepare('DELETE FROM sync_log WHERE user_id = ?').run(id);
   db.prepare('DELETE FROM settings WHERE user_id = ?').run(id);
@@ -360,6 +363,7 @@ export function upsertDiscogsAccount(userId, discogsUsername, discogsToken) {
 }
 
 export function clearUserCollectionData(userId) {
+  clearRadarRows(db, userId);
   db.prepare('DELETE FROM releases WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM sync_log WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM settings WHERE user_id = ?').run(userId);
@@ -369,6 +373,10 @@ export function migrateLegacyDataToUser(userId) {
   db.prepare('UPDATE releases SET user_id = ? WHERE user_id IS NULL').run(userId);
   db.prepare('UPDATE sync_log SET user_id = ? WHERE user_id IS NULL').run(userId);
   db.prepare('UPDATE settings SET user_id = ? WHERE user_id IS NULL').run(userId);
+}
+
+export function getRadarForUser(userId) {
+  return getRadarSnapshot(db, userId);
 }
 
 export default db;
