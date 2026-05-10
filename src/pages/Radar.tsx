@@ -16,7 +16,7 @@ import {
   type RadarResponse,
   type RadarSyncResult,
 } from '../../shared/contracts/radar.js';
-import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
+import { MARKETPLACE_STATUS, type MarketplaceStatus } from '../../shared/contracts/marketplace.js';
 import RadarWantlistImportPanel from '../components/RadarWantlistImportPanel';
 import { useAuth } from '../lib/AuthContext';
 import { getErrorMessage } from '../lib/errors';
@@ -77,6 +77,20 @@ const RADAR_FILTERS = [
   { id: 'failed', labelKey: 'radar.filter.failed' },
 ] as const;
 type RadarFilterId = (typeof RADAR_FILTERS)[number]['id'];
+
+type RadarStateLabelKey =
+  | 'radar.state.pending'
+  | 'radar.state.unavailable'
+  | 'radar.state.failed'
+  | 'radar.state.hidden'
+  | 'radar.state.resolved'
+  | 'radar.state.missingFromSource';
+
+const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, RadarStateLabelKey>> = {
+  [MARKETPLACE_STATUS.PENDING]: 'radar.state.pending',
+  [MARKETPLACE_STATUS.UNAVAILABLE]: 'radar.state.unavailable',
+  [MARKETPLACE_STATUS.FAILED]: 'radar.state.failed',
+};
 
 const ENRICH_POLL_MS = 2000;
 
@@ -170,19 +184,12 @@ function getFilteredRadarItems(items: RadarRelease[], filterId: RadarFilterId): 
   return items.filter((item) => matchesRadarFilter(item, filterId));
 }
 
-function getRadarStateLabelKeys(item: RadarRelease): string[] {
-  const labelKeys: string[] = [];
+function getRadarStateLabelKeys(item: RadarRelease): RadarStateLabelKey[] {
+  const labelKeys: RadarStateLabelKey[] = [];
+  const marketplaceStateLabelKey = RADAR_MARKETPLACE_STATE_LABEL_KEYS[item.marketplace.status];
 
-  if (item.marketplace.status === MARKETPLACE_STATUS.PENDING) {
-    labelKeys.push('radar.state.pending');
-  }
-
-  if (item.marketplace.status === MARKETPLACE_STATUS.UNAVAILABLE) {
-    labelKeys.push('radar.state.unavailable');
-  }
-
-  if (item.marketplace.status === MARKETPLACE_STATUS.FAILED) {
-    labelKeys.push('radar.state.failed');
+  if (marketplaceStateLabelKey) {
+    labelKeys.push(marketplaceStateLabelKey);
   }
 
   if (item.source.status === RADAR_SOURCE_STATUS.MISSING) {
@@ -198,6 +205,46 @@ function getRadarStateLabelKeys(item: RadarRelease): string[] {
   }
 
   return labelKeys;
+}
+
+type RadarFilterBarProps = {
+  selectedFilter: RadarFilterId;
+  t: Translate;
+  onFilterChange: (filterId: RadarFilterId) => void;
+};
+
+function RadarFilterBar({
+  selectedFilter,
+  t,
+  onFilterChange,
+}: RadarFilterBarProps) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.filtersTitle')}</p>
+        <div className="flex flex-wrap gap-2">
+          {RADAR_FILTERS.map(({ id, labelKey }) => {
+            const selected = id === selectedFilter;
+            const buttonClassName = selected
+              ? 'border-brand-100 bg-brand-400/15 text-white'
+              : 'border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/25 hover:text-white';
+
+            return (
+              <button
+                key={id}
+                type="button"
+                data-radar-filter={id}
+                onClick={() => onFilterChange(id)}
+                className={`rounded-full border px-4 py-2 text-sm transition ${buttonClassName}`}
+              >
+                {t(labelKey)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 type RadarReleaseCardProps = {
@@ -224,6 +271,7 @@ function RadarReleaseCard({
   const releaseKey = item.id ?? item.release_id ?? 0;
   const opportunityReasons = getOrderedOpportunityReasons(item);
   const stateLabelKeys = getRadarStateLabelKeys(item);
+  const hasLabels = stateLabelKeys.length > 0 || opportunityReasons.length > 0;
 
   async function handleSave() {
     if (item.id == null) {
@@ -250,7 +298,7 @@ function RadarReleaseCard({
             {item.artist} - {item.title}
           </p>
           <p className="text-sm text-slate-300">#{item.release_id}</p>
-          {stateLabelKeys.length || opportunityReasons.length ? (
+          {hasLabels ? (
             <div className="flex flex-wrap gap-2">
               {stateLabelKeys.map((labelKey) => (
                 <span
@@ -390,14 +438,32 @@ function RadarReleaseCard({
   );
 }
 
-function renderRadarContent(
-  items: RadarRelease[],
-  hasRadarItems: boolean,
-  loading: boolean,
-  loadFailed: boolean,
-  t: Translate,
-  onSave: RadarSaveHandler,
-) {
+type RadarContentProps = {
+  items: RadarRelease[];
+  hasAnyRadarItems: boolean;
+  loading: boolean;
+  loadFailed: boolean;
+  t: Translate;
+  onSave: RadarSaveHandler;
+};
+
+function renderEmptyRadarMessage(titleKey: string, bodyKey: string, t: Translate) {
+  return (
+    <div className="space-y-3 rounded-3xl border border-dashed border-white/15 bg-slate-950/20 p-8">
+      <h2 className="font-display text-4xl text-white">{t(titleKey)}</h2>
+      <p className="max-w-2xl text-base text-slate-300">{t(bodyKey)}</p>
+    </div>
+  );
+}
+
+function renderRadarContent({
+  items,
+  hasAnyRadarItems,
+  loading,
+  loadFailed,
+  t,
+  onSave,
+}: RadarContentProps) {
   if (loading) {
     return (
       <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-8 text-center text-slate-300">
@@ -415,21 +481,10 @@ function renderRadarContent(
   }
 
   if (items.length === 0) {
-    if (hasRadarItems) {
-      return (
-        <div className="space-y-3 rounded-3xl border border-dashed border-white/15 bg-slate-950/20 p-8">
-          <h2 className="font-display text-4xl text-white">{t('radar.filterEmptyTitle')}</h2>
-          <p className="max-w-2xl text-base text-slate-300">{t('radar.filterEmptyBody')}</p>
-        </div>
-      );
-    }
+    const titleKey = hasAnyRadarItems ? 'radar.filterEmptyTitle' : 'radar.emptyTitle';
+    const bodyKey = hasAnyRadarItems ? 'radar.filterEmptyBody' : 'radar.emptyBody';
 
-    return (
-      <div className="space-y-3 rounded-3xl border border-dashed border-white/15 bg-slate-950/20 p-8">
-        <h2 className="font-display text-4xl text-white">{t('radar.emptyTitle')}</h2>
-        <p className="max-w-2xl text-base text-slate-300">{t('radar.emptyBody')}</p>
-      </div>
-    );
+    return renderEmptyRadarMessage(titleKey, bodyKey, t);
   }
 
   return (
@@ -727,33 +782,16 @@ function Radar() {
         }}
       />
 
-      <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.filtersTitle')}</p>
-          <div className="flex flex-wrap gap-2">
-            {RADAR_FILTERS.map(({ id, labelKey }) => {
-              const selected = id === selectedFilter;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  data-radar-filter={id}
-                  onClick={() => setSelectedFilter(id)}
-                  className={`rounded-full border px-4 py-2 text-sm transition ${
-                    selected
-                      ? 'border-brand-100 bg-brand-400/15 text-white'
-                      : 'border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/25 hover:text-white'
-                  }`}
-                >
-                  {t(labelKey)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <RadarFilterBar selectedFilter={selectedFilter} t={t} onFilterChange={setSelectedFilter} />
 
-      {renderRadarContent(filteredItems, radar.items.length > 0, loading, loadFailed, t, saveRadarRelease)}
+      {renderRadarContent({
+        items: filteredItems,
+        hasAnyRadarItems: radar.items.length > 0,
+        loading,
+        loadFailed,
+        t,
+        onSave: saveRadarRelease,
+      })}
     </section>
   );
 }

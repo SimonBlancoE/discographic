@@ -149,6 +149,59 @@ const RADAR_KEYS = [
   'radar.saveFailed'
 ];
 
+const NATURAL_RADAR_LABELS = [
+  {
+    key: 'radar.opportunity.below_target',
+    es: 'Por debajo del precio objetivo',
+    en: 'Below target price'
+  },
+  {
+    key: 'radar.opportunity.high_priority_available',
+    es: 'Alta prioridad con copia disponible',
+    en: 'High priority with copy available'
+  },
+  {
+    key: 'radar.opportunity.available_again',
+    es: 'Disponible de nuevo',
+    en: 'Available again'
+  },
+  {
+    key: 'radar.opportunity.already_in_collection',
+    es: 'Ya en tu colección',
+    en: 'Already in your collection'
+  },
+  {
+    key: 'radar.state.pending',
+    es: 'Pendiente de actualizar',
+    en: 'Pending update'
+  },
+  {
+    key: 'radar.state.unavailable',
+    es: 'Sin precio disponible',
+    en: 'No price available'
+  },
+  {
+    key: 'radar.state.failed',
+    es: 'Actualización fallida',
+    en: 'Update failed'
+  },
+  {
+    key: 'radar.state.hidden',
+    es: 'Oculto',
+    en: 'Hidden'
+  },
+  {
+    key: 'radar.state.resolved',
+    es: 'Resuelto',
+    en: 'Resolved'
+  },
+  {
+    key: 'radar.state.missingFromSource',
+    es: 'Fuera de fuente',
+    en: 'Missing from source'
+  }
+] as const;
+
 const VISUAL_I18N_KEYS = [
   'app.badgeLabel',
   'dashboard.feature.previous',
@@ -291,24 +344,10 @@ describe('i18n keys for import/media/client fallbacks', () => {
   });
 
   it('uses natural Radar labels in Spanish and English', () => {
-    expect(messages.es['radar.opportunity.below_target']).toBe('Por debajo del precio objetivo');
-    expect(messages.en['radar.opportunity.below_target']).toBe('Below target price');
-    expect(messages.es['radar.opportunity.high_priority_available']).toBe('Alta prioridad con copia disponible');
-    expect(messages.en['radar.opportunity.high_priority_available']).toBe('High priority with copy available');
-    expect(messages.es['radar.opportunity.available_again']).toBe('Disponible de nuevo');
-    expect(messages.en['radar.opportunity.available_again']).toBe('Available again');
-    expect(messages.es['radar.opportunity.already_in_collection']).toBe('Ya en tu colección');
-    expect(messages.en['radar.opportunity.already_in_collection']).toBe('Already in your collection');
-    expect(messages.es['radar.state.pending']).toBe('Pendiente de actualizar');
-    expect(messages.en['radar.state.pending']).toBe('Pending update');
-    expect(messages.es['radar.state.unavailable']).toBe('Sin precio disponible');
-    expect(messages.en['radar.state.unavailable']).toBe('No price available');
-    expect(messages.es['radar.state.failed']).toBe('Actualización fallida');
-    expect(messages.en['radar.state.failed']).toBe('Update failed');
-    expect(messages.es['radar.state.hidden']).toBe('Oculto');
-    expect(messages.en['radar.state.hidden']).toBe('Hidden');
-    expect(messages.es['radar.state.resolved']).toBe('Resuelto');
-    expect(messages.en['radar.state.resolved']).toBe('Resolved');
+    for (const label of NATURAL_RADAR_LABELS) {
+      expect(messages.es[label.key]).toBe(label.es);
+      expect(messages.en[label.key]).toBe(label.en);
+    }
   });
 
   it('localizes import template labels and sample copy', () => {

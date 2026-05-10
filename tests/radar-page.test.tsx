@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Radar from '../src/pages/Radar';
+import type { RadarRelease } from '../shared/contracts/radar.js';
 
 const authState = vi.hoisted(() => ({
   accountUnavailable: false,
@@ -128,6 +129,72 @@ const messages = {
   'radar.saveFailed': 'Radar could not save your local decision. Try again.',
 } satisfies Record<string, string>;
 
+const RADAR_TEST_TIMESTAMP = '2026-05-10T00:00:00Z';
+
+type RadarReleaseFixture = Pick<RadarRelease, 'id' | 'release_id' | 'title' | 'artist'> & {
+  user_id?: RadarRelease['user_id'];
+  year?: RadarRelease['year'];
+  cover_url?: RadarRelease['cover_url'];
+  date_added?: RadarRelease['date_added'];
+  local?: Partial<RadarRelease['local']>;
+  source?: Partial<RadarRelease['source']>;
+  marketplace?: Partial<RadarRelease['marketplace']>;
+  timestamps?: Partial<RadarRelease['timestamps']>;
+  opportunity?: Partial<RadarRelease['opportunity']>;
+  display_currency?: RadarRelease['display_currency'];
+};
+
+function createRadarRelease(overrides: RadarReleaseFixture): RadarRelease {
+  return {
+    id: overrides.id,
+    user_id: overrides.user_id ?? 1,
+    release_id: overrides.release_id,
+    title: overrides.title,
+    artist: overrides.artist,
+    year: overrides.year ?? null,
+    cover_url: overrides.cover_url ?? null,
+    date_added: overrides.date_added ?? RADAR_TEST_TIMESTAMP,
+    local: {
+      priority: 'normal',
+      target_price: null,
+      target_price_eur: null,
+      minimum_condition: null,
+      note: '',
+      hidden: false,
+      resolved: false,
+      ...overrides.local,
+    },
+    source: {
+      origin: 'discogs',
+      status: 'active',
+      last_seen_at: RADAR_TEST_TIMESTAMP,
+      ...overrides.source,
+    },
+    marketplace: {
+      status: 'pending',
+      estimated_price: null,
+      listing_status: null,
+      listing_price: null,
+      listing_currency: null,
+      listing_price_eur: null,
+      last_checked_at: null,
+      ...overrides.marketplace,
+    },
+    timestamps: {
+      created_at: RADAR_TEST_TIMESTAMP,
+      updated_at: RADAR_TEST_TIMESTAMP,
+      ...overrides.timestamps,
+    },
+    opportunity: {
+      reasons: [],
+      default_visible: false,
+      is_in_collection: false,
+      ...overrides.opportunity,
+    },
+    display_currency: overrides.display_currency ?? 'EUR',
+  };
+}
+
 vi.mock('../src/lib/AuthContext', () => ({
   useAuth: () => authState,
 }));
@@ -171,6 +238,19 @@ async function renderRadar() {
   });
 
   return container;
+}
+
+async function clickRadarFilter(rendered: HTMLDivElement, filter: string) {
+  const button = rendered.querySelector(`button[data-radar-filter="${filter}"]`) as HTMLButtonElement | null;
+
+  if (!button) {
+    throw new Error(`Missing Radar filter button: ${filter}`);
+  }
+
+  await act(async () => {
+    button.click();
+    await Promise.resolve();
+  });
 }
 
 describe('Radar page', () => {
@@ -615,12 +695,7 @@ describe('Radar page', () => {
     });
 
     const rendered = await renderRadar();
-    const opportunitiesButton = rendered.querySelector('button[data-radar-filter="opportunities"]') as HTMLButtonElement | null;
-
-    await act(async () => {
-      opportunitiesButton?.click();
-      await Promise.resolve();
-    });
+    await clickRadarFilter(rendered, 'opportunities');
 
     const text = rendered.textContent ?? '';
 
@@ -638,28 +713,16 @@ describe('Radar page', () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
       items: [
-        {
+        createRadarRelease({
           id: 11,
-          user_id: 1,
           release_id: 511,
           title: 'Below Target',
           artist: 'Artist A',
           year: 1997,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
           local: {
             priority: 'high',
             target_price: 18,
             target_price_eur: 18,
-            minimum_condition: null,
-            note: '',
-            hidden: false,
-            resolved: false,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
           },
           marketplace: {
             status: 'priced',
@@ -668,171 +731,60 @@ describe('Radar page', () => {
             listing_price: 16,
             listing_currency: 'EUR',
             listing_price_eur: 16,
-            last_checked_at: '2026-05-10T00:00:00Z',
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
           },
           opportunity: {
             reasons: ['below_target', 'high_priority_available', 'already_in_collection'],
             default_visible: true,
             is_in_collection: true,
           },
-          display_currency: 'EUR',
-        },
-        {
+        }),
+        createRadarRelease({
           id: 12,
-          user_id: 1,
           release_id: 512,
           title: 'Pending Hidden',
           artist: 'Artist B',
           year: 2001,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
           local: {
             priority: 'high',
-            target_price: null,
-            target_price_eur: null,
-            minimum_condition: null,
-            note: '',
             hidden: true,
-            resolved: false,
           },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
-          },
-          marketplace: {
-            status: 'pending',
-            estimated_price: null,
-            listing_status: null,
-            listing_price: null,
-            listing_currency: null,
-            listing_price_eur: null,
-            last_checked_at: null,
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
-          },
-          opportunity: {
-            reasons: [],
-            default_visible: false,
-            is_in_collection: false,
-          },
-          display_currency: 'EUR',
-        },
-        {
+        }),
+        createRadarRelease({
           id: 13,
-          user_id: 1,
           release_id: 513,
           title: 'Resolved Error',
           artist: 'Artist C',
           year: 2004,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
           local: {
-            priority: 'normal',
-            target_price: null,
-            target_price_eur: null,
-            minimum_condition: null,
-            note: '',
-            hidden: false,
             resolved: true,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
           },
           marketplace: {
             status: 'failed',
-            estimated_price: null,
-            listing_status: null,
-            listing_price: null,
-            listing_currency: null,
-            listing_price_eur: null,
-            last_checked_at: '2026-05-10T00:00:00Z',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
           },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
-          },
-          opportunity: {
-            reasons: [],
-            default_visible: false,
-            is_in_collection: false,
-          },
-          display_currency: 'EUR',
-        },
-        {
+        }),
+        createRadarRelease({
           id: 14,
-          user_id: 1,
           release_id: 514,
           title: 'No Price',
           artist: 'Artist D',
           year: 2009,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
-          local: {
-            priority: 'normal',
-            target_price: null,
-            target_price_eur: null,
-            minimum_condition: null,
-            note: '',
-            hidden: false,
-            resolved: false,
-          },
           source: {
-            origin: 'discogs',
             status: 'missing',
             last_seen_at: '2026-05-09T00:00:00Z',
           },
           marketplace: {
             status: 'unavailable',
-            estimated_price: null,
-            listing_status: null,
-            listing_price: null,
-            listing_currency: null,
-            listing_price_eur: null,
-            last_checked_at: '2026-05-10T00:00:00Z',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
           },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
-          },
-          opportunity: {
-            reasons: [],
-            default_visible: false,
-            is_in_collection: false,
-          },
-          display_currency: 'EUR',
-        },
-        {
+        }),
+        createRadarRelease({
           id: 15,
-          user_id: 1,
           release_id: 515,
           title: 'Back Again',
           artist: 'Artist E',
           year: 2015,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
-          local: {
-            priority: 'normal',
-            target_price: null,
-            target_price_eur: null,
-            minimum_condition: null,
-            note: '',
-            hidden: false,
-            resolved: false,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
-          },
           marketplace: {
             status: 'priced',
             estimated_price: 20,
@@ -840,19 +792,13 @@ describe('Radar page', () => {
             listing_price: 20,
             listing_currency: 'EUR',
             listing_price_eur: 20,
-            last_checked_at: '2026-05-10T00:00:00Z',
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
           },
           opportunity: {
             reasons: ['available_again'],
             default_visible: true,
-            is_in_collection: false,
           },
-          display_currency: 'EUR',
-        },
+        }),
       ],
       summary: {
         total: 5,
@@ -869,15 +815,6 @@ describe('Radar page', () => {
 
     const rendered = await renderRadar();
     const text = () => rendered.textContent ?? '';
-    const clickFilter = async (filter: string) => {
-      const button = rendered.querySelector(`button[data-radar-filter="${filter}"]`) as HTMLButtonElement | null;
-      expect(button).not.toBeNull();
-
-      await act(async () => {
-        button?.click();
-        await Promise.resolve();
-      });
-    };
 
     expect(text()).toContain('Below Target');
     expect(text()).toContain('Pending Hidden');
@@ -895,35 +832,35 @@ describe('Radar page', () => {
     expect(text()).toContain(messages['radar.state.resolved']);
     expect(text()).toContain(messages['radar.state.missingFromSource']);
 
-    await clickFilter('opportunities');
+    await clickRadarFilter(rendered, 'opportunities');
     expect(text()).toContain('Below Target');
     expect(text()).toContain('Back Again');
     expect(text()).not.toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
 
-    await clickFilter('below_target');
+    await clickRadarFilter(rendered, 'below_target');
     expect(text()).toContain('Below Target');
     expect(text()).not.toContain('Back Again');
 
-    await clickFilter('high_priority');
+    await clickRadarFilter(rendered, 'high_priority');
     expect(text()).toContain('Below Target');
     expect(text()).toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
 
-    await clickFilter('in_collection');
+    await clickRadarFilter(rendered, 'in_collection');
     expect(text()).toContain('Below Target');
     expect(text()).not.toContain('Back Again');
 
-    await clickFilter('hidden_resolved');
+    await clickRadarFilter(rendered, 'hidden_resolved');
     expect(text()).toContain('Pending Hidden');
     expect(text()).toContain('Resolved Error');
     expect(text()).not.toContain('Below Target');
 
-    await clickFilter('pending');
+    await clickRadarFilter(rendered, 'pending');
     expect(text()).toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
 
-    await clickFilter('failed');
+    await clickRadarFilter(rendered, 'failed');
     expect(text()).toContain('Resolved Error');
     expect(text()).not.toContain('Pending Hidden');
   });
