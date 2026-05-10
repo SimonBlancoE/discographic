@@ -229,6 +229,16 @@ const VISUAL_I18N_KEYS = [
   'dashboard.feature.export.where'
 ];
 
+const DASHBOARD_RADAR_KEYS = [
+  'dashboard.radarTitle',
+  'dashboard.radarBody',
+  'dashboard.radarOpen',
+  'dashboard.radar.totalWanted',
+  'dashboard.radar.activeOpportunities',
+  'dashboard.radar.belowTarget',
+  'dashboard.radar.alreadyOwned'
+];
+
 describe('i18n keys for table columns', () => {
   it('all column i18n keys exist in Spanish locale', () => {
     for (const col of COLUMNS) {
@@ -359,6 +369,13 @@ describe('i18n keys for import/media/client fallbacks', () => {
 
   it('has visual hero and badge keys in both locales', () => {
     for (const key of VISUAL_I18N_KEYS) {
+      expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
+      expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
+    }
+  });
+
+  it('has Dashboard Radar summary keys in both locales', () => {
+    for (const key of DASHBOARD_RADAR_KEYS) {
       expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
       expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
     }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { DashboardStats, NamedCountRow } from '../../shared/contracts/dashboardStats.js';
+import type { DashboardRadarSummary, DashboardStats, NamedCountRow } from '../../shared/contracts/dashboardStats.js';
 import ConfettiBurst from '../components/ConfettiBurst';
 import AchievementsPanel from '../components/AchievementsPanel';
 import HeroCarousel from '../components/HeroCarousel';
@@ -21,6 +21,28 @@ import { useI18n } from '../lib/I18nContext';
 import { useToast } from '../lib/ToastContext';
 
 const MILESTONES = [100, 500, 1000, 2500, 5000];
+const RADAR_SUMMARY_METRICS = [
+  {
+    labelKey: 'dashboard.radar.totalWanted',
+    valueKey: 'totalWanted',
+    accent: 'from-cyan-300/40 via-cyan-300/10 to-transparent'
+  },
+  {
+    labelKey: 'dashboard.radar.activeOpportunities',
+    valueKey: 'activeOpportunities',
+    accent: 'from-emerald-300/40 via-emerald-300/10 to-transparent'
+  },
+  {
+    labelKey: 'dashboard.radar.belowTarget',
+    valueKey: 'belowTarget',
+    accent: 'from-amber-300/40 via-amber-300/10 to-transparent'
+  },
+  {
+    labelKey: 'dashboard.radar.alreadyOwned',
+    valueKey: 'alreadyOwned',
+    accent: 'from-rose-300/40 via-rose-300/10 to-transparent'
+  },
+] as const;
 
 function getMilestone(total: number): number | null {
   return [...MILESTONES].reverse().find((milestone) => total >= milestone) || null;
@@ -186,6 +208,35 @@ function CoveragePanel({ totals }: { totals: DashboardStats['totals'] }) {
   );
 }
 
+function RadarSummaryPanel({ radar }: { radar: DashboardRadarSummary }) {
+  const { t } = useI18n();
+
+  return (
+    <section className="glass-panel overflow-hidden p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.25em] text-brand-200/80">{t('dashboard.radarTitle')}</p>
+          <h3 className="mt-2 font-display text-2xl text-white">{t('nav.radar')}</h3>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">{t('dashboard.radarBody')}</p>
+        </div>
+        <Link to="/radar" className="inline-flex items-center rounded-full border border-brand-300/30 bg-brand-400/10 px-4 py-2 text-sm text-brand-100 transition hover:border-brand-200/60 hover:text-white">
+          {t('dashboard.radarOpen')}
+        </Link>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {RADAR_SUMMARY_METRICS.map(({ labelKey, valueKey, accent }) => (
+          <div key={labelKey} className="relative overflow-hidden rounded-[24px] border border-white/5 bg-slate-950/45 p-4">
+            <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${accent}`} />
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{t(labelKey)}</p>
+            <p className="mt-3 font-display text-3xl text-white">{formatNumber(radar[valueKey])}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Dashboard() {
   const { accountUnavailable, discogsConfigured, currency } = useAuth();
   const { locale, t } = useI18n();
@@ -342,6 +393,8 @@ function Dashboard() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => <StatCard key={card.label} {...card} />)}
       </section>
+
+      <RadarSummaryPanel radar={stats.radar} />
 
       <CoveragePanel totals={stats.totals} />
 

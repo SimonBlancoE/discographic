@@ -22,6 +22,12 @@ describe('dashboard stats contract', () => {
       growth: [],
       topValue: [],
       artists: [],
+      radar: {
+        totalWanted: 0,
+        activeOpportunities: 0,
+        belowTarget: 0,
+        alreadyOwned: 0,
+      },
       lastSync: null,
       displayCurrency: null
     });
@@ -43,6 +49,12 @@ describe('dashboard stats contract', () => {
       artists: [{ artist: 'Surgeon', count: '2' }, { name: 'bad' }],
       growth: [{ month: '2026-04', count: '9' }, {}],
       topValue: [{ id: '5', release_id: '10', artist: 'A', title: 'B', year: '1999', estimated_value: '28.1' }, { title: 'bad' }],
+      radar: {
+        totalWanted: '6',
+        activeOpportunities: '3',
+        belowTarget: '2',
+        alreadyOwned: '1',
+      },
       lastSync: { started_at: '2026-04-22T10:00:00Z', finished_at: '2026-04-22T10:01:00Z', records_synced: '44', status: 'completed' },
       displayCurrency: 'USD'
     });
@@ -69,6 +81,12 @@ describe('dashboard stats contract', () => {
       cover_url: null,
       estimated_value: 28.1
     }]);
+    expect(normalized.radar).toEqual({
+      totalWanted: 6,
+      activeOpportunities: 3,
+      belowTarget: 2,
+      alreadyOwned: 1,
+    });
     expect(normalized.lastSync).toEqual({
       started_at: '2026-04-22T10:00:00Z',
       finished_at: '2026-04-22T10:01:00Z',
