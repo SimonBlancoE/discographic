@@ -144,7 +144,7 @@ export type RadarWantlistPreviewRow = {
   notes: string | null;
   date_added: string | null;
   target_price: number | null;
-  minimum_condition: string | null;
+  minimum_condition: RadarMinimumCondition | null;
   priority: RadarPriority | null;
 };
 
@@ -156,6 +156,7 @@ export type RadarWantlistPreviewError = {
 };
 
 export type RadarWantlistPreviewResponse = {
+  previewId: string | null;
   summary: {
     totalRows: number;
     validRows: number;
@@ -165,6 +166,20 @@ export type RadarWantlistPreviewResponse = {
   ignoredColumns: string[];
   rows: RadarWantlistPreviewRow[];
   errors: RadarWantlistPreviewError[];
+};
+
+export type RadarWantlistApplyResult = {
+  totalRows: number;
+  imported: number;
+  skipped: number;
+  added: number;
+  updated: number;
+};
+
+export type RadarWantlistApplyResponse = {
+  ok: boolean;
+  radar: RadarResponse;
+  result: RadarWantlistApplyResult;
 };
 
 export type RadarLocalDecisionPayload = {
@@ -402,6 +417,82 @@ export function normalizeRadarEnrichmentStatus(payload: unknown = {}): RadarEnri
     finishedAt: asNullableText(source.finishedAt),
     isRunning: status === RADAR_ENRICH_STATUS.RUNNING,
     isTerminal: RADAR_TERMINAL_ENRICH_STATUSES.has(status),
+  };
+}
+
+export function normalizeRadarWantlistPreviewResponse(payload: unknown = {}): RadarWantlistPreviewResponse {
+  const source = asRecord(payload) ?? {};
+  const summary = asRecord(source.summary) ?? {};
+
+  return {
+    previewId: asNullableText(source.previewId),
+    summary: {
+      totalRows: asCount(summary.totalRows),
+      validRows: asCount(summary.validRows),
+      invalidRows: asCount(summary.invalidRows),
+    },
+    mappedColumns: asArray(source.mappedColumns)
+      .map((column) => {
+        const candidate = asRecord(column) ?? {};
+        const key = asText(candidate.key) as RadarWantlistColumnKey;
+
+        return {
+          header: asText(candidate.header),
+          key,
+          required: asBoolean(candidate.required),
+        };
+      })
+      .filter((column) => column.header && column.key),
+    ignoredColumns: asArray(source.ignoredColumns)
+      .map((column) => asText(column))
+      .filter(Boolean),
+    rows: asArray(source.rows)
+      .map((row) => {
+        const candidate = asRecord(row) ?? {};
+        return {
+          row: asCount(candidate.row),
+          release_id: asCount(candidate.release_id),
+          artist: asNullableText(candidate.artist),
+          title: asNullableText(candidate.title),
+          year: asNumber(candidate.year),
+          notes: asNullableText(candidate.notes),
+          date_added: asNullableText(candidate.date_added),
+          target_price: asNumber(candidate.target_price),
+          minimum_condition: asRadarMinimumCondition(candidate.minimum_condition),
+          priority: RADAR_PRIORITIES.has(candidate.priority as RadarPriority)
+            ? (candidate.priority as RadarPriority)
+            : null,
+        };
+      })
+      .filter((row) => row.row > 0 && row.release_id > 0),
+    errors: asArray(source.errors)
+      .map((error) => {
+        const candidate = asRecord(error) ?? {};
+        return {
+          row: asCount(candidate.row),
+          column: asText(candidate.column),
+          value: asText(candidate.value),
+          reason: asText(candidate.reason),
+        };
+      })
+      .filter((error) => error.row > 0 && error.column && error.reason),
+  };
+}
+
+export function normalizeRadarWantlistApplyResponse(payload: unknown = {}): RadarWantlistApplyResponse {
+  const source = asRecord(payload) ?? {};
+  const result = asRecord(source.result) ?? {};
+
+  return {
+    ok: asBoolean(source.ok),
+    radar: normalizeRadarResponse(source.radar),
+    result: {
+      totalRows: asCount(result.totalRows),
+      imported: asCount(result.imported),
+      skipped: asCount(result.skipped),
+      added: asCount(result.added),
+      updated: asCount(result.updated),
+    },
   };
 }
 

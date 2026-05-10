@@ -1,10 +1,16 @@
 import { useState, type ChangeEvent } from 'react';
+import type { RadarResponse } from '../../shared/contracts/radar.js';
 import { api } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../lib/I18nContext';
-import type { RadarWantlistPreviewResponse, RadarWantlistTemplateFormat, Translate } from '../lib/types';
+import type {
+  RadarWantlistApplyResponse,
+  RadarWantlistPreviewResponse,
+  RadarWantlistTemplateFormat,
+  Translate,
+} from '../lib/types';
 
-type ImportPhase = 'idle' | 'loading' | 'preview';
+type ImportPhase = 'idle' | 'loading' | 'preview' | 'applying';
 
 type PreviewColumn = RadarWantlistPreviewResponse['mappedColumns'][number];
 type PreviewError = RadarWantlistPreviewResponse['errors'][number];
@@ -168,10 +174,24 @@ function WantlistPreview({ preview, t }: { preview: RadarWantlistPreviewResponse
   );
 }
 
-function RadarWantlistImportPanel() {
+function ApplyResultBanner({ result, t }: { result: RadarWantlistApplyResponse['result']; t: Translate }) {
+  return (
+    <div className="space-y-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-emerald-100">
+      <p className="text-sm">{t('radar.import.applySummary', { imported: result.imported, skipped: result.skipped })}</p>
+      <p className="text-sm text-emerald-200/90">{t('radar.import.applyBreakdown', { added: result.added, updated: result.updated })}</p>
+    </div>
+  );
+}
+
+type RadarWantlistImportPanelProps = {
+  onApplied: (radar: RadarResponse) => void;
+};
+
+function RadarWantlistImportPanel({ onApplied }: RadarWantlistImportPanelProps) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<ImportPhase>('idle');
   const [preview, setPreview] = useState<RadarWantlistPreviewResponse | null>(null);
+  const [applyResult, setApplyResult] = useState<RadarWantlistApplyResponse['result'] | null>(null);
   const [error, setError] = useState('');
 
   async function handleFileSelect(event: ChangeEvent<HTMLInputElement>) {
@@ -182,6 +202,7 @@ function RadarWantlistImportPanel() {
 
     setPhase('loading');
     setError('');
+    setApplyResult(null);
 
     try {
       const nextPreview = await api.previewRadarWantlist(file);
@@ -198,6 +219,28 @@ function RadarWantlistImportPanel() {
 
   function downloadTemplate(format: RadarWantlistTemplateFormat) {
     api.downloadRadarWantlistTemplate(format);
+  }
+
+  async function handleApplyPreview() {
+    if (!preview?.previewId) {
+      return;
+    }
+
+    setPhase('applying');
+    setError('');
+
+    try {
+      const response = await api.applyRadarWantlistPreview(preview.previewId);
+      setPreview((current) => current ? { ...current, previewId: null } : current);
+      setApplyResult(response.result);
+      onApplied(response.radar);
+      setPhase('preview');
+    } catch (nextError) {
+      setError(t('radar.import.applyFailed', {
+        error: getErrorMessage(nextError, t('client.networkError')),
+      }));
+      setPhase('preview');
+    }
   }
 
   return (
@@ -227,13 +270,33 @@ function RadarWantlistImportPanel() {
         </div>
       ) : null}
 
+      {phase === 'applying' ? (
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+          {t('radar.import.applying')}
+        </div>
+      ) : null}
+
       {error ? (
         <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
 
-      {phase === 'preview' && preview ? <WantlistPreview preview={preview} t={t} /> : null}
+      {applyResult ? <ApplyResultBanner result={applyResult} t={t} /> : null}
+
+      {phase === 'preview' && preview ? (
+        <div className="space-y-4">
+          <WantlistPreview preview={preview} t={t} />
+          <button
+            type="button"
+            onClick={() => void handleApplyPreview()}
+            disabled={!preview.previewId || preview.summary.validRows === 0}
+            className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {t('radar.import.apply')}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

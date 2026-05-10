@@ -605,7 +605,12 @@ function Radar() {
         ) : null}
       </div>
 
-      <RadarWantlistImportPanel />
+      <RadarWantlistImportPanel
+        onApplied={(nextRadar) => {
+          setRadar(nextRadar);
+          setLoadFailed(false);
+        }}
+      />
 
       {renderRadarContent(radar, loading, loadFailed, t, saveRadarRelease)}
     </section>

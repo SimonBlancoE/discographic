@@ -1,7 +1,11 @@
 import * as XLSX from 'xlsx';
 import {
+  RADAR_MINIMUM_CONDITION,
+  RADAR_SOURCE_STATUS,
   RADAR_PRIORITY,
+  type RadarMinimumCondition,
   type RadarPriority,
+  type RadarWantlistApplyResult,
   type RadarWantlistColumnKey,
   type RadarWantlistPreviewColumn,
   type RadarWantlistPreviewError,
@@ -9,6 +13,7 @@ import {
   type RadarWantlistPreviewRow,
   type RadarWantlistTemplateFormat,
 } from '../../shared/contracts/radar.js';
+import type Database from 'better-sqlite3';
 
 type Translate = (key: string) => string;
 
@@ -63,6 +68,25 @@ const PRIORITY_ALIASES = new Map<string, RadarPriority>([
   ['alto', RADAR_PRIORITY.HIGH],
 ]);
 
+const MINIMUM_CONDITION_ALIASES = new Map<string, RadarMinimumCondition>([
+  ['M', RADAR_MINIMUM_CONDITION.MINT],
+  ['MINT', RADAR_MINIMUM_CONDITION.MINT],
+  ['NM', RADAR_MINIMUM_CONDITION.NEAR_MINT],
+  ['NEAR MINT', RADAR_MINIMUM_CONDITION.NEAR_MINT],
+  ['VG+', RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS],
+  ['VERY GOOD PLUS', RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS],
+  ['VG', RADAR_MINIMUM_CONDITION.VERY_GOOD],
+  ['VERY GOOD', RADAR_MINIMUM_CONDITION.VERY_GOOD],
+  ['G+', RADAR_MINIMUM_CONDITION.GOOD_PLUS],
+  ['GOOD PLUS', RADAR_MINIMUM_CONDITION.GOOD_PLUS],
+  ['G', RADAR_MINIMUM_CONDITION.GOOD],
+  ['GOOD', RADAR_MINIMUM_CONDITION.GOOD],
+  ['F', RADAR_MINIMUM_CONDITION.FAIR],
+  ['FAIR', RADAR_MINIMUM_CONDITION.FAIR],
+  ['P', RADAR_MINIMUM_CONDITION.POOR],
+  ['POOR', RADAR_MINIMUM_CONDITION.POOR],
+]);
+
 function toText(value: unknown): string {
   return String(value ?? '').trim();
 }
@@ -104,6 +128,14 @@ function parseRadarWantlistPriority(value: string): RadarPriority | null {
   }
 
   return PRIORITY_ALIASES.get(normalizeRadarWantlistHeader(value)) ?? null;
+}
+
+function parseRadarWantlistMinimumCondition(value: string): RadarMinimumCondition | null {
+  if (!value) {
+    return null;
+  }
+
+  return MINIMUM_CONDITION_ALIASES.get(value.trim().toUpperCase()) ?? null;
 }
 
 function toIsoDateString(value: Date): string {
@@ -249,6 +281,7 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
   const { mappedColumns, ignoredColumns } = resolveRadarWantlistColumns(rows, t);
   const previewRows: RadarWantlistPreviewRow[] = [];
   const errors: RadarWantlistPreviewError[] = [];
+  const seenReleaseIds = new Set<number>();
 
   for (const [index, rawRow] of rows.entries()) {
     const rowNumber = index + DATA_ROW_NUMBER_OFFSET;
@@ -336,9 +369,22 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
           break;
         }
 
-        case 'minimum_condition':
-          parsedRow.minimum_condition = textValue || null;
+        case 'minimum_condition': {
+          if (!textValue) {
+            break;
+          }
+
+          const minimumCondition = parseRadarWantlistMinimumCondition(textValue);
+          if (!minimumCondition) {
+            rowErrors.push(
+              createPreviewError(rowNumber, column, textValue, t('backend.radarImport.invalidMinimumCondition')),
+            );
+            break;
+          }
+
+          parsedRow.minimum_condition = minimumCondition;
           break;
+        }
 
         case 'priority': {
           if (!textValue) {
@@ -364,10 +410,27 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
       continue;
     }
 
+    if (seenReleaseIds.has(parsedRow.release_id)) {
+      const releaseIdColumn = mappedColumns.find((column) => column.key === 'release_id');
+      if (releaseIdColumn) {
+        errors.push(
+          createPreviewError(
+            rowNumber,
+            releaseIdColumn,
+            String(parsedRow.release_id),
+            t('backend.radarImport.duplicateReleaseId'),
+          ),
+        );
+      }
+      continue;
+    }
+
+    seenReleaseIds.add(parsedRow.release_id);
     previewRows.push(parsedRow);
   }
 
   return {
+    previewId: null,
     summary: {
       totalRows: rows.length,
       validRows: previewRows.length,
@@ -378,4 +441,169 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
     rows: previewRows,
     errors,
   };
+}
+
+type StoredRadarImportRow = {
+  id: number;
+  release_id: number;
+  title: string;
+  artist: string;
+  year: number | null;
+  date_added: string | null;
+  local_priority: RadarPriority;
+  local_target_price_eur: number | null;
+  local_minimum_condition: RadarMinimumCondition | null;
+  local_note: string | null;
+  source_discogs: number;
+  source_file: number;
+};
+
+type RadarWantlistApplyRow = Omit<RadarWantlistPreviewRow, 'target_price'> & {
+  target_price_eur: number | null;
+};
+
+function normalizeImportedText(value: string | null): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeImportedPrice(value: number | null): number | null {
+  return value == null || !Number.isFinite(value) ? null : Number(value.toFixed(2));
+}
+
+function insertRadarWantlistRow(
+  db: Database.Database,
+  userId: number,
+  row: RadarWantlistApplyRow,
+  importedAt: string,
+): void {
+  db.prepare(`
+    INSERT INTO radar_releases (
+      user_id,
+      release_id,
+      title,
+      artist,
+      year,
+      date_added,
+      local_priority,
+      local_target_price_eur,
+      local_minimum_condition,
+      local_note,
+      source_discogs,
+      source_file,
+      source_status,
+      source_last_seen_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
+  `).run(
+    userId,
+    row.release_id,
+    normalizeImportedText(row.title) ?? '-',
+    normalizeImportedText(row.artist) ?? '-',
+    row.year,
+    row.date_added,
+    row.priority ?? RADAR_PRIORITY.NORMAL,
+    normalizeImportedPrice(row.target_price_eur),
+    row.minimum_condition,
+    normalizeImportedText(row.notes) ?? '',
+    RADAR_SOURCE_STATUS.ACTIVE,
+    importedAt,
+  );
+}
+
+function updateRadarWantlistRow(
+  db: Database.Database,
+  existing: StoredRadarImportRow,
+  row: RadarWantlistApplyRow,
+  importedAt: string,
+): void {
+  const keepsDiscogsMetadata = existing.source_discogs === 1;
+  const nextTitle = keepsDiscogsMetadata ? existing.title : normalizeImportedText(row.title) ?? existing.title;
+  const nextArtist = keepsDiscogsMetadata ? existing.artist : normalizeImportedText(row.artist) ?? existing.artist;
+  const nextYear = keepsDiscogsMetadata ? existing.year : row.year ?? existing.year;
+
+  db.prepare(`
+    UPDATE radar_releases
+    SET title = ?,
+        artist = ?,
+        year = ?,
+        date_added = ?,
+        local_priority = ?,
+        local_target_price_eur = ?,
+        local_minimum_condition = ?,
+        local_note = ?,
+        source_file = 1,
+        source_status = ?,
+        source_last_seen_at = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    nextTitle,
+    nextArtist,
+    nextYear,
+    row.date_added ?? existing.date_added,
+    row.priority ?? existing.local_priority,
+    row.target_price_eur == null ? existing.local_target_price_eur : normalizeImportedPrice(row.target_price_eur),
+    row.minimum_condition ?? existing.local_minimum_condition,
+    row.notes == null ? normalizeImportedText(existing.local_note) ?? '' : normalizeImportedText(row.notes) ?? '',
+    RADAR_SOURCE_STATUS.ACTIVE,
+    importedAt,
+    existing.id,
+  );
+}
+
+export function applyRadarWantlistImport(
+  db: Database.Database,
+  userId: number,
+  rows: RadarWantlistApplyRow[],
+  importedAt = new Date().toISOString(),
+): RadarWantlistApplyResult {
+  const applyTx = db.transaction((
+    targetUserId: number,
+    targetRows: RadarWantlistApplyRow[],
+    targetImportedAt: string,
+  ) => {
+    let added = 0;
+    let updated = 0;
+
+    const selectExisting = db.prepare<[number, number], StoredRadarImportRow>(`
+      SELECT
+        id,
+        release_id,
+        title,
+        artist,
+        year,
+        date_added,
+        local_priority,
+        local_target_price_eur,
+        local_minimum_condition,
+        local_note,
+        source_discogs,
+        source_file
+      FROM radar_releases
+      WHERE user_id = ? AND release_id = ?
+    `);
+
+    for (const row of targetRows) {
+      const existing = selectExisting.get(targetUserId, row.release_id);
+
+      if (!existing) {
+        insertRadarWantlistRow(db, targetUserId, row, targetImportedAt);
+        added += 1;
+        continue;
+      }
+
+      updateRadarWantlistRow(db, existing, row, targetImportedAt);
+      updated += 1;
+    }
+
+    return {
+      totalRows: targetRows.length,
+      imported: targetRows.length,
+      skipped: 0,
+      added,
+      updated,
+    };
+  });
+
+  return applyTx(userId, rows, importedAt);
 }

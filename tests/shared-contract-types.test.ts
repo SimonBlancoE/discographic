@@ -27,8 +27,10 @@ import {
 import {
   normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
+  normalizeRadarWantlistApplyResponse,
   type RadarEnrichmentStatus,
   type RadarResponse,
+  type RadarWantlistApplyResponse,
   type RadarWantlistPreviewResponse,
   type RadarWantlistTemplateFormat,
 } from '../shared/contracts/radar.js';
@@ -56,6 +58,7 @@ describe('shared contract types', () => {
     const radar: RadarResponse = normalizeRadarResponse({});
     const radarWantlistTemplateFormat: RadarWantlistTemplateFormat = 'csv';
     const radarWantlistPreview: RadarWantlistPreviewResponse = {
+      previewId: 'preview-1',
       summary: {
         totalRows: 1,
         validRows: 1,
@@ -81,6 +84,17 @@ describe('shared contract types', () => {
       ],
       errors: [],
     };
+    const radarWantlistApply: RadarWantlistApplyResponse = normalizeRadarWantlistApplyResponse({
+      ok: true,
+      radar: {},
+      result: {
+        totalRows: 1,
+        imported: 1,
+        skipped: 0,
+        added: 1,
+        updated: 0,
+      },
+    });
     const radarEnrichment: RadarEnrichmentStatus = normalizeRadarEnrichmentStatus({});
     const syncStatus: SyncStatusState = normalizeSyncStatus({});
     const importSyncState: ImportSyncState = normalizeImportSyncState({});
@@ -97,7 +111,9 @@ describe('shared contract types', () => {
     expect(collection.releases).toEqual([]);
     expect(radar.items).toEqual([]);
     expect(radarWantlistTemplateFormat).toBe('csv');
+    expect(radarWantlistPreview.previewId).toBe('preview-1');
     expect(radarWantlistPreview.summary.validRows).toBe(1);
+    expect(radarWantlistApply.result.imported).toBe(1);
     expect(radarEnrichment.status).toBe('idle');
     expect(syncStatus.locale).toBe('es');
     expect(importSyncState.status).toBe('idle');
@@ -110,6 +126,7 @@ describe('shared contract types', () => {
     expectTypeOf(collection).toMatchTypeOf<CollectionResponse>();
     expectTypeOf(radar).toMatchTypeOf<RadarResponse>();
     expectTypeOf(radarWantlistPreview).toMatchTypeOf<RadarWantlistPreviewResponse>();
+    expectTypeOf(radarWantlistApply).toMatchTypeOf<RadarWantlistApplyResponse>();
     expectTypeOf(radarEnrichment).toMatchTypeOf<RadarEnrichmentStatus>();
     expectTypeOf(syncStatus).toMatchTypeOf<SyncStatusState>();
     expectTypeOf(importSyncState).toMatchTypeOf<ImportSyncState>();

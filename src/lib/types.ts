@@ -9,6 +9,7 @@ import type { CollectionSavedView } from '../../shared/contracts/collectionViews
 import type { DashboardStats, NamedCountRow } from '../../shared/contracts/dashboardStats.js';
 import type {
   RadarResponse,
+  RadarWantlistApplyResponse,
   RadarWantlistPreviewResponse,
   RadarWantlistTemplateFormat,
 } from '../../shared/contracts/radar.js';
@@ -57,7 +58,7 @@ export type DashboardStatsContextValue = {
 };
 
 export type RadarData = RadarResponse;
-export type { RadarWantlistPreviewResponse, RadarWantlistTemplateFormat };
+export type { RadarWantlistApplyResponse, RadarWantlistPreviewResponse, RadarWantlistTemplateFormat };
 
 export type AuthMutationResponse = {
   ok: boolean;
