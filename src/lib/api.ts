@@ -19,6 +19,7 @@ import {
 import {
   normalizeRadarResponse,
   normalizeRadarSyncResponse,
+  type RadarLocalDecisionPayload,
   type RadarResponse,
   type RadarSyncResponse,
 } from '../../shared/contracts/radar.js';
@@ -174,6 +175,11 @@ export const api = {
   syncRadar: async (): Promise<RadarSyncResponse> => (
     normalizeRadarSyncResponse(await request('/radar/sync', { method: 'POST' }))
   ),
+  updateRadarRelease: async (id: string | number, payload: RadarLocalDecisionPayload): Promise<RadarResponse> =>
+    normalizeRadarResponse(await request(`/radar/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })),
   previewRadarWantlist: (file: File): Promise<RadarWantlistPreviewResponse> => {
     const form = new FormData();
     form.append('file', file);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MARKETPLACE_STATUS,
+  RADAR_MINIMUM_CONDITION,
   normalizeRadarResponse,
   normalizeRadarSyncResponse,
   RADAR_PRIORITY,
@@ -40,8 +41,9 @@ describe('radar contract', () => {
           date_added: 12,
           local: {
             priority: 'urgent',
+            target_price: '21.8',
             target_price_eur: '17.4',
-            minimum_condition: 9,
+            minimum_condition: 'bad',
             note: ['bad'],
             hidden: 1,
             resolved: 0,
@@ -64,6 +66,7 @@ describe('radar contract', () => {
             created_at: '2026-05-10T00:00:00Z',
             updated_at: 1,
           },
+          display_currency: 3,
         },
         {
           title: 'drop me',
@@ -94,6 +97,7 @@ describe('radar contract', () => {
         date_added: null,
         local: {
           priority: RADAR_PRIORITY.NORMAL,
+          target_price: 21.8,
           target_price_eur: 17.4,
           minimum_condition: null,
           note: '',
@@ -118,6 +122,7 @@ describe('radar contract', () => {
           created_at: '2026-05-10T00:00:00Z',
           updated_at: null,
         },
+        display_currency: null,
       },
     ]);
 
@@ -170,5 +175,40 @@ describe('radar contract', () => {
         ignored: 0,
       },
     });
+  });
+
+  it('preserves recognized minimum condition values and display currency fields', () => {
+    const normalized = normalizeRadarResponse({
+      items: [
+        {
+          id: 4,
+          user_id: 2,
+          release_id: 77,
+          title: 'Known',
+          artist: 'Condition Test',
+          local: {
+            priority: RADAR_PRIORITY.LOW,
+            target_price: 12,
+            target_price_eur: 10,
+            minimum_condition: RADAR_MINIMUM_CONDITION.NEAR_MINT,
+            note: 'keep it local',
+            hidden: 0,
+            resolved: 0,
+          },
+          source: {
+            origin: RADAR_SOURCE_ORIGIN.FILE,
+            status: RADAR_SOURCE_STATUS.ACTIVE,
+          },
+          marketplace: {
+            status: MARKETPLACE_STATUS.PRICED,
+          },
+          display_currency: 'USD',
+        },
+      ],
+    });
+
+    expect(normalized.items[0]?.local.minimum_condition).toBe(RADAR_MINIMUM_CONDITION.NEAR_MINT);
+    expect(normalized.items[0]?.local.target_price).toBe(12);
+    expect(normalized.items[0]?.display_currency).toBe('USD');
   });
 });

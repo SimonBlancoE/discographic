@@ -5,7 +5,7 @@ import { join } from 'path';
 import { cleanupStoredNotes, normalizeNotes, notesToText, parseStoredNotes } from './services/notes.js';
 import { parseJson, stringifyJson } from './services/jsonStorage.js';
 import { migrateMarketplaceStatus } from './services/dbMigrations.js';
-import { clearRadarRows, getRadarSnapshot, migrateRadarStorage } from './services/radarStorage.js';
+import { clearRadarRows, getRadarSnapshot, migrateRadarStorage, updateRadarLocalDecision } from './services/radarStorage.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
 
 const { dataDir } = resolveRuntimePaths(import.meta.url);
@@ -377,6 +377,14 @@ export function migrateLegacyDataToUser(userId) {
 
 export function getRadarForUser(userId) {
   return getRadarSnapshot(db, userId);
+}
+
+export function updateRadarReleaseForUser(userId, radarId, patch) {
+  return updateRadarLocalDecision(db, {
+    userId,
+    radarId,
+    ...patch,
+  });
 }
 
 export default db;

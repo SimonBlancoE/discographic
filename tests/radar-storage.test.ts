@@ -7,8 +7,14 @@ import {
   clearRadarRows,
   getRadarSnapshot,
   migrateRadarStorage,
+  updateRadarLocalDecision,
 } from '../server/services/radarStorage.js';
-import { MARKETPLACE_STATUS, RADAR_PRIORITY, RADAR_SOURCE_STATUS } from '../shared/contracts/radar.js';
+import {
+  MARKETPLACE_STATUS,
+  RADAR_MINIMUM_CONDITION,
+  RADAR_PRIORITY,
+  RADAR_SOURCE_STATUS,
+} from '../shared/contracts/radar.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -156,6 +162,7 @@ describe('radar storage', () => {
           date_added: null,
           local: {
             priority: RADAR_PRIORITY.HIGH,
+            target_price: null,
             target_price_eur: null,
             minimum_condition: null,
             note: '',
@@ -180,6 +187,7 @@ describe('radar storage', () => {
             created_at: '2026-05-10T00:00:00Z',
             updated_at: '2026-05-10T00:00:00Z',
           },
+          display_currency: null,
         },
       ],
       summary: {
@@ -224,5 +232,106 @@ describe('radar storage', () => {
       },
     });
     expect(getRadarSnapshot(db, 2).items).toHaveLength(1);
+  });
+
+  it('updates local Radar decisions for one release without touching another row', () => {
+    migrateRadarStorage(db);
+
+    db.prepare(`
+      INSERT INTO radar_releases (
+        user_id,
+        release_id,
+        title,
+        artist,
+        local_priority,
+        local_target_price_eur,
+        local_minimum_condition,
+        local_note,
+        local_hidden,
+        local_resolved,
+        source_discogs,
+        source_status,
+        marketplace_status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      1,
+      303,
+      'Editable Release',
+      'Artist C',
+      RADAR_PRIORITY.NORMAL,
+      12,
+      null,
+      '',
+      0,
+      0,
+      1,
+      RADAR_SOURCE_STATUS.ACTIVE,
+      MARKETPLACE_STATUS.PENDING,
+    );
+
+    db.prepare(`
+      INSERT INTO radar_releases (
+        user_id,
+        release_id,
+        title,
+        artist,
+        local_priority,
+        local_target_price_eur,
+        local_note,
+        source_discogs,
+        source_status,
+        marketplace_status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      1,
+      404,
+      'Untouched Release',
+      'Artist D',
+      RADAR_PRIORITY.LOW,
+      9,
+      'keep me',
+      1,
+      RADAR_SOURCE_STATUS.ACTIVE,
+      MARKETPLACE_STATUS.PRICED,
+    );
+
+    const updated = updateRadarLocalDecision(db, {
+      userId: 1,
+      radarId: 1,
+      priority: RADAR_PRIORITY.HIGH,
+      targetPriceEur: 18.25,
+      minimumCondition: RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS,
+      note: 'Watch for clean cover',
+      hidden: true,
+      resolved: true,
+    });
+
+    expect(updated).toBe(true);
+
+    const snapshot = getRadarSnapshot(db, 1);
+    const editable = snapshot.items.find((item) => item.id === 1);
+    const untouched = snapshot.items.find((item) => item.id === 2);
+
+    expect(editable?.local).toEqual({
+      priority: RADAR_PRIORITY.HIGH,
+      target_price: null,
+      target_price_eur: 18.25,
+      minimum_condition: RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS,
+      note: 'Watch for clean cover',
+      hidden: true,
+      resolved: true,
+    });
+
+    expect(untouched?.local).toEqual({
+      priority: RADAR_PRIORITY.LOW,
+      target_price: null,
+      target_price_eur: 9,
+      minimum_condition: null,
+      note: 'keep me',
+      hidden: false,
+      resolved: false,
+    });
   });
 });
