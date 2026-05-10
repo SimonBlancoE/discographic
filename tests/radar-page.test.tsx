@@ -653,18 +653,18 @@ describe('Radar page', () => {
             listing_price_eur: 25,
             last_checked_at: '2026-05-10T00:00:00Z',
           },
-            timestamps: {
-              created_at: '2026-05-10T00:00:00Z',
-              updated_at: '2026-05-10T01:00:00Z',
-            },
-            opportunity: {
-              reasons: [],
-              default_visible: true,
-              is_in_collection: false,
-            },
-            display_currency: 'USD',
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: '2026-05-10T01:00:00Z',
           },
-        ],
+          opportunity: {
+            reasons: [],
+            default_visible: true,
+            is_in_collection: false,
+          },
+          display_currency: 'USD',
+        },
+      ],
       summary: {
         total: 1,
         active: 1,

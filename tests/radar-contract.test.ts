@@ -64,17 +64,17 @@ describe('radar contract', () => {
             listing_price_eur: '11.5',
             last_checked_at: 5,
           },
-        timestamps: {
-          created_at: '2026-05-10T00:00:00Z',
-          updated_at: 1,
+          timestamps: {
+            created_at: '2026-05-10T00:00:00Z',
+            updated_at: 1,
+          },
+          opportunity: {
+            reasons: ['below_target', 'mystery'],
+            default_visible: 1,
+            is_in_collection: 0,
+          },
+          display_currency: 3,
         },
-        opportunity: {
-          reasons: ['below_target', 'mystery'],
-          default_visible: 1,
-          is_in_collection: 0,
-        },
-        display_currency: 3,
-      },
         {
           title: 'drop me',
         },

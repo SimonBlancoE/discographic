@@ -9,7 +9,6 @@ import {
   RADAR_SOURCE_STATUS,
   type RadarLocalDecisionUpdate,
   type RadarOpportunityReason,
-  type RadarPriority,
   type RadarResponse,
   type RadarSourceOrigin,
 } from '../../shared/contracts/radar.js';
@@ -78,6 +77,9 @@ type RadarAvailabilityTransition = {
 };
 
 const RADAR_TABLE = 'radar_releases';
+const HIDDEN_OR_INACTIVE_SORT_BUCKET = 99;
+const INCOMPLETE_MARKETPLACE_SORT_BUCKET = 4;
+const DEFAULT_SORT_BUCKET = 5;
 
 const RADAR_COLUMN_DEFINITIONS: RadarColumnDefinition[] = [
   { name: 'year', sqlType: 'INTEGER DEFAULT NULL' },
@@ -138,11 +140,12 @@ const RADAR_SELECT_COLUMNS = [
   'updated_at',
 ].join(',\n      ');
 
-const RADAR_PRIORITY_RANK: Record<RadarPriority, number> = {
-  [RADAR_PRIORITY.HIGH]: 0,
-  [RADAR_PRIORITY.NORMAL]: 1,
-  [RADAR_PRIORITY.LOW]: 2,
-};
+const OPPORTUNITY_REASON_SORT_BUCKETS: Array<{ reason: RadarOpportunityReason; bucket: number }> = [
+  { reason: RADAR_OPPORTUNITY_REASON.BELOW_TARGET, bucket: 0 },
+  { reason: RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE, bucket: 1 },
+  { reason: RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN, bucket: 2 },
+  { reason: RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION, bucket: 3 },
+];
 
 function hasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
   return db
@@ -233,40 +236,49 @@ function isDefaultVisible(row: RadarRow): boolean {
     && row.source_status !== RADAR_SOURCE_STATUS.MISSING;
 }
 
-function getSortBucket(
-  row: RadarRow,
-  reasons: RadarOpportunityReason[],
-  defaultVisible: boolean,
-): number {
-  if (!defaultVisible) {
-    return 99;
-  }
-
-  if (reasons.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET)) {
-    return 0;
-  }
-
-  if (reasons.includes(RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE)) {
-    return 1;
-  }
-
-  if (reasons.includes(RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN)) {
-    return 2;
-  }
-
-  if (reasons.includes(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION)) {
-    return 3;
-  }
-
-  if (
-    row.marketplace_status === MARKETPLACE_STATUS.PENDING
+function hasIncompleteMarketplaceStatus(row: RadarRow): boolean {
+  return row.marketplace_status === MARKETPLACE_STATUS.PENDING
     || row.marketplace_status === MARKETPLACE_STATUS.FAILED
-    || row.marketplace_status === MARKETPLACE_STATUS.UNAVAILABLE
-  ) {
-    return 4;
+    || row.marketplace_status === MARKETPLACE_STATUS.UNAVAILABLE;
+}
+
+function getOpportunityReasonSortBucket(reasons: RadarOpportunityReason[]): number | null {
+  for (const { reason, bucket } of OPPORTUNITY_REASON_SORT_BUCKETS) {
+    if (reasons.includes(reason)) {
+      return bucket;
+    }
   }
 
-  return 5;
+  return null;
+}
+
+function getSortBucket(row: RadarRow, reasons: RadarOpportunityReason[], defaultVisible: boolean): number {
+  if (!defaultVisible) {
+    return HIDDEN_OR_INACTIVE_SORT_BUCKET;
+  }
+
+  const reasonBucket = getOpportunityReasonSortBucket(reasons);
+  if (reasonBucket != null) {
+    return reasonBucket;
+  }
+
+  if (hasIncompleteMarketplaceStatus(row)) {
+    return INCOMPLETE_MARKETPLACE_SORT_BUCKET;
+  }
+
+  return DEFAULT_SORT_BUCKET;
+}
+
+function getPriorityRank(priority: string | null): number {
+  switch (priority) {
+    case RADAR_PRIORITY.HIGH:
+      return 0;
+    case RADAR_PRIORITY.LOW:
+      return 2;
+    case RADAR_PRIORITY.NORMAL:
+    default:
+      return 1;
+  }
 }
 
 function getTimestampRank(value: string | null): number {
@@ -323,6 +335,56 @@ function toRadarItem(row: RadarRow, ownedReleaseIds: ReadonlySet<number>) {
       is_in_collection: ownedReleaseIds.has(row.release_id),
     },
   };
+}
+
+type RadarItem = ReturnType<typeof toRadarItem>;
+
+type SortableRadarItem = {
+  item: RadarItem;
+  bucket: number;
+  priority: number;
+  dateRank: number;
+};
+
+function getOwnedReleaseIds(db: Database.Database, userId: number): Set<number> {
+  if (!tableExists(db, 'releases')) {
+    return new Set<number>();
+  }
+
+  const rows = db.prepare<[{ userId: number }], { release_id: number }>(`
+    SELECT DISTINCT release_id
+    FROM releases
+    WHERE user_id = @userId
+  `).all({ userId });
+
+  return new Set(rows.map((row) => row.release_id));
+}
+
+function toSortableRadarItem(row: RadarRow, ownedReleaseIds: ReadonlySet<number>): SortableRadarItem {
+  const item = toRadarItem(row, ownedReleaseIds);
+
+  return {
+    item,
+    bucket: getSortBucket(row, item.opportunity.reasons, item.opportunity.default_visible),
+    priority: getPriorityRank(row.local_priority),
+    dateRank: getTimestampRank(item.date_added ?? item.timestamps.updated_at ?? item.timestamps.created_at),
+  };
+}
+
+function compareSortableRadarItems(left: SortableRadarItem, right: SortableRadarItem): number {
+  if (left.bucket !== right.bucket) {
+    return left.bucket - right.bucket;
+  }
+
+  if (left.priority !== right.priority) {
+    return left.priority - right.priority;
+  }
+
+  if (left.dateRank !== right.dateRank) {
+    return right.dateRank - left.dateRank;
+  }
+
+  return (right.item.id ?? 0) - (left.item.id ?? 0);
 }
 
 function normalizeLegacyMarketplaceStatus(db: Database.Database): void {
@@ -458,15 +520,7 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
     WHERE user_id = @userId
     ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
   `).all({ userId });
-  const ownedReleaseIds = tableExists(db, 'releases')
-    ? new Set(
-      db.prepare<[{ userId: number }], { release_id: number }>(`
-        SELECT DISTINCT release_id
-        FROM releases
-        WHERE user_id = @userId
-      `).all({ userId }).map((row) => row.release_id),
-    )
-    : new Set<number>();
+  const ownedReleaseIds = getOwnedReleaseIds(db, userId);
 
   const summary = db.prepare<
     [RadarSummaryParams],
@@ -496,30 +550,8 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
     unavailableStatus: MARKETPLACE_STATUS.UNAVAILABLE,
   });
   const items = rows
-    .map((row) => {
-      const item = toRadarItem(row, ownedReleaseIds);
-      return {
-        item,
-        bucket: getSortBucket(row, item.opportunity.reasons, item.opportunity.default_visible),
-        priority: RADAR_PRIORITY_RANK[item.local.priority as RadarPriority] ?? RADAR_PRIORITY_RANK[RADAR_PRIORITY.NORMAL],
-        dateRank: getTimestampRank(item.date_added ?? item.timestamps.updated_at ?? item.timestamps.created_at),
-      };
-    })
-    .sort((left, right) => {
-      if (left.bucket !== right.bucket) {
-        return left.bucket - right.bucket;
-      }
-
-      if (left.priority !== right.priority) {
-        return left.priority - right.priority;
-      }
-
-      if (left.dateRank !== right.dateRank) {
-        return right.dateRank - left.dateRank;
-      }
-
-      return (right.item.id ?? 0) - (left.item.id ?? 0);
-    })
+    .map((row) => toSortableRadarItem(row, ownedReleaseIds))
+    .sort(compareSortableRadarItems)
     .map(({ item }) => item);
 
   return normalizeRadarResponse({

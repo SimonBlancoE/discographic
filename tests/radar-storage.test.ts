@@ -379,18 +379,157 @@ describe('radar storage', () => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    insertRadar.run(1, 401, 'Below Target', 'Artist A', '2026-05-01', RADAR_PRIORITY.NORMAL, 20, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 18, null, null);
-    insertRadar.run(1, 402, 'High Priority Available', 'Artist B', '2026-05-02', RADAR_PRIORITY.HIGH, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 24, null, null);
-    insertRadar.run(1, 403, 'Available Again', 'Artist C', '2026-05-03', RADAR_PRIORITY.NORMAL, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 26, '2026-05-08T00:00:00Z', '2026-05-10T00:00:00Z');
-    insertRadar.run(1, 404, 'Owned Release', 'Artist D', '2026-05-04', RADAR_PRIORITY.NORMAL, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 28, null, null);
-    insertRadar.run(1, 405, 'Pending Release', 'Artist E', '2026-05-05', RADAR_PRIORITY.NORMAL, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PENDING, null, null, null);
-    insertRadar.run(1, 406, 'Failed Release', 'Artist F', '2026-05-06', RADAR_PRIORITY.NORMAL, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.FAILED, null, null, null);
-    insertRadar.run(1, 407, 'Unavailable Release', 'Artist G', '2026-05-07', RADAR_PRIORITY.NORMAL, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.UNAVAILABLE, null, null, null);
-    insertRadar.run(1, 408, 'Rest Normal Newer', 'Artist H', '2026-05-09', RADAR_PRIORITY.NORMAL, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 30, null, null);
-    insertRadar.run(1, 409, 'Rest Low Older', 'Artist I', '2026-05-01', RADAR_PRIORITY.LOW, null, 0, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 31, null, null);
-    insertRadar.run(1, 410, 'Hidden Release', 'Artist J', '2026-05-10', RADAR_PRIORITY.HIGH, 40, 1, 0, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 10, null, null);
-    insertRadar.run(1, 411, 'Resolved Release', 'Artist K', '2026-05-10', RADAR_PRIORITY.HIGH, null, 0, 1, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 12, null, null);
-    insertRadar.run(1, 412, 'Missing Release', 'Artist L', '2026-05-10', RADAR_PRIORITY.NORMAL, null, 0, 0, 1, RADAR_SOURCE_STATUS.MISSING, MARKETPLACE_STATUS.PRICED, 12, null, null);
+    type RadarOrderingFixture = {
+      releaseId: number;
+      title: string;
+      artist: string;
+      dateAdded: string;
+      priority?: string;
+      targetPriceEur?: number | null;
+      hidden?: boolean;
+      resolved?: boolean;
+      sourceStatus?: string;
+      marketplaceStatus?: string;
+      estimatedPrice?: number | null;
+      lastUnavailableAt?: string | null;
+      availableAgainAt?: string | null;
+    };
+
+    function insertRadarFixture({
+      releaseId,
+      title,
+      artist,
+      dateAdded,
+      priority = RADAR_PRIORITY.NORMAL,
+      targetPriceEur = null,
+      hidden = false,
+      resolved = false,
+      sourceStatus = RADAR_SOURCE_STATUS.ACTIVE,
+      marketplaceStatus = MARKETPLACE_STATUS.PRICED,
+      estimatedPrice = null,
+      lastUnavailableAt = null,
+      availableAgainAt = null,
+    }: RadarOrderingFixture): void {
+      insertRadar.run(
+        1,
+        releaseId,
+        title,
+        artist,
+        dateAdded,
+        priority,
+        targetPriceEur,
+        hidden ? 1 : 0,
+        resolved ? 1 : 0,
+        1,
+        sourceStatus,
+        marketplaceStatus,
+        estimatedPrice,
+        lastUnavailableAt,
+        availableAgainAt,
+      );
+    }
+
+    const radarFixtures: RadarOrderingFixture[] = [
+      {
+        releaseId: 401,
+        title: 'Below Target',
+        artist: 'Artist A',
+        dateAdded: '2026-05-01',
+        targetPriceEur: 20,
+        estimatedPrice: 18,
+      },
+      {
+        releaseId: 402,
+        title: 'High Priority Available',
+        artist: 'Artist B',
+        dateAdded: '2026-05-02',
+        priority: RADAR_PRIORITY.HIGH,
+        estimatedPrice: 24,
+      },
+      {
+        releaseId: 403,
+        title: 'Available Again',
+        artist: 'Artist C',
+        dateAdded: '2026-05-03',
+        estimatedPrice: 26,
+        lastUnavailableAt: '2026-05-08T00:00:00Z',
+        availableAgainAt: '2026-05-10T00:00:00Z',
+      },
+      {
+        releaseId: 404,
+        title: 'Owned Release',
+        artist: 'Artist D',
+        dateAdded: '2026-05-04',
+        estimatedPrice: 28,
+      },
+      {
+        releaseId: 405,
+        title: 'Pending Release',
+        artist: 'Artist E',
+        dateAdded: '2026-05-05',
+        marketplaceStatus: MARKETPLACE_STATUS.PENDING,
+      },
+      {
+        releaseId: 406,
+        title: 'Failed Release',
+        artist: 'Artist F',
+        dateAdded: '2026-05-06',
+        marketplaceStatus: MARKETPLACE_STATUS.FAILED,
+      },
+      {
+        releaseId: 407,
+        title: 'Unavailable Release',
+        artist: 'Artist G',
+        dateAdded: '2026-05-07',
+        marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE,
+      },
+      {
+        releaseId: 408,
+        title: 'Rest Normal Newer',
+        artist: 'Artist H',
+        dateAdded: '2026-05-09',
+        estimatedPrice: 30,
+      },
+      {
+        releaseId: 409,
+        title: 'Rest Low Older',
+        artist: 'Artist I',
+        dateAdded: '2026-05-01',
+        priority: RADAR_PRIORITY.LOW,
+        estimatedPrice: 31,
+      },
+      {
+        releaseId: 410,
+        title: 'Hidden Release',
+        artist: 'Artist J',
+        dateAdded: '2026-05-10',
+        priority: RADAR_PRIORITY.HIGH,
+        targetPriceEur: 40,
+        hidden: true,
+        estimatedPrice: 10,
+      },
+      {
+        releaseId: 411,
+        title: 'Resolved Release',
+        artist: 'Artist K',
+        dateAdded: '2026-05-10',
+        priority: RADAR_PRIORITY.HIGH,
+        resolved: true,
+        estimatedPrice: 12,
+      },
+      {
+        releaseId: 412,
+        title: 'Missing Release',
+        artist: 'Artist L',
+        dateAdded: '2026-05-10',
+        sourceStatus: RADAR_SOURCE_STATUS.MISSING,
+        estimatedPrice: 12,
+      },
+    ];
+
+    for (const fixture of radarFixtures) {
+      insertRadarFixture(fixture);
+    }
 
     const snapshot = getRadarSnapshot(db, 1);
     const items = snapshot.items as Array<{
