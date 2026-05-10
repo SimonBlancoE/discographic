@@ -6,6 +6,7 @@ import {
   type RadarResponse,
   type RadarSyncResult,
 } from '../../shared/contracts/radar.js';
+import RadarWantlistImportPanel from '../components/RadarWantlistImportPanel';
 import { useAuth } from '../lib/AuthContext';
 import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../lib/I18nContext';
@@ -209,6 +210,8 @@ function Radar() {
           </article>
         ))}
       </div>
+
+      <RadarWantlistImportPanel />
 
       {renderRadarContent(radar, loading, loadFailed, t)}
     </section>

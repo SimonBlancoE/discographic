@@ -15,6 +15,8 @@ const authState = vi.hoisted(() => ({
 
 const getRadar = vi.hoisted(() => vi.fn());
 const syncRadar = vi.hoisted(() => vi.fn());
+const previewRadarWantlist = vi.hoisted(() => vi.fn());
+const downloadRadarWantlistTemplate = vi.hoisted(() => vi.fn());
 
 const messages = {
   'radar.eyebrow': 'Radar',
@@ -41,6 +43,21 @@ const messages = {
   'radar.emptyTitle': 'Your Radar is ready',
   'radar.emptyBody': 'Your list is empty for now. When Wantlist releases arrive, Radar will keep their local decisions and market state here.',
   'radar.accountUnavailable': 'Discogs account status could not be loaded. Reload the page or review Settings before opening Radar.',
+  'radar.import.title': 'Wantlist fallback import',
+  'radar.import.description': 'Upload a CSV or XLSX file to preview valid and invalid Wantlist rows before anything is applied.',
+  'radar.import.requiredHint': 'Required: release_id. Optional: artist, title, year, notes, date added, target price, minimum condition, priority.',
+  'radar.import.upload': 'Upload CSV/XLSX',
+  'radar.import.downloadCsvTemplate': 'CSV template',
+  'radar.import.downloadXlsxTemplate': 'XLSX template',
+  'radar.import.loading': 'Analyzing Wantlist file...',
+  'radar.import.previewTitle': 'Wantlist preview',
+  'radar.import.totalRows': '2 rows',
+  'radar.import.validRows': '1 valid',
+  'radar.import.invalidRows': '1 invalid',
+  'radar.import.mappedColumns': 'Mapped columns',
+  'radar.import.ignoredColumns': 'Ignored columns',
+  'radar.import.previewRows': 'Preview rows',
+  'radar.import.rowError': 'Row 3, column Prioridad: \"urgent\" - Priority must be low, normal, or high.',
 } satisfies Record<string, string>;
 
 vi.mock('../src/lib/AuthContext', () => ({
@@ -57,6 +74,8 @@ vi.mock('../src/lib/api', () => ({
   api: {
     getRadar,
     syncRadar,
+    previewRadarWantlist,
+    downloadRadarWantlistTemplate,
   },
 }));
 
@@ -86,6 +105,8 @@ describe('Radar page', () => {
     authState.accountUnavailable = false;
     authState.capabilities.canUseRadar = false;
     getRadar.mockReset();
+    previewRadarWantlist.mockReset();
+    downloadRadarWantlistTemplate.mockReset();
     getRadar.mockResolvedValue({
       items: [],
       summary: {
@@ -162,6 +183,40 @@ describe('Radar page', () => {
         ignored: 0,
       },
     });
+    previewRadarWantlist.mockResolvedValue({
+      summary: {
+        totalRows: 2,
+        validRows: 1,
+        invalidRows: 1,
+      },
+      mappedColumns: [
+        { header: 'release_id', key: 'release_id', required: true },
+        { header: 'Prioridad', key: 'priority', required: false },
+      ],
+      ignoredColumns: ['Color'],
+      rows: [
+        {
+          row: 2,
+          release_id: 12345,
+          artist: 'Kraftwerk',
+          title: 'Computer World',
+          year: 1981,
+          notes: 'Need clean copy',
+          date_added: '2026-05-10',
+          target_price: 18,
+          minimum_condition: 'VG+',
+          priority: 'high',
+        },
+      ],
+      errors: [
+        {
+          row: 3,
+          column: 'Prioridad',
+          value: 'urgent',
+          reason: 'Priority must be low, normal, or high.',
+        },
+      ],
+    });
   });
 
   afterEach(async () => {
@@ -222,6 +277,56 @@ describe('Radar page', () => {
     expect(text).toContain(messages['radar.syncBreakdown']);
     expect(text).toContain('Fresh Want');
     expect(text).toContain('New Artist');
+  });
+
+  it('shows Wantlist template actions and preview validation when a file is uploaded', async () => {
+    authState.capabilities.canUseRadar = true;
+
+    const rendered = await renderRadar();
+    const csvButton = Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === messages['radar.import.downloadCsvTemplate']);
+    const xlsxButton = Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === messages['radar.import.downloadXlsxTemplate']);
+    const uploadInput = rendered.querySelector('input[type="file"]') as HTMLInputElement | null;
+
+    expect(rendered.textContent).toContain(messages['radar.import.title']);
+    expect(rendered.textContent).toContain(messages['radar.import.description']);
+    expect(rendered.textContent).toContain(messages['radar.import.requiredHint']);
+    expect(csvButton).not.toBeNull();
+    expect(xlsxButton).not.toBeNull();
+    expect(uploadInput).not.toBeNull();
+
+    await act(async () => {
+      csvButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      xlsxButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(downloadRadarWantlistTemplate).toHaveBeenNthCalledWith(1, 'csv');
+    expect(downloadRadarWantlistTemplate).toHaveBeenNthCalledWith(2, 'xlsx');
+
+    const file = new File(['release_id\n12345\n'], 'wantlist.csv', { type: 'text/csv' });
+    Object.defineProperty(uploadInput, 'files', {
+      configurable: true,
+      value: [file],
+    });
+
+    await act(async () => {
+      uploadInput?.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const text = rendered.textContent ?? '';
+
+    expect(previewRadarWantlist).toHaveBeenCalledTimes(1);
+    expect(text).toContain(messages['radar.import.previewTitle']);
+    expect(text).toContain(messages['radar.import.totalRows']);
+    expect(text).toContain(messages['radar.import.validRows']);
+    expect(text).toContain(messages['radar.import.invalidRows']);
+    expect(text).toContain(messages['radar.import.mappedColumns']);
+    expect(text).toContain(messages['radar.import.ignoredColumns']);
+    expect(text).toContain(messages['radar.import.previewRows']);
+    expect(text).toContain('Color');
+    expect(text).toContain('Kraftwerk');
+    expect(text).toContain(messages['radar.import.rowError']);
   });
 
   it('shows the account-unavailable state before the blocked state when account status cannot be loaded', async () => {
