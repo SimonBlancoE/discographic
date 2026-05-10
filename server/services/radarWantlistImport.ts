@@ -1,58 +1,25 @@
 import * as XLSX from 'xlsx';
-import { RADAR_PRIORITY, type RadarPriority } from '../../shared/contracts/radar.js';
+import {
+  RADAR_PRIORITY,
+  type RadarPriority,
+  type RadarWantlistColumnKey,
+  type RadarWantlistPreviewColumn,
+  type RadarWantlistPreviewError,
+  type RadarWantlistPreviewResponse,
+  type RadarWantlistPreviewRow,
+  type RadarWantlistTemplateFormat,
+} from '../../shared/contracts/radar.js';
 
 type Translate = (key: string) => string;
 
 type RawRow = Record<string, unknown>;
 
-type RadarWantlistColumnKey =
-  | 'release_id'
-  | 'artist'
-  | 'title'
-  | 'year'
-  | 'notes'
-  | 'date_added'
-  | 'target_price'
-  | 'minimum_condition'
-  | 'priority';
-
-type RadarWantlistColumn = {
-  header: string;
-  key: RadarWantlistColumnKey;
-  required: boolean;
-};
-
-type RadarWantlistError = {
-  row: number;
-  column: string;
-  value: string;
-  reason: string;
-};
-
-type RadarWantlistPreviewRow = {
-  row: number;
-  release_id: number;
-  artist: string | null;
-  title: string | null;
-  year: number | null;
-  notes: string | null;
-  date_added: string | null;
-  target_price: number | null;
-  minimum_condition: string | null;
-  priority: RadarPriority | null;
-};
-
-type RadarWantlistPreview = {
-  summary: {
-    totalRows: number;
-    validRows: number;
-    invalidRows: number;
-  };
-  mappedColumns: RadarWantlistColumn[];
+type ResolvedRadarWantlistColumns = {
+  mappedColumns: RadarWantlistPreviewColumn[];
   ignoredColumns: string[];
-  rows: RadarWantlistPreviewRow[];
-  errors: RadarWantlistError[];
 };
+
+const DATA_ROW_NUMBER_OFFSET = 2;
 
 const HEADER_ALIASES = new Map<string, RadarWantlistColumnKey>([
   ['releaseid', 'release_id'],
@@ -183,15 +150,26 @@ function parseRadarWantlistRows(sheet: XLSX.WorkSheet): RawRow[] {
   });
 }
 
-export function parseRadarWantlistWorkbook(buffer: Buffer, filename: string, t: Translate): RawRow[] {
+function parseRadarWantlistFileExtension(filename: string): RadarWantlistTemplateFormat | null {
   const extension = filename.toLowerCase().split('.').pop();
-  if (extension !== 'csv' && extension !== 'xlsx') {
+  return extension === 'csv' || extension === 'xlsx' ? extension : null;
+}
+
+function readRadarWantlistWorkbook(buffer: Buffer, extension: RadarWantlistTemplateFormat): XLSX.WorkBook {
+  if (extension === 'csv') {
+    return XLSX.read(buffer.toString('utf8'), { type: 'string' });
+  }
+
+  return XLSX.read(buffer, { type: 'buffer' });
+}
+
+export function parseRadarWantlistWorkbook(buffer: Buffer, filename: string, t: Translate): RawRow[] {
+  const extension = parseRadarWantlistFileExtension(filename);
+  if (!extension) {
     throw new Error(t('backend.radarImport.fileType'));
   }
 
-  const workbook = extension === 'csv'
-    ? XLSX.read(buffer.toString('utf8'), { type: 'string' })
-    : XLSX.read(buffer, { type: 'buffer' });
+  const workbook = readRadarWantlistWorkbook(buffer, extension);
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) {
     throw new Error(t('backend.radarImport.noSheets'));
@@ -206,11 +184,11 @@ export function parseRadarWantlistWorkbook(buffer: Buffer, filename: string, t: 
   return rows;
 }
 
-function resolveRadarWantlistColumns(rows: RawRow[], t: Translate): { mappedColumns: RadarWantlistColumn[]; ignoredColumns: string[] } {
+function resolveRadarWantlistColumns(rows: RawRow[], t: Translate): ResolvedRadarWantlistColumns {
   const headers = Object.keys(rows[0] ?? {});
-  const mappedColumns: RadarWantlistColumn[] = [];
+  const mappedColumns: RadarWantlistPreviewColumn[] = [];
   const ignoredColumns: string[] = [];
-  let hasReleaseId = false;
+  let hasRequiredReleaseIdColumn = false;
 
   for (const header of headers) {
     const key = HEADER_ALIASES.get(normalizeRadarWantlistHeader(header));
@@ -221,7 +199,7 @@ function resolveRadarWantlistColumns(rows: RawRow[], t: Translate): { mappedColu
 
     const isRequired = key === 'release_id';
     if (isRequired) {
-      hasReleaseId = true;
+      hasRequiredReleaseIdColumn = true;
     }
 
     mappedColumns.push({
@@ -231,50 +209,51 @@ function resolveRadarWantlistColumns(rows: RawRow[], t: Translate): { mappedColu
     });
   }
 
-  if (!hasReleaseId) {
+  if (!hasRequiredReleaseIdColumn) {
     throw new Error(t('backend.radarImport.releaseIdColumnRequired'));
   }
 
   return { mappedColumns, ignoredColumns };
 }
 
-function buildEmptyPreview(): RadarWantlistPreview {
+function createPreviewRow(rowNumber: number): RadarWantlistPreviewRow {
   return {
-    summary: {
-      totalRows: 0,
-      validRows: 0,
-      invalidRows: 0,
-    },
-    mappedColumns: [],
-    ignoredColumns: [],
-    rows: [],
-    errors: [],
+    row: rowNumber,
+    release_id: 0,
+    artist: null,
+    title: null,
+    year: null,
+    notes: null,
+    date_added: null,
+    target_price: null,
+    minimum_condition: null,
+    priority: null,
   };
 }
 
-export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWantlistPreview {
-  const preview = buildEmptyPreview();
-  const { mappedColumns, ignoredColumns } = resolveRadarWantlistColumns(rows, t);
+function createPreviewError(
+  rowNumber: number,
+  column: RadarWantlistPreviewColumn,
+  value: string,
+  reason: string,
+): RadarWantlistPreviewError {
+  return {
+    row: rowNumber,
+    column: column.header,
+    value,
+    reason,
+  };
+}
 
-  preview.summary.totalRows = rows.length;
-  preview.mappedColumns = mappedColumns;
-  preview.ignoredColumns = ignoredColumns;
+export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWantlistPreviewResponse {
+  const { mappedColumns, ignoredColumns } = resolveRadarWantlistColumns(rows, t);
+  const previewRows: RadarWantlistPreviewRow[] = [];
+  const errors: RadarWantlistPreviewError[] = [];
 
   for (const [index, rawRow] of rows.entries()) {
-    const rowNumber = index + 2;
-    const rowErrors: RadarWantlistError[] = [];
-    const parsedRow: RadarWantlistPreviewRow = {
-      row: rowNumber,
-      release_id: 0,
-      artist: null,
-      title: null,
-      year: null,
-      notes: null,
-      date_added: null,
-      target_price: null,
-      minimum_condition: null,
-      priority: null,
-    };
+    const rowNumber = index + DATA_ROW_NUMBER_OFFSET;
+    const rowErrors: RadarWantlistPreviewError[] = [];
+    const parsedRow = createPreviewRow(rowNumber);
 
     for (const column of mappedColumns) {
       const sourceValue = isObjectRecord(rawRow) ? rawRow[column.header] : '';
@@ -284,12 +263,9 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
         case 'release_id': {
           const releaseId = parseRadarWantlistInteger(textValue);
           if (!releaseId || releaseId <= 0) {
-            rowErrors.push({
-              row: rowNumber,
-              column: column.header,
-              value: textValue,
-              reason: t('backend.radarImport.invalidReleaseId'),
-            });
+            rowErrors.push(
+              createPreviewError(rowNumber, column, textValue, t('backend.radarImport.invalidReleaseId')),
+            );
             break;
           }
 
@@ -312,12 +288,9 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
 
           const year = parseRadarWantlistInteger(textValue);
           if (year == null) {
-            rowErrors.push({
-              row: rowNumber,
-              column: column.header,
-              value: textValue,
-              reason: t('backend.radarImport.invalidYear'),
-            });
+            rowErrors.push(
+              createPreviewError(rowNumber, column, textValue, t('backend.radarImport.invalidYear')),
+            );
             break;
           }
 
@@ -336,12 +309,9 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
 
           const parsedDate = parseRadarWantlistDateValue(sourceValue);
           if (!parsedDate) {
-            rowErrors.push({
-              row: rowNumber,
-              column: column.header,
-              value: textValue,
-              reason: t('backend.radarImport.invalidDateAdded'),
-            });
+            rowErrors.push(
+              createPreviewError(rowNumber, column, textValue, t('backend.radarImport.invalidDateAdded')),
+            );
             break;
           }
 
@@ -356,12 +326,9 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
 
           const targetPrice = parseRadarWantlistNumber(textValue);
           if (targetPrice == null) {
-            rowErrors.push({
-              row: rowNumber,
-              column: column.header,
-              value: textValue,
-              reason: t('backend.radarImport.invalidTargetPrice'),
-            });
+            rowErrors.push(
+              createPreviewError(rowNumber, column, textValue, t('backend.radarImport.invalidTargetPrice')),
+            );
             break;
           }
 
@@ -380,12 +347,9 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
 
           const priority = parseRadarWantlistPriority(textValue);
           if (!priority) {
-            rowErrors.push({
-              row: rowNumber,
-              column: column.header,
-              value: textValue,
-              reason: t('backend.radarImport.invalidPriority'),
-            });
+            rowErrors.push(
+              createPreviewError(rowNumber, column, textValue, t('backend.radarImport.invalidPriority')),
+            );
             break;
           }
 
@@ -396,15 +360,22 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
     }
 
     if (rowErrors.length > 0) {
-      preview.errors.push(...rowErrors);
+      errors.push(...rowErrors);
       continue;
     }
 
-    preview.rows.push(parsedRow);
+    previewRows.push(parsedRow);
   }
 
-  preview.summary.validRows = preview.rows.length;
-  preview.summary.invalidRows = preview.summary.totalRows - preview.summary.validRows;
-
-  return preview;
+  return {
+    summary: {
+      totalRows: rows.length,
+      validRows: previewRows.length,
+      invalidRows: rows.length - previewRows.length,
+    },
+    mappedColumns,
+    ignoredColumns,
+    rows: previewRows,
+    errors,
+  };
 }
