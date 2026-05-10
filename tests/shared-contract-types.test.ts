@@ -25,7 +25,9 @@ import {
   type CollectionResponse,
 } from '../shared/contracts/release.js';
 import {
+  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
+  type RadarEnrichmentStatus,
   type RadarResponse,
 } from '../shared/contracts/radar.js';
 import {
@@ -50,6 +52,7 @@ describe('shared contract types', () => {
     const release: CollectionRelease = normalizeCollectionRelease({ id: '7' });
     const collection: CollectionResponse = normalizeCollectionResponse({});
     const radar: RadarResponse = normalizeRadarResponse({});
+    const radarEnrichment: RadarEnrichmentStatus = normalizeRadarEnrichmentStatus({});
     const syncStatus: SyncStatusState = normalizeSyncStatus({});
     const importSyncState: ImportSyncState = normalizeImportSyncState({});
     const locale: Locale = resolveLocale('en');
@@ -64,6 +67,7 @@ describe('shared contract types', () => {
     expect(release.id).toBe(7);
     expect(collection.releases).toEqual([]);
     expect(radar.items).toEqual([]);
+    expect(radarEnrichment.status).toBe('idle');
     expect(syncStatus.locale).toBe('es');
     expect(importSyncState.status).toBe('idle');
     expect(locale).toBe('en');
@@ -74,6 +78,7 @@ describe('shared contract types', () => {
     expectTypeOf(release).toMatchTypeOf<CollectionRelease>();
     expectTypeOf(collection).toMatchTypeOf<CollectionResponse>();
     expectTypeOf(radar).toMatchTypeOf<RadarResponse>();
+    expectTypeOf(radarEnrichment).toMatchTypeOf<RadarEnrichmentStatus>();
     expectTypeOf(syncStatus).toMatchTypeOf<SyncStatusState>();
     expectTypeOf(importSyncState).toMatchTypeOf<ImportSyncState>();
     expectTypeOf({ en: {}, es: {} }).toMatchTypeOf<MessagesByLocale>();
