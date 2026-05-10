@@ -23,6 +23,15 @@ export const RADAR_SOURCE_STATUS = Object.freeze({
 } as const);
 export type RadarSourceStatus = (typeof RADAR_SOURCE_STATUS)[keyof typeof RADAR_SOURCE_STATUS];
 
+export const RADAR_ENRICH_STATUS = Object.freeze({
+  IDLE: 'idle',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  STOPPED: 'stopped',
+} as const);
+export type RadarEnrichmentWorkflowStatus = (typeof RADAR_ENRICH_STATUS)[keyof typeof RADAR_ENRICH_STATUS];
+
 export type RadarRelease = {
   id: number | null;
   user_id: number | null;
@@ -77,10 +86,29 @@ export type RadarResponse = {
   summary: RadarSummary;
 };
 
+export type RadarEnrichmentStatus = {
+  status: RadarEnrichmentWorkflowStatus;
+  current: number;
+  total: number;
+  pending: number;
+  progressPercent: number;
+  message: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  isRunning: boolean;
+  isTerminal: boolean;
+};
+
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
+const RADAR_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>(Object.values(RADAR_ENRICH_STATUS));
 const MARKETPLACE_STATUSES = new Set<MarketplaceStatus>(Object.values(MARKETPLACE_STATUS));
+const RADAR_TERMINAL_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>([
+  RADAR_ENRICH_STATUS.COMPLETED,
+  RADAR_ENRICH_STATUS.FAILED,
+  RADAR_ENRICH_STATUS.STOPPED,
+]);
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
@@ -133,8 +161,20 @@ function asRadarSourceStatus(value: unknown): RadarSourceStatus {
   return valueFromSet(value, RADAR_SOURCE_STATUSES, RADAR_SOURCE_STATUS.ACTIVE);
 }
 
+function asRadarEnrichmentWorkflowStatus(value: unknown): RadarEnrichmentWorkflowStatus {
+  return valueFromSet(value, RADAR_ENRICH_STATUSES, RADAR_ENRICH_STATUS.IDLE);
+}
+
 function asMarketplaceStatus(value: unknown): MarketplaceStatus {
   return valueFromSet(value, MARKETPLACE_STATUSES, MARKETPLACE_STATUS.PENDING);
+}
+
+function progressPercent(current: number, total: number): number {
+  if (!total) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
 }
 
 function isValidRadarRelease(release: RadarRelease): release is RadarRelease & { id: number; release_id: number } {
@@ -210,6 +250,26 @@ export function normalizeRadarResponse(payload: unknown = {}): RadarResponse {
       .map((item) => normalizeRadarRelease(item))
       .filter(isValidRadarRelease),
     summary: normalizeRadarSummary(source.summary),
+  };
+}
+
+export function normalizeRadarEnrichmentStatus(payload: unknown = {}): RadarEnrichmentStatus {
+  const source = asRecord(payload) ?? {};
+  const status = asRadarEnrichmentWorkflowStatus(source.status);
+  const current = asCount(source.current);
+  const total = asCount(source.total);
+
+  return {
+    status,
+    current,
+    total,
+    pending: asCount(source.pending),
+    progressPercent: progressPercent(current, total),
+    message: asText(source.message),
+    startedAt: asNullableText(source.startedAt),
+    finishedAt: asNullableText(source.finishedAt),
+    isRunning: status === RADAR_ENRICH_STATUS.RUNNING,
+    isTerminal: RADAR_TERMINAL_ENRICH_STATUSES.has(status),
   };
 }
 
