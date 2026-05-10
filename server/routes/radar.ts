@@ -25,6 +25,14 @@ type MutableRadarEnrichmentState = Omit<
   'isRunning' | 'isTerminal' | 'progressPercent'
 >;
 
+type RadarEnrichInput = {
+  userId: number;
+  locale: string | undefined;
+  discogs: Parameters<typeof fetchMarketplaceValue>[0];
+};
+
+type RadarMarketplaceValue = Awaited<ReturnType<typeof fetchMarketplaceValue>>;
+
 router.use(requireAuth);
 
 function radarT(locale: string | undefined, key: string, vars?: Record<string, string | number>): string {
@@ -70,15 +78,41 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-async function runRadarEnrich({
-  userId,
+function getProgressMessage(locale: string | undefined, current: number, total: number): string {
+  return radarT(locale, 'backend.radar.enrichProgress', { current, total });
+}
+
+function getEstimatedPrice(marketplace: RadarMarketplaceValue): number | null {
+  if (marketplace.marketplaceStatus !== MARKETPLACE_STATUS.PRICED) {
+    return null;
+  }
+
+  return marketplace.estimatedValue;
+}
+
+function getCompletionMessage({
   locale,
-  discogs,
+  wasStopped,
+  processed,
+  pending,
 }: {
-  userId: number;
   locale: string | undefined;
-  discogs: ReturnType<typeof getDiscogsClientForUser>;
-}): Promise<void> {
+  wasStopped: boolean;
+  processed: number;
+  pending: number;
+}): string {
+  if (wasStopped) {
+    return radarT(locale, 'backend.radar.enrichStopped', { processed, pending });
+  }
+
+  if (pending) {
+    return radarT(locale, 'backend.radar.enrichRemaining', { processed, pending });
+  }
+
+  return radarT(locale, 'backend.radar.enrichDone', { processed });
+}
+
+async function runRadarEnrich({ userId, locale, discogs }: RadarEnrichInput): Promise<void> {
   if (enrichRunning.has(userId)) {
     return;
   }
@@ -109,7 +143,7 @@ async function runRadarEnrich({
       current: 0,
       total: totalPending,
       pending: totalPending,
-      message: radarT(locale, 'backend.radar.enrichProgress', { current: 0, total: totalPending }),
+      message: getProgressMessage(locale, 0, totalPending),
       startedAt: new Date().toISOString(),
       finishedAt: null,
     });
@@ -123,9 +157,7 @@ async function runRadarEnrich({
         }
 
         const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
-        const estimatedPrice = marketplace.marketplaceStatus === MARKETPLACE_STATUS.PRICED
-          ? marketplace.estimatedValue
-          : null;
+        const estimatedPrice = getEstimatedPrice(marketplace);
 
         db.prepare(`
           UPDATE radar_releases
@@ -146,7 +178,7 @@ async function runRadarEnrich({
           status: RADAR_ENRICH_STATUS.RUNNING,
           current: processed,
           total: totalPending,
-          message: radarT(locale, 'backend.radar.enrichProgress', { current: processed, total: totalPending }),
+          message: getProgressMessage(locale, processed, totalPending),
         });
       }
     }
@@ -159,11 +191,12 @@ async function runRadarEnrich({
       current: processed,
       total: totalPending,
       pending: finalPending,
-      message: wasStopped
-        ? radarT(locale, 'backend.radar.enrichStopped', { processed, pending: finalPending })
-        : finalPending
-          ? radarT(locale, 'backend.radar.enrichRemaining', { processed, pending: finalPending })
-          : radarT(locale, 'backend.radar.enrichDone', { processed }),
+      message: getCompletionMessage({
+        locale,
+        wasStopped,
+        processed,
+        pending: finalPending,
+      }),
       finishedAt: new Date().toISOString(),
     });
   } catch (error) {
