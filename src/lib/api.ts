@@ -17,8 +17,10 @@ import {
   type WallRelease,
 } from '../../shared/contracts/release.js';
 import {
+  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   normalizeRadarSyncResponse,
+  type RadarEnrichmentStatus,
   type RadarLocalDecisionPayload,
   type RadarResponse,
   type RadarSyncResponse,
@@ -175,6 +177,9 @@ export const api = {
   syncRadar: async (): Promise<RadarSyncResponse> => (
     normalizeRadarSyncResponse(await request('/radar/sync', { method: 'POST' }))
   ),
+  getRadarStatus: async (): Promise<RadarEnrichmentStatus> => normalizeRadarEnrichmentStatus(await request('/radar/status')),
+  enrichRadar: (): Promise<MessageResponse> => request('/radar/enrich', { method: 'POST' }),
+  stopRadarEnrich: (): Promise<MessageResponse> => request('/radar/enrich/stop', { method: 'POST' }),
   updateRadarRelease: async (id: string | number, payload: RadarLocalDecisionPayload): Promise<RadarResponse> =>
     normalizeRadarResponse(await request(`/radar/${id}`, {
       method: 'PUT',
