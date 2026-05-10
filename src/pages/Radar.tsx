@@ -4,6 +4,7 @@ import {
   RADAR_MINIMUM_CONDITION,
   RADAR_OPPORTUNITY_REASON,
   RADAR_PRIORITY,
+  RADAR_SOURCE_STATUS,
   normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   type RadarOpportunityReason,
@@ -15,6 +16,7 @@ import {
   type RadarResponse,
   type RadarSyncResult,
 } from '../../shared/contracts/radar.js';
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import RadarWantlistImportPanel from '../components/RadarWantlistImportPanel';
 import { useAuth } from '../lib/AuthContext';
 import { getErrorMessage } from '../lib/errors';
@@ -63,6 +65,18 @@ const RADAR_OPPORTUNITY_REASON_ORDER: RadarOpportunityReason[] = [
   RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN,
   RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
 ];
+
+const RADAR_FILTERS = [
+  { id: 'all', labelKey: 'radar.filter.all' },
+  { id: 'opportunities', labelKey: 'radar.filter.opportunities' },
+  { id: 'below_target', labelKey: 'radar.filter.belowTarget' },
+  { id: 'high_priority', labelKey: 'radar.filter.highPriority' },
+  { id: 'in_collection', labelKey: 'radar.filter.inCollection' },
+  { id: 'hidden_resolved', labelKey: 'radar.filter.hiddenResolved' },
+  { id: 'pending', labelKey: 'radar.filter.pending' },
+  { id: 'failed', labelKey: 'radar.filter.failed' },
+] as const;
+type RadarFilterId = (typeof RADAR_FILTERS)[number]['id'];
 
 const ENRICH_POLL_MS = 2000;
 
@@ -126,12 +140,64 @@ function createReleasePayload(draft: RadarReleaseDraft): RadarLocalDecisionPaylo
   };
 }
 
-function getVisibleRadarItems(radar: RadarResponse): RadarRelease[] {
-  return radar.items.filter((item) => item.opportunity.default_visible);
-}
-
 function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
   return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
+}
+
+function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolean {
+  switch (filterId) {
+    case 'all':
+      return true;
+    case 'opportunities':
+      return item.opportunity.default_visible && item.opportunity.reasons.length > 0;
+    case 'below_target':
+      return item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET);
+    case 'high_priority':
+      return item.local.priority === RADAR_PRIORITY.HIGH;
+    case 'in_collection':
+      return item.opportunity.is_in_collection
+        || item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION);
+    case 'hidden_resolved':
+      return item.local.hidden || item.local.resolved;
+    case 'pending':
+      return item.marketplace.status === MARKETPLACE_STATUS.PENDING;
+    case 'failed':
+      return item.marketplace.status === MARKETPLACE_STATUS.FAILED;
+  }
+}
+
+function getFilteredRadarItems(items: RadarRelease[], filterId: RadarFilterId): RadarRelease[] {
+  return items.filter((item) => matchesRadarFilter(item, filterId));
+}
+
+function getRadarStateLabelKeys(item: RadarRelease): string[] {
+  const labelKeys: string[] = [];
+
+  if (item.marketplace.status === MARKETPLACE_STATUS.PENDING) {
+    labelKeys.push('radar.state.pending');
+  }
+
+  if (item.marketplace.status === MARKETPLACE_STATUS.UNAVAILABLE) {
+    labelKeys.push('radar.state.unavailable');
+  }
+
+  if (item.marketplace.status === MARKETPLACE_STATUS.FAILED) {
+    labelKeys.push('radar.state.failed');
+  }
+
+  if (item.source.status === RADAR_SOURCE_STATUS.MISSING) {
+    labelKeys.push('radar.state.missingFromSource');
+  }
+
+  if (item.local.hidden) {
+    labelKeys.push('radar.state.hidden');
+  }
+
+  if (item.local.resolved) {
+    labelKeys.push('radar.state.resolved');
+  }
+
+  return labelKeys;
 }
 
 type RadarReleaseCardProps = {
@@ -157,6 +223,7 @@ function RadarReleaseCard({
   const displayCurrency = item.display_currency || 'EUR';
   const releaseKey = item.id ?? item.release_id ?? 0;
   const opportunityReasons = getOrderedOpportunityReasons(item);
+  const stateLabelKeys = getRadarStateLabelKeys(item);
 
   async function handleSave() {
     if (item.id == null) {
@@ -182,11 +249,17 @@ function RadarReleaseCard({
           <p className="font-display text-2xl text-white">
             {item.artist} - {item.title}
           </p>
-          <p className="text-sm text-slate-300">
-            #{item.release_id} · {item.marketplace.status}
-          </p>
-          {opportunityReasons.length ? (
+          <p className="text-sm text-slate-300">#{item.release_id}</p>
+          {stateLabelKeys.length || opportunityReasons.length ? (
             <div className="flex flex-wrap gap-2">
+              {stateLabelKeys.map((labelKey) => (
+                <span
+                  key={labelKey}
+                  className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-950/35 px-3 py-1 text-xs uppercase tracking-[0.18em] text-amber-100"
+                >
+                  {t(labelKey)}
+                </span>
+              ))}
               {opportunityReasons.map((reason) => (
                 <span
                   key={reason}
@@ -318,14 +391,13 @@ function RadarReleaseCard({
 }
 
 function renderRadarContent(
-  radar: RadarResponse,
+  items: RadarRelease[],
+  hasRadarItems: boolean,
   loading: boolean,
   loadFailed: boolean,
   t: Translate,
   onSave: RadarSaveHandler,
 ) {
-  const visibleItems = getVisibleRadarItems(radar);
-
   if (loading) {
     return (
       <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-8 text-center text-slate-300">
@@ -342,7 +414,16 @@ function renderRadarContent(
     );
   }
 
-  if (visibleItems.length === 0) {
+  if (items.length === 0) {
+    if (hasRadarItems) {
+      return (
+        <div className="space-y-3 rounded-3xl border border-dashed border-white/15 bg-slate-950/20 p-8">
+          <h2 className="font-display text-4xl text-white">{t('radar.filterEmptyTitle')}</h2>
+          <p className="max-w-2xl text-base text-slate-300">{t('radar.filterEmptyBody')}</p>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-3 rounded-3xl border border-dashed border-white/15 bg-slate-950/20 p-8">
         <h2 className="font-display text-4xl text-white">{t('radar.emptyTitle')}</h2>
@@ -353,7 +434,7 @@ function renderRadarContent(
 
   return (
     <ul className="grid gap-4">
-      {visibleItems.map((item) => (
+      {items.map((item) => (
         <RadarReleaseCard key={item.id ?? item.release_id} item={item} t={t} onSave={onSave} />
       ))}
     </ul>
@@ -372,6 +453,8 @@ function Radar() {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [syncResult, setSyncResult] = useState<RadarSyncResult | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<RadarFilterId>('all');
+  const filteredItems = getFilteredRadarItems(radar.items, selectedFilter);
 
   useEffect(() => {
     if (accountUnavailable || !capabilities.canUseRadar) {
@@ -644,7 +727,33 @@ function Radar() {
         }}
       />
 
-      {renderRadarContent(radar, loading, loadFailed, t, saveRadarRelease)}
+      <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.filtersTitle')}</p>
+          <div className="flex flex-wrap gap-2">
+            {RADAR_FILTERS.map(({ id, labelKey }) => {
+              const selected = id === selectedFilter;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-radar-filter={id}
+                  onClick={() => setSelectedFilter(id)}
+                  className={`rounded-full border px-4 py-2 text-sm transition ${
+                    selected
+                      ? 'border-brand-100 bg-brand-400/15 text-white'
+                      : 'border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/25 hover:text-white'
+                  }`}
+                >
+                  {t(labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {renderRadarContent(filteredItems, radar.items.length > 0, loading, loadFailed, t, saveRadarRelease)}
     </section>
   );
 }

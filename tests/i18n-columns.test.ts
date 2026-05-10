@@ -101,6 +101,17 @@ const RADAR_KEYS = [
   'radar.summary.pending',
   'radar.summary.failed',
   'radar.summary.unavailable',
+  'radar.filtersTitle',
+  'radar.filter.all',
+  'radar.filter.opportunities',
+  'radar.filter.belowTarget',
+  'radar.filter.highPriority',
+  'radar.filter.inCollection',
+  'radar.filter.hiddenResolved',
+  'radar.filter.pending',
+  'radar.filter.failed',
+  'radar.filterEmptyTitle',
+  'radar.filterEmptyBody',
   'radar.emptyTitle',
   'radar.emptyBody',
   'radar.openDiscogs',
@@ -109,6 +120,12 @@ const RADAR_KEYS = [
   'radar.priority.normal',
   'radar.priority.high',
   'radar.targetPrice',
+  'radar.state.pending',
+  'radar.state.unavailable',
+  'radar.state.failed',
+  'radar.state.hidden',
+  'radar.state.resolved',
+  'radar.state.missingFromSource',
   'radar.opportunity.below_target',
   'radar.opportunity.high_priority_available',
   'radar.opportunity.available_again',
@@ -271,6 +288,27 @@ describe('i18n keys for import/media/client fallbacks', () => {
       expect(messages.es[key], `Missing es key: ${key}`).toBeTruthy();
       expect(messages.en[key], `Missing en key: ${key}`).toBeTruthy();
     }
+  });
+
+  it('uses natural Radar labels in Spanish and English', () => {
+    expect(messages.es['radar.opportunity.below_target']).toBe('Por debajo del precio objetivo');
+    expect(messages.en['radar.opportunity.below_target']).toBe('Below target price');
+    expect(messages.es['radar.opportunity.high_priority_available']).toBe('Alta prioridad con copia disponible');
+    expect(messages.en['radar.opportunity.high_priority_available']).toBe('High priority with copy available');
+    expect(messages.es['radar.opportunity.available_again']).toBe('Disponible de nuevo');
+    expect(messages.en['radar.opportunity.available_again']).toBe('Available again');
+    expect(messages.es['radar.opportunity.already_in_collection']).toBe('Ya en tu colección');
+    expect(messages.en['radar.opportunity.already_in_collection']).toBe('Already in your collection');
+    expect(messages.es['radar.state.pending']).toBe('Pendiente de actualizar');
+    expect(messages.en['radar.state.pending']).toBe('Pending update');
+    expect(messages.es['radar.state.unavailable']).toBe('Sin precio disponible');
+    expect(messages.en['radar.state.unavailable']).toBe('No price available');
+    expect(messages.es['radar.state.failed']).toBe('Actualización fallida');
+    expect(messages.en['radar.state.failed']).toBe('Update failed');
+    expect(messages.es['radar.state.hidden']).toBe('Oculto');
+    expect(messages.en['radar.state.hidden']).toBe('Hidden');
+    expect(messages.es['radar.state.resolved']).toBe('Resuelto');
+    expect(messages.en['radar.state.resolved']).toBe('Resolved');
   });
 
   it('localizes import template labels and sample copy', () => {
