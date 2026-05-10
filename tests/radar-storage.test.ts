@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import {
   clearRadarRows,
+  getRadarAvailabilityTransition,
   getRadarSnapshot,
   migrateRadarStorage,
   updateRadarLocalDecision,
@@ -31,6 +32,15 @@ describe('radar storage', () => {
     db = new Database(testDbPath);
     db.pragma('journal_mode = WAL');
     db.exec(`
+      CREATE TABLE releases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        release_id INTEGER NOT NULL,
+        instance_id INTEGER NOT NULL DEFAULT 0,
+        title TEXT NOT NULL DEFAULT '',
+        artist TEXT NOT NULL DEFAULT ''
+      );
+
       CREATE TABLE radar_releases (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -187,6 +197,11 @@ describe('radar storage', () => {
             created_at: '2026-05-10T00:00:00Z',
             updated_at: '2026-05-10T00:00:00Z',
           },
+          opportunity: {
+            reasons: ['high_priority_available'],
+            default_visible: true,
+            is_in_collection: false,
+          },
           display_currency: null,
         },
       ],
@@ -332,6 +347,239 @@ describe('radar storage', () => {
       note: 'keep me',
       hidden: false,
       resolved: false,
+    });
+  });
+
+  it('derives opportunity reasons, already-owned flags, and default ordering for the active Radar list', () => {
+    migrateRadarStorage(db);
+
+    db.prepare(`
+      INSERT INTO releases (user_id, release_id, instance_id, title, artist)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(1, 404, 1, 'Owned Release', 'Artist D');
+
+    const insertRadar = db.prepare(`
+      INSERT INTO radar_releases (
+        user_id,
+        release_id,
+        title,
+        artist,
+        date_added,
+        local_priority,
+        local_target_price_eur,
+        local_hidden,
+        local_resolved,
+        source_discogs,
+        source_status,
+        marketplace_status,
+        estimated_price,
+        marketplace_last_unavailable_at,
+        marketplace_available_again_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    type RadarOrderingFixture = {
+      releaseId: number;
+      title: string;
+      artist: string;
+      dateAdded: string;
+      priority?: string;
+      targetPriceEur?: number | null;
+      hidden?: boolean;
+      resolved?: boolean;
+      sourceStatus?: string;
+      marketplaceStatus?: string;
+      estimatedPrice?: number | null;
+      lastUnavailableAt?: string | null;
+      availableAgainAt?: string | null;
+    };
+
+    function insertRadarFixture({
+      releaseId,
+      title,
+      artist,
+      dateAdded,
+      priority = RADAR_PRIORITY.NORMAL,
+      targetPriceEur = null,
+      hidden = false,
+      resolved = false,
+      sourceStatus = RADAR_SOURCE_STATUS.ACTIVE,
+      marketplaceStatus = MARKETPLACE_STATUS.PRICED,
+      estimatedPrice = null,
+      lastUnavailableAt = null,
+      availableAgainAt = null,
+    }: RadarOrderingFixture): void {
+      insertRadar.run(
+        1,
+        releaseId,
+        title,
+        artist,
+        dateAdded,
+        priority,
+        targetPriceEur,
+        hidden ? 1 : 0,
+        resolved ? 1 : 0,
+        1,
+        sourceStatus,
+        marketplaceStatus,
+        estimatedPrice,
+        lastUnavailableAt,
+        availableAgainAt,
+      );
+    }
+
+    const radarFixtures: RadarOrderingFixture[] = [
+      {
+        releaseId: 401,
+        title: 'Below Target',
+        artist: 'Artist A',
+        dateAdded: '2026-05-01',
+        targetPriceEur: 20,
+        estimatedPrice: 18,
+      },
+      {
+        releaseId: 402,
+        title: 'High Priority Available',
+        artist: 'Artist B',
+        dateAdded: '2026-05-02',
+        priority: RADAR_PRIORITY.HIGH,
+        estimatedPrice: 24,
+      },
+      {
+        releaseId: 403,
+        title: 'Available Again',
+        artist: 'Artist C',
+        dateAdded: '2026-05-03',
+        estimatedPrice: 26,
+        lastUnavailableAt: '2026-05-08T00:00:00Z',
+        availableAgainAt: '2026-05-10T00:00:00Z',
+      },
+      {
+        releaseId: 404,
+        title: 'Owned Release',
+        artist: 'Artist D',
+        dateAdded: '2026-05-04',
+        estimatedPrice: 28,
+      },
+      {
+        releaseId: 405,
+        title: 'Pending Release',
+        artist: 'Artist E',
+        dateAdded: '2026-05-05',
+        marketplaceStatus: MARKETPLACE_STATUS.PENDING,
+      },
+      {
+        releaseId: 406,
+        title: 'Failed Release',
+        artist: 'Artist F',
+        dateAdded: '2026-05-06',
+        marketplaceStatus: MARKETPLACE_STATUS.FAILED,
+      },
+      {
+        releaseId: 407,
+        title: 'Unavailable Release',
+        artist: 'Artist G',
+        dateAdded: '2026-05-07',
+        marketplaceStatus: MARKETPLACE_STATUS.UNAVAILABLE,
+      },
+      {
+        releaseId: 408,
+        title: 'Rest Normal Newer',
+        artist: 'Artist H',
+        dateAdded: '2026-05-09',
+        estimatedPrice: 30,
+      },
+      {
+        releaseId: 409,
+        title: 'Rest Low Older',
+        artist: 'Artist I',
+        dateAdded: '2026-05-01',
+        priority: RADAR_PRIORITY.LOW,
+        estimatedPrice: 31,
+      },
+      {
+        releaseId: 410,
+        title: 'Hidden Release',
+        artist: 'Artist J',
+        dateAdded: '2026-05-10',
+        priority: RADAR_PRIORITY.HIGH,
+        targetPriceEur: 40,
+        hidden: true,
+        estimatedPrice: 10,
+      },
+      {
+        releaseId: 411,
+        title: 'Resolved Release',
+        artist: 'Artist K',
+        dateAdded: '2026-05-10',
+        priority: RADAR_PRIORITY.HIGH,
+        resolved: true,
+        estimatedPrice: 12,
+      },
+      {
+        releaseId: 412,
+        title: 'Missing Release',
+        artist: 'Artist L',
+        dateAdded: '2026-05-10',
+        sourceStatus: RADAR_SOURCE_STATUS.MISSING,
+        estimatedPrice: 12,
+      },
+    ];
+
+    for (const fixture of radarFixtures) {
+      insertRadarFixture(fixture);
+    }
+
+    const snapshot = getRadarSnapshot(db, 1);
+    const items = snapshot.items as Array<{
+      release_id: number;
+      opportunity: {
+        reasons: string[];
+        default_visible: boolean;
+        is_in_collection: boolean;
+      };
+    }>;
+
+    expect(items.find((item) => item.release_id === 401)?.opportunity.reasons).toEqual(['below_target']);
+    expect(items.find((item) => item.release_id === 402)?.opportunity.reasons).toEqual(['high_priority_available']);
+    expect(items.find((item) => item.release_id === 403)?.opportunity.reasons).toEqual(['available_again']);
+    expect(items.find((item) => item.release_id === 404)?.opportunity).toEqual({
+      reasons: ['already_in_collection'],
+      default_visible: true,
+      is_in_collection: true,
+    });
+
+    expect(items.find((item) => item.release_id === 410)?.opportunity.default_visible).toBe(false);
+    expect(items.find((item) => item.release_id === 411)?.opportunity.default_visible).toBe(false);
+    expect(items.find((item) => item.release_id === 412)?.opportunity.default_visible).toBe(false);
+
+    const visibleReleaseIds = items
+      .filter((item) => item.opportunity.default_visible)
+      .map((item) => item.release_id);
+
+    expect(visibleReleaseIds.slice(0, 4)).toEqual([401, 402, 403, 404]);
+    expect(visibleReleaseIds.slice(4, 7)).toEqual(expect.arrayContaining([405, 406, 407]));
+    expect(visibleReleaseIds.slice(7)).toEqual([408, 409]);
+  });
+
+  it('tracks when a release becomes available again after an unavailable Marketplace state', () => {
+    expect(getRadarAvailabilityTransition(MARKETPLACE_STATUS.UNAVAILABLE, MARKETPLACE_STATUS.PRICED)).toEqual({
+      markUnavailableNow: false,
+      markAvailableAgainNow: true,
+      clearAvailableAgain: false,
+    });
+
+    expect(getRadarAvailabilityTransition(MARKETPLACE_STATUS.PRICED, MARKETPLACE_STATUS.UNAVAILABLE)).toEqual({
+      markUnavailableNow: true,
+      markAvailableAgainNow: false,
+      clearAvailableAgain: true,
+    });
+
+    expect(getRadarAvailabilityTransition(MARKETPLACE_STATUS.FAILED, MARKETPLACE_STATUS.PRICED)).toEqual({
+      markUnavailableNow: false,
+      markAvailableAgainNow: false,
+      clearAvailableAgain: false,
     });
   });
 });

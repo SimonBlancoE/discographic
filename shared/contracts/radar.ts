@@ -36,6 +36,15 @@ export const RADAR_SOURCE_STATUS = Object.freeze({
 } as const);
 export type RadarSourceStatus = (typeof RADAR_SOURCE_STATUS)[keyof typeof RADAR_SOURCE_STATUS];
 
+export const RADAR_OPPORTUNITY_REASON = Object.freeze({
+  BELOW_TARGET: 'below_target',
+  HIGH_PRIORITY_AVAILABLE: 'high_priority_available',
+  AVAILABLE_AGAIN: 'available_again',
+  ALREADY_IN_COLLECTION: 'already_in_collection',
+} as const);
+export type RadarOpportunityReason =
+  (typeof RADAR_OPPORTUNITY_REASON)[keyof typeof RADAR_OPPORTUNITY_REASON];
+
 export const RADAR_ENRICH_STATUS = Object.freeze({
   IDLE: 'idle',
   RUNNING: 'running',
@@ -81,6 +90,11 @@ export type RadarRelease = {
   timestamps: {
     created_at: string | null;
     updated_at: string | null;
+  };
+  opportunity: {
+    reasons: RadarOpportunityReason[];
+    default_visible: boolean;
+    is_in_collection: boolean;
   };
   display_currency: string | null;
 };
@@ -230,6 +244,7 @@ const RADAR_WANTLIST_COLUMN_KEYS = new Set<RadarWantlistColumnKey>([
 ]);
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
+const RADAR_OPPORTUNITY_REASONS = new Set<RadarOpportunityReason>(Object.values(RADAR_OPPORTUNITY_REASON));
 const RADAR_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>(Object.values(RADAR_ENRICH_STATUS));
 const MARKETPLACE_STATUSES = new Set<MarketplaceStatus>(Object.values(MARKETPLACE_STATUS));
 const RADAR_TERMINAL_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>([
@@ -305,6 +320,12 @@ function asRadarSourceStatus(value: unknown): RadarSourceStatus {
   return valueFromSet(value, RADAR_SOURCE_STATUSES, RADAR_SOURCE_STATUS.ACTIVE);
 }
 
+function asRadarOpportunityReason(value: unknown): RadarOpportunityReason | null {
+  return RADAR_OPPORTUNITY_REASONS.has(value as RadarOpportunityReason)
+    ? (value as RadarOpportunityReason)
+    : null;
+}
+
 function asRadarEnrichmentWorkflowStatus(value: unknown): RadarEnrichmentWorkflowStatus {
   return valueFromSet(value, RADAR_ENRICH_STATUSES, RADAR_ENRICH_STATUS.IDLE);
 }
@@ -331,6 +352,10 @@ export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
   const releaseSource = asRecord(source.source) ?? {};
   const marketplace = asRecord(source.marketplace) ?? {};
   const timestamps = asRecord(source.timestamps) ?? {};
+  const opportunity = asRecord(source.opportunity) ?? {};
+  const reasons = asArray(opportunity.reasons)
+    .map((reason) => asRadarOpportunityReason(reason))
+    .filter((reason): reason is RadarOpportunityReason => reason != null);
 
   return {
     id: asNumber(source.id),
@@ -367,6 +392,11 @@ export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
     timestamps: {
       created_at: asNullableText(timestamps.created_at),
       updated_at: asNullableText(timestamps.updated_at),
+    },
+    opportunity: {
+      reasons,
+      default_visible: asBoolean(opportunity.default_visible),
+      is_in_collection: asBoolean(opportunity.is_in_collection),
     },
     display_currency: asNullableText(source.display_currency),
   };
