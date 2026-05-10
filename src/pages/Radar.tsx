@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { normalizeRadarResponse, type RadarRelease, type RadarResponse } from '../../shared/contracts/radar.js';
+import RadarWantlistImportPanel from '../components/RadarWantlistImportPanel';
 import { useAuth } from '../lib/AuthContext';
 import { useI18n } from '../lib/I18nContext';
 import { api } from '../lib/api';
@@ -145,6 +146,8 @@ function Radar() {
           </article>
         ))}
       </div>
+
+      <RadarWantlistImportPanel />
 
       {renderRadarContent(radar, loading, loadFailed, t)}
     </section>
