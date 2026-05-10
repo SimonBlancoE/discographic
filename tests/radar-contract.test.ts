@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RADAR_ENRICH_STATUS,
   MARKETPLACE_STATUS,
   RADAR_MINIMUM_CONDITION,
+  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   normalizeRadarSyncResponse,
   RADAR_PRIORITY,
@@ -210,5 +212,41 @@ describe('radar contract', () => {
     expect(normalized.items[0]?.local.minimum_condition).toBe(RADAR_MINIMUM_CONDITION.NEAR_MINT);
     expect(normalized.items[0]?.local.target_price).toBe(12);
     expect(normalized.items[0]?.display_currency).toBe('USD');
+  });
+
+  it('normalizes Radar enrichment status into a stable progress contract', () => {
+    expect(normalizeRadarEnrichmentStatus()).toEqual({
+      status: RADAR_ENRICH_STATUS.IDLE,
+      current: 0,
+      total: 0,
+      pending: 0,
+      progressPercent: 0,
+      message: '',
+      startedAt: null,
+      finishedAt: null,
+      isRunning: false,
+      isTerminal: false,
+    });
+
+    expect(normalizeRadarEnrichmentStatus({
+      status: 'stopped',
+      current: '3',
+      total: '12',
+      pending: '9',
+      message: 'Stopped after 3',
+      startedAt: '2026-05-10T10:00:00.000Z',
+      finishedAt: '2026-05-10T10:01:00.000Z',
+    })).toEqual({
+      status: RADAR_ENRICH_STATUS.STOPPED,
+      current: 3,
+      total: 12,
+      pending: 9,
+      progressPercent: 25,
+      message: 'Stopped after 3',
+      startedAt: '2026-05-10T10:00:00.000Z',
+      finishedAt: '2026-05-10T10:01:00.000Z',
+      isRunning: false,
+      isTerminal: true,
+    });
   });
 });
