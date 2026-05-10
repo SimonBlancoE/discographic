@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { normalizeRadarResponse, type RadarRelease, type RadarResponse } from '../../shared/contracts/radar.js';
+import {
+  normalizeRadarResponse,
+  type RadarRelease,
+  type RadarResponse,
+  type RadarSyncResult,
+} from '../../shared/contracts/radar.js';
 import { useAuth } from '../lib/AuthContext';
+import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../lib/I18nContext';
 import { api } from '../lib/api';
 import type { Translate } from '../lib/types';
@@ -20,6 +26,23 @@ const RADAR_SUMMARY_CARDS = [
 
 function createEmptyRadarResponse(): RadarResponse {
   return normalizeRadarResponse({});
+}
+
+function renderSyncResult(syncResult: RadarSyncResult, t: Translate) {
+  return (
+    <div className="rounded-3xl border border-emerald-300/20 bg-emerald-950/20 p-5 text-emerald-50">
+      <p className="text-sm uppercase tracking-[0.28em] text-emerald-200">{t('radar.syncResultTitle')}</p>
+      <p className="mt-2 text-base">{t('radar.syncResultSummary', { count: syncResult.totalFetched })}</p>
+      <p className="mt-2 text-sm text-emerald-100/90">
+        {t('radar.syncBreakdown', {
+          added: syncResult.added,
+          updated: syncResult.updated,
+          reactivated: syncResult.reactivated,
+          markedMissing: syncResult.markedMissing,
+        })}
+      </p>
+    </div>
+  );
 }
 
 function renderRadarRelease(item: RadarRelease) {
@@ -70,12 +93,18 @@ function Radar() {
   const [radar, setRadar] = useState(createEmptyRadarResponse);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState('');
+  const [syncResult, setSyncResult] = useState<RadarSyncResult | null>(null);
 
   useEffect(() => {
     if (accountUnavailable || !capabilities.canUseRadar) {
       setRadar(createEmptyRadarResponse());
       setLoading(false);
       setLoadFailed(false);
+      setSyncing(false);
+      setSyncError('');
+      setSyncResult(null);
       return;
     }
 
@@ -134,9 +163,44 @@ function Radar() {
     );
   }
 
+  async function handleSync() {
+    setSyncing(true);
+    setSyncError('');
+
+    try {
+      const response = await api.syncRadar();
+      setRadar(response.radar);
+      setSyncResult(response.result);
+      setLoadFailed(false);
+    } catch (error) {
+      setSyncError(t('radar.syncError', { error: getErrorMessage(error, t('client.networkError')) }));
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
-      <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
+        <button
+          type="button"
+          onClick={handleSync}
+          disabled={loading || syncing}
+          className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {syncing ? t('radar.syncing') : t('radar.syncAction')}
+        </button>
+      </div>
+
+      {syncResult ? renderSyncResult(syncResult, t) : null}
+
+      {syncError ? (
+        <div className="rounded-3xl border border-rose-300/20 bg-rose-950/20 p-5 text-rose-100">
+          {syncError}
+        </div>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-9">
         {RADAR_SUMMARY_CARDS.map(({ labelKey, valueKey }) => (
           <article key={labelKey} className="rounded-3xl border border-white/10 bg-slate-950/40 p-4 text-center">
