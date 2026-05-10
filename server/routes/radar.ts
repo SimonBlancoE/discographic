@@ -79,6 +79,8 @@ type CachedWantlistPreview = {
   expiresAt: number;
 };
 
+type RadarWantlistApplyRows = Parameters<typeof applyRadarWantlistImport>[2];
+
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
 
@@ -135,6 +137,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function readPreviewId(payload: unknown): string {
+  const source = asRecord(payload);
+  return typeof source?.previewId === 'string' ? source.previewId : '';
 }
 
 function asBoolean(value: unknown): boolean | null {
@@ -201,6 +208,50 @@ function convertNullableAmount(
   rates: ExchangeRates,
 ): number | null {
   return amount == null ? null : convertAmountWithRates(amount, fromCurrency, toCurrency, rates);
+}
+
+function cacheWantlistPreview(userId: number, preview: RadarWantlistPreviewResponse): string {
+  cleanWantlistPreviewCache();
+
+  const previewId = crypto.randomBytes(16).toString('hex');
+  wantlistPreviewCache.set(previewId, {
+    userId,
+    displayCurrency: getDisplayCurrency(userId),
+    preview,
+    expiresAt: Date.now() + WANTLIST_PREVIEW_TTL_MS,
+  });
+
+  return previewId;
+}
+
+function getCachedWantlistPreview(previewId: string, userId: number): CachedWantlistPreview | null {
+  const cached = wantlistPreviewCache.get(previewId);
+
+  if (!cached || cached.userId !== userId) {
+    return null;
+  }
+
+  if (cached.expiresAt < Date.now()) {
+    wantlistPreviewCache.delete(previewId);
+    return null;
+  }
+
+  return cached;
+}
+
+function toRadarWantlistApplyRows(
+  cached: CachedWantlistPreview,
+  rates: ExchangeRates,
+): RadarWantlistApplyRows {
+  return cached.preview.rows.map((row) => ({
+    ...row,
+    target_price_eur: convertNullableAmount(
+      row.target_price,
+      cached.displayCurrency,
+      DEFAULT_CURRENCY,
+      rates,
+    ),
+  }));
 }
 
 function serializeRadarRelease(
@@ -530,16 +581,8 @@ router.post('/wantlist/preview', upload.single('file'), (req, res) => {
       return res.json(preview);
     }
 
-    cleanWantlistPreviewCache();
-    const previewId = crypto.randomBytes(16).toString('hex');
     const userId = req.session.userId as number;
-
-    wantlistPreviewCache.set(previewId, {
-      userId,
-      displayCurrency: getDisplayCurrency(userId),
-      preview,
-      expiresAt: Date.now() + WANTLIST_PREVIEW_TTL_MS,
-    });
+    const previewId = cacheWantlistPreview(userId, preview);
 
     return res.json({
       ...preview,
@@ -558,32 +601,20 @@ router.post('/wantlist/apply', async (req, res) => {
       return res.status(401).json({ error: req.t('backend.auth.required') });
     }
 
-    const previewId = typeof req.body?.previewId === 'string' ? req.body.previewId : '';
+    const previewId = readPreviewId(req.body);
     if (!previewId) {
       return res.status(400).json({ error: req.t('backend.radarImport.previewIdRequired') });
     }
 
-    const cached = wantlistPreviewCache.get(previewId);
-    if (!cached || cached.userId !== userId || cached.expiresAt < Date.now()) {
+    const cached = getCachedWantlistPreview(previewId, userId);
+    if (!cached) {
       return res.status(410).json({ error: req.t('backend.radarImport.previewExpired') });
     }
 
     wantlistPreviewCache.delete(previewId);
 
     const rates = await getDisplayRates(cached.displayCurrency);
-    const applied = applyRadarWantlistImport(
-      db,
-      userId,
-      cached.preview.rows.map((row) => ({
-        ...row,
-        target_price_eur: convertNullableAmount(
-          row.target_price,
-          cached.displayCurrency,
-          DEFAULT_CURRENCY,
-          rates,
-        ),
-      })),
-    );
+    const applied = applyRadarWantlistImport(db, userId, toRadarWantlistApplyRows(cached, rates));
 
     return res.json({
       ok: true,

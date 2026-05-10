@@ -445,7 +445,6 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
 
 type StoredRadarImportRow = {
   id: number;
-  release_id: number;
   title: string;
   artist: string;
   year: number | null;
@@ -455,12 +454,40 @@ type StoredRadarImportRow = {
   local_minimum_condition: RadarMinimumCondition | null;
   local_note: string | null;
   source_discogs: number;
-  source_file: number;
 };
 
 type RadarWantlistApplyRow = Omit<RadarWantlistPreviewRow, 'target_price'> & {
   target_price_eur: number | null;
 };
+
+type InsertRadarWantlistParams = [
+  number,
+  number,
+  string,
+  string,
+  number | null,
+  string | null,
+  RadarPriority,
+  number | null,
+  RadarMinimumCondition | null,
+  string,
+  string,
+  string,
+];
+
+type UpdateRadarWantlistParams = [
+  string,
+  string,
+  number | null,
+  string | null,
+  RadarPriority,
+  number | null,
+  RadarMinimumCondition | null,
+  string,
+  string,
+  string,
+  number,
+];
 
 function normalizeImportedText(value: string | null): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -470,81 +497,138 @@ function normalizeImportedPrice(value: number | null): number | null {
   return value == null || !Number.isFinite(value) ? null : Number(value.toFixed(2));
 }
 
+function importedTextOrFallback(value: string | null, fallback: string): string {
+  return normalizeImportedText(value) ?? fallback;
+}
+
+function prepareRadarWantlistApplyStatements(db: Database.Database) {
+  return {
+    selectExisting: db.prepare<[number, number], StoredRadarImportRow>(`
+      SELECT
+        id,
+        title,
+        artist,
+        year,
+        date_added,
+        local_priority,
+        local_target_price_eur,
+        local_minimum_condition,
+        local_note,
+        source_discogs
+      FROM radar_releases
+      WHERE user_id = ? AND release_id = ?
+    `),
+
+    insertRow: db.prepare<InsertRadarWantlistParams>(`
+      INSERT INTO radar_releases (
+        user_id,
+        release_id,
+        title,
+        artist,
+        year,
+        date_added,
+        local_priority,
+        local_target_price_eur,
+        local_minimum_condition,
+        local_note,
+        source_discogs,
+        source_file,
+        source_status,
+        source_last_seen_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
+    `),
+
+    updateRow: db.prepare<UpdateRadarWantlistParams>(`
+      UPDATE radar_releases
+      SET title = ?,
+          artist = ?,
+          year = ?,
+          date_added = ?,
+          local_priority = ?,
+          local_target_price_eur = ?,
+          local_minimum_condition = ?,
+          local_note = ?,
+          source_file = 1,
+          source_status = ?,
+          source_last_seen_at = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `),
+  };
+}
+
 function insertRadarWantlistRow(
-  db: Database.Database,
+  statements: ReturnType<typeof prepareRadarWantlistApplyStatements>,
   userId: number,
   row: RadarWantlistApplyRow,
   importedAt: string,
 ): void {
-  db.prepare(`
-    INSERT INTO radar_releases (
-      user_id,
-      release_id,
-      title,
-      artist,
-      year,
-      date_added,
-      local_priority,
-      local_target_price_eur,
-      local_minimum_condition,
-      local_note,
-      source_discogs,
-      source_file,
-      source_status,
-      source_last_seen_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
-  `).run(
+  statements.insertRow.run(
     userId,
     row.release_id,
-    normalizeImportedText(row.title) ?? '-',
-    normalizeImportedText(row.artist) ?? '-',
+    importedTextOrFallback(row.title, '-'),
+    importedTextOrFallback(row.artist, '-'),
     row.year,
     row.date_added,
     row.priority ?? RADAR_PRIORITY.NORMAL,
     normalizeImportedPrice(row.target_price_eur),
     row.minimum_condition,
-    normalizeImportedText(row.notes) ?? '',
+    importedTextOrFallback(row.notes, ''),
     RADAR_SOURCE_STATUS.ACTIVE,
     importedAt,
   );
 }
 
+function resolveImportedMetadata(existing: StoredRadarImportRow, row: RadarWantlistApplyRow) {
+  if (existing.source_discogs === 1) {
+    return {
+      title: existing.title,
+      artist: existing.artist,
+      year: existing.year,
+    };
+  }
+
+  return {
+    title: importedTextOrFallback(row.title, existing.title),
+    artist: importedTextOrFallback(row.artist, existing.artist),
+    year: row.year ?? existing.year,
+  };
+}
+
+function resolveImportedNote(existing: StoredRadarImportRow, row: RadarWantlistApplyRow): string {
+  if (row.notes == null) {
+    return importedTextOrFallback(existing.local_note, '');
+  }
+
+  return importedTextOrFallback(row.notes, '');
+}
+
+function resolveImportedTargetPrice(existing: StoredRadarImportRow, row: RadarWantlistApplyRow): number | null {
+  if (row.target_price_eur == null) {
+    return existing.local_target_price_eur;
+  }
+
+  return normalizeImportedPrice(row.target_price_eur);
+}
+
 function updateRadarWantlistRow(
-  db: Database.Database,
+  statements: ReturnType<typeof prepareRadarWantlistApplyStatements>,
   existing: StoredRadarImportRow,
   row: RadarWantlistApplyRow,
   importedAt: string,
 ): void {
-  const keepsDiscogsMetadata = existing.source_discogs === 1;
-  const nextTitle = keepsDiscogsMetadata ? existing.title : normalizeImportedText(row.title) ?? existing.title;
-  const nextArtist = keepsDiscogsMetadata ? existing.artist : normalizeImportedText(row.artist) ?? existing.artist;
-  const nextYear = keepsDiscogsMetadata ? existing.year : row.year ?? existing.year;
+  const metadata = resolveImportedMetadata(existing, row);
 
-  db.prepare(`
-    UPDATE radar_releases
-    SET title = ?,
-        artist = ?,
-        year = ?,
-        date_added = ?,
-        local_priority = ?,
-        local_target_price_eur = ?,
-        local_minimum_condition = ?,
-        local_note = ?,
-        source_file = 1,
-        source_status = ?,
-        source_last_seen_at = ?,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(
-    nextTitle,
-    nextArtist,
-    nextYear,
+  statements.updateRow.run(
+    metadata.title,
+    metadata.artist,
+    metadata.year,
     row.date_added ?? existing.date_added,
     row.priority ?? existing.local_priority,
-    row.target_price_eur == null ? existing.local_target_price_eur : normalizeImportedPrice(row.target_price_eur),
+    resolveImportedTargetPrice(existing, row),
     row.minimum_condition ?? existing.local_minimum_condition,
-    row.notes == null ? normalizeImportedText(existing.local_note) ?? '' : normalizeImportedText(row.notes) ?? '',
+    resolveImportedNote(existing, row),
     RADAR_SOURCE_STATUS.ACTIVE,
     importedAt,
     existing.id,
@@ -564,35 +648,18 @@ export function applyRadarWantlistImport(
   ) => {
     let added = 0;
     let updated = 0;
-
-    const selectExisting = db.prepare<[number, number], StoredRadarImportRow>(`
-      SELECT
-        id,
-        release_id,
-        title,
-        artist,
-        year,
-        date_added,
-        local_priority,
-        local_target_price_eur,
-        local_minimum_condition,
-        local_note,
-        source_discogs,
-        source_file
-      FROM radar_releases
-      WHERE user_id = ? AND release_id = ?
-    `);
+    const statements = prepareRadarWantlistApplyStatements(db);
 
     for (const row of targetRows) {
-      const existing = selectExisting.get(targetUserId, row.release_id);
+      const existing = statements.selectExisting.get(targetUserId, row.release_id);
 
       if (!existing) {
-        insertRadarWantlistRow(db, targetUserId, row, targetImportedAt);
+        insertRadarWantlistRow(statements, targetUserId, row, targetImportedAt);
         added += 1;
         continue;
       }
 
-      updateRadarWantlistRow(db, existing, row, targetImportedAt);
+      updateRadarWantlistRow(statements, existing, row, targetImportedAt);
       updated += 1;
     }
 

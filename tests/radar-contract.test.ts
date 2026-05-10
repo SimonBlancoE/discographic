@@ -9,6 +9,7 @@ import {
   RADAR_PRIORITY,
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
+  normalizeRadarWantlistPreviewResponse,
 } from '../shared/contracts/radar.js';
 
 describe('radar contract', () => {
@@ -212,6 +213,76 @@ describe('radar contract', () => {
     expect(normalized.items[0]?.local.minimum_condition).toBe(RADAR_MINIMUM_CONDITION.NEAR_MINT);
     expect(normalized.items[0]?.local.target_price).toBe(12);
     expect(normalized.items[0]?.display_currency).toBe('USD');
+  });
+
+  it('normalizes Wantlist preview responses without trusting malformed column keys', () => {
+    const normalized = normalizeRadarWantlistPreviewResponse({
+      previewId: 'preview-1',
+      summary: {
+        totalRows: '3',
+        validRows: '1',
+        invalidRows: '2',
+      },
+      mappedColumns: [
+        { header: 'release_id', key: 'release_id', required: true },
+        { header: 'bad', key: 'unexpected', required: true },
+        { header: '', key: 'artist', required: false },
+      ],
+      ignoredColumns: ['Color', 2],
+      rows: [
+        {
+          row: '2',
+          release_id: '303',
+          artist: 'Editable Release',
+          title: 'Artist C',
+          target_price: '12.5',
+          minimum_condition: RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS,
+          priority: 'urgent',
+        },
+        {
+          row: '3',
+          release_id: 0,
+        },
+      ],
+      errors: [
+        {
+          row: '3',
+          column: 'release_id',
+          value: 'bad',
+          reason: 'Release ID must be a positive integer.',
+        },
+      ],
+    });
+
+    expect(normalized).toMatchObject({
+      previewId: 'preview-1',
+      summary: {
+        totalRows: 3,
+        validRows: 1,
+        invalidRows: 2,
+      },
+      mappedColumns: [
+        { header: 'release_id', key: 'release_id', required: true },
+      ],
+      ignoredColumns: ['Color'],
+      rows: [
+        {
+          row: 2,
+          release_id: 303,
+          target_price: 12.5,
+          minimum_condition: RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS,
+          priority: null,
+        },
+      ],
+      errors: [
+        {
+          row: 3,
+          column: 'release_id',
+          value: 'bad',
+          reason: 'Release ID must be a positive integer.',
+        },
+      ],
+    });
   });
 
   it('normalizes Radar enrichment status into a stable progress contract', () => {

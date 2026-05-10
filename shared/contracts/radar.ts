@@ -217,6 +217,17 @@ export type RadarEnrichmentStatus = {
 
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
+const RADAR_WANTLIST_COLUMN_KEYS = new Set<RadarWantlistColumnKey>([
+  'release_id',
+  'artist',
+  'title',
+  'year',
+  'notes',
+  'date_added',
+  'target_price',
+  'minimum_condition',
+  'priority',
+]);
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
 const RADAR_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>(Object.values(RADAR_ENRICH_STATUS));
@@ -270,9 +281,19 @@ function asRadarPriority(value: unknown): RadarPriority {
   return valueFromSet(value, RADAR_PRIORITIES, RADAR_PRIORITY.NORMAL);
 }
 
+function asNullableRadarPriority(value: unknown): RadarPriority | null {
+  return RADAR_PRIORITIES.has(value as RadarPriority) ? (value as RadarPriority) : null;
+}
+
 function asRadarMinimumCondition(value: unknown): RadarMinimumCondition | null {
   return RADAR_MINIMUM_CONDITIONS.has(value as RadarMinimumCondition)
     ? (value as RadarMinimumCondition)
+    : null;
+}
+
+function asRadarWantlistColumnKey(value: unknown): RadarWantlistColumnKey | null {
+  return RADAR_WANTLIST_COLUMN_KEYS.has(value as RadarWantlistColumnKey)
+    ? (value as RadarWantlistColumnKey)
     : null;
 }
 
@@ -434,15 +455,20 @@ export function normalizeRadarWantlistPreviewResponse(payload: unknown = {}): Ra
     mappedColumns: asArray(source.mappedColumns)
       .map((column) => {
         const candidate = asRecord(column) ?? {};
-        const key = asText(candidate.key) as RadarWantlistColumnKey;
+        const key = asRadarWantlistColumnKey(candidate.key);
+        const header = asText(candidate.header);
+
+        if (!key || !header) {
+          return null;
+        }
 
         return {
-          header: asText(candidate.header),
+          header,
           key,
           required: asBoolean(candidate.required),
         };
       })
-      .filter((column) => column.header && column.key),
+      .filter((column): column is RadarWantlistPreviewColumn => column != null),
     ignoredColumns: asArray(source.ignoredColumns)
       .map((column) => asText(column))
       .filter(Boolean),
@@ -459,9 +485,7 @@ export function normalizeRadarWantlistPreviewResponse(payload: unknown = {}): Ra
           date_added: asNullableText(candidate.date_added),
           target_price: asNumber(candidate.target_price),
           minimum_condition: asRadarMinimumCondition(candidate.minimum_condition),
-          priority: RADAR_PRIORITIES.has(candidate.priority as RadarPriority)
-            ? (candidate.priority as RadarPriority)
-            : null,
+          priority: asNullableRadarPriority(candidate.priority),
         };
       })
       .filter((row) => row.row > 0 && row.release_id > 0),
