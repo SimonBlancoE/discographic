@@ -13,6 +13,11 @@ type TableColumn = {
   name: string;
 };
 
+type RadarColumnDefinition = {
+  name: string;
+  sqlType: string;
+};
+
 type RadarRow = {
   id: number;
   user_id: number;
@@ -42,6 +47,74 @@ type RadarRow = {
   created_at: string | null;
   updated_at: string | null;
 };
+
+type RadarSummaryParams = {
+  userId: number;
+  missingStatus: string;
+  pricedStatus: string;
+  pendingStatus: string;
+  failedStatus: string;
+  unavailableStatus: string;
+};
+
+type RadarSummaryRow = Record<keyof RadarResponse['summary'], number | null>;
+
+const RADAR_TABLE = 'radar_releases';
+
+const RADAR_COLUMN_DEFINITIONS: RadarColumnDefinition[] = [
+  { name: 'year', sqlType: 'INTEGER DEFAULT NULL' },
+  { name: 'cover_url', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'date_added', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'local_priority', sqlType: `TEXT NOT NULL DEFAULT '${RADAR_PRIORITY.NORMAL}'` },
+  { name: 'local_target_price_eur', sqlType: 'REAL DEFAULT NULL' },
+  { name: 'local_minimum_condition', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'local_note', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'local_hidden', sqlType: 'INTEGER NOT NULL DEFAULT 0' },
+  { name: 'local_resolved', sqlType: 'INTEGER NOT NULL DEFAULT 0' },
+  { name: 'source_discogs', sqlType: 'INTEGER NOT NULL DEFAULT 0' },
+  { name: 'source_file', sqlType: 'INTEGER NOT NULL DEFAULT 0' },
+  { name: 'source_status', sqlType: `TEXT NOT NULL DEFAULT '${RADAR_SOURCE_STATUS.ACTIVE}'` },
+  { name: 'source_last_seen_at', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'marketplace_status', sqlType: `TEXT NOT NULL DEFAULT '${MARKETPLACE_STATUS.PENDING}'` },
+  { name: 'estimated_price', sqlType: 'REAL DEFAULT NULL' },
+  { name: 'listing_status', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'listing_price', sqlType: 'REAL DEFAULT NULL' },
+  { name: 'listing_currency', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'listing_price_eur', sqlType: 'REAL DEFAULT NULL' },
+  { name: 'marketplace_last_checked_at', sqlType: 'TEXT DEFAULT NULL' },
+  { name: 'created_at', sqlType: 'TEXT DEFAULT CURRENT_TIMESTAMP' },
+  { name: 'updated_at', sqlType: 'TEXT DEFAULT CURRENT_TIMESTAMP' },
+];
+
+const RADAR_SELECT_COLUMNS = [
+  'id',
+  'user_id',
+  'release_id',
+  'title',
+  'artist',
+  'year',
+  'cover_url',
+  'date_added',
+  'local_priority',
+  'local_target_price_eur',
+  'local_minimum_condition',
+  'local_note',
+  'local_hidden',
+  'local_resolved',
+  'source_discogs',
+  'source_file',
+  'source_status',
+  'source_last_seen_at',
+  'marketplace_status',
+  'estimated_price',
+  'listing_status',
+  'listing_price',
+  'listing_currency',
+  'listing_price_eur',
+  'marketplace_last_checked_at',
+  'created_at',
+  'updated_at',
+].join(',\n      ');
 
 function hasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
   return db
@@ -80,9 +153,48 @@ function deriveSourceOrigin(sourceDiscogs: number | null, sourceFile: number | n
   return RADAR_SOURCE_ORIGIN.NONE;
 }
 
+function toRadarItem(row: RadarRow) {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    release_id: row.release_id,
+    title: row.title,
+    artist: row.artist,
+    year: row.year,
+    cover_url: row.cover_url,
+    date_added: row.date_added,
+    local: {
+      priority: row.local_priority,
+      target_price_eur: row.local_target_price_eur,
+      minimum_condition: row.local_minimum_condition,
+      note: row.local_note ?? '',
+      hidden: row.local_hidden,
+      resolved: row.local_resolved,
+    },
+    source: {
+      origin: deriveSourceOrigin(row.source_discogs, row.source_file),
+      status: row.source_status,
+      last_seen_at: row.source_last_seen_at,
+    },
+    marketplace: {
+      status: row.marketplace_status,
+      estimated_price: row.estimated_price,
+      listing_status: row.listing_status,
+      listing_price: row.listing_price,
+      listing_currency: row.listing_currency,
+      listing_price_eur: row.listing_price_eur,
+      last_checked_at: row.marketplace_last_checked_at,
+    },
+    timestamps: {
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    },
+  };
+}
+
 function normalizeLegacyMarketplaceStatus(db: Database.Database): void {
   db.prepare(`
-    UPDATE radar_releases
+    UPDATE ${RADAR_TABLE}
     SET marketplace_status = ?
     WHERE marketplace_status = 'ready'
   `).run(MARKETPLACE_STATUS.PRICED);
@@ -90,7 +202,7 @@ function normalizeLegacyMarketplaceStatus(db: Database.Database): void {
 
 export function migrateRadarStorage(db: Database.Database): void {
   db.exec(`
-    CREATE TABLE IF NOT EXISTS radar_releases (
+    CREATE TABLE IF NOT EXISTS ${RADAR_TABLE} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       release_id INTEGER NOT NULL,
@@ -121,97 +233,37 @@ export function migrateRadarStorage(db: Database.Database): void {
     )
   `);
 
-  addColumnIfMissing(db, 'radar_releases', 'year', 'INTEGER DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'cover_url', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'date_added', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(
-    db,
-    'radar_releases',
-    'local_priority',
-    `TEXT NOT NULL DEFAULT '${RADAR_PRIORITY.NORMAL}'`,
-  );
-  addColumnIfMissing(db, 'radar_releases', 'local_target_price_eur', 'REAL DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'local_minimum_condition', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'local_note', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'local_hidden', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(db, 'radar_releases', 'local_resolved', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(db, 'radar_releases', 'source_discogs', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(db, 'radar_releases', 'source_file', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(
-    db,
-    'radar_releases',
-    'source_status',
-    `TEXT NOT NULL DEFAULT '${RADAR_SOURCE_STATUS.ACTIVE}'`,
-  );
-  addColumnIfMissing(db, 'radar_releases', 'source_last_seen_at', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(
-    db,
-    'radar_releases',
-    'marketplace_status',
-    `TEXT NOT NULL DEFAULT '${MARKETPLACE_STATUS.PENDING}'`,
-  );
-  addColumnIfMissing(db, 'radar_releases', 'estimated_price', 'REAL DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'listing_status', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'listing_price', 'REAL DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'listing_currency', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'listing_price_eur', 'REAL DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'marketplace_last_checked_at', 'TEXT DEFAULT NULL');
-  addColumnIfMissing(db, 'radar_releases', 'created_at', 'TEXT DEFAULT CURRENT_TIMESTAMP');
-  addColumnIfMissing(db, 'radar_releases', 'updated_at', 'TEXT DEFAULT CURRENT_TIMESTAMP');
+  for (const column of RADAR_COLUMN_DEFINITIONS) {
+    addColumnIfMissing(db, RADAR_TABLE, column.name, column.sqlType);
+  }
 
   normalizeLegacyMarketplaceStatus(db);
 
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_radar_releases_user_release
-    ON radar_releases(user_id, release_id);
+    ON ${RADAR_TABLE}(user_id, release_id);
 
     CREATE INDEX IF NOT EXISTS idx_radar_releases_user_status
-    ON radar_releases(user_id, source_status, marketplace_status);
+    ON ${RADAR_TABLE}(user_id, source_status, marketplace_status);
   `);
 }
 
 export function clearRadarRows(db: Database.Database, userId: number): void {
-  db.prepare('DELETE FROM radar_releases WHERE user_id = ?').run(userId);
+  db.prepare(`DELETE FROM ${RADAR_TABLE} WHERE user_id = ?`).run(userId);
 }
 
 export function getRadarSnapshot(db: Database.Database, userId: number): RadarResponse {
   const rows = db.prepare<[{ userId: number }], RadarRow>(`
     SELECT
-      id,
-      user_id,
-      release_id,
-      title,
-      artist,
-      year,
-      cover_url,
-      date_added,
-      local_priority,
-      local_target_price_eur,
-      local_minimum_condition,
-      local_note,
-      local_hidden,
-      local_resolved,
-      source_discogs,
-      source_file,
-      source_status,
-      source_last_seen_at,
-      marketplace_status,
-      estimated_price,
-      listing_status,
-      listing_price,
-      listing_currency,
-      listing_price_eur,
-      marketplace_last_checked_at,
-      created_at,
-      updated_at
-    FROM radar_releases
+      ${RADAR_SELECT_COLUMNS}
+    FROM ${RADAR_TABLE}
     WHERE user_id = @userId
     ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
   `).all({ userId });
 
   const summary = db.prepare<
-    [{ userId: number; missingStatus: string; pricedStatus: string; pendingStatus: string; failedStatus: string; unavailableStatus: string }],
-    Record<string, number>
+    [RadarSummaryParams],
+    RadarSummaryRow
   >(`
     SELECT
       COUNT(*) AS total,
@@ -226,7 +278,7 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
       SUM(CASE WHEN marketplace_status = @pendingStatus THEN 1 ELSE 0 END) AS pending,
       SUM(CASE WHEN marketplace_status = @failedStatus THEN 1 ELSE 0 END) AS failed,
       SUM(CASE WHEN marketplace_status = @unavailableStatus THEN 1 ELSE 0 END) AS unavailable
-    FROM radar_releases
+    FROM ${RADAR_TABLE}
     WHERE user_id = @userId
   `).get({
     userId,
@@ -238,42 +290,7 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
   });
 
   return normalizeRadarResponse({
-    items: rows.map((row) => ({
-      id: row.id,
-      user_id: row.user_id,
-      release_id: row.release_id,
-      title: row.title,
-      artist: row.artist,
-      year: row.year,
-      cover_url: row.cover_url,
-      date_added: row.date_added,
-      local: {
-        priority: row.local_priority,
-        target_price_eur: row.local_target_price_eur,
-        minimum_condition: row.local_minimum_condition,
-        note: row.local_note ?? '',
-        hidden: row.local_hidden,
-        resolved: row.local_resolved,
-      },
-      source: {
-        origin: deriveSourceOrigin(row.source_discogs, row.source_file),
-        status: row.source_status,
-        last_seen_at: row.source_last_seen_at,
-      },
-      marketplace: {
-        status: row.marketplace_status,
-        estimated_price: row.estimated_price,
-        listing_status: row.listing_status,
-        listing_price: row.listing_price,
-        listing_currency: row.listing_currency,
-        listing_price_eur: row.listing_price_eur,
-        last_checked_at: row.marketplace_last_checked_at,
-      },
-      timestamps: {
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      },
-    })),
+    items: rows.map(toRadarItem),
     summary,
   });
 }
