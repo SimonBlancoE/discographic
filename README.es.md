@@ -30,11 +30,13 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 > [!NOTE]
 > **v0.3.1 disponible** - ahora se muestra el precio de listado en el detalle de cada lanzamiento y se ha pulido la copia en español. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
 
-## ¿Qué es?
+## ¿Qué es Discographic?
 
 Discographic es una aplicación web autohospedada para explorar y gestionar tu colección de Discogs de una forma realmente útil en el día a día.
 
 En lugar de limitarse a mostrar una lista de lanzamientos, ofrece un panel real, un navegador de colección con búsqueda, un muro visual de portadas, exportaciones, notas, valoraciones y una caché local para que la app siga siendo rápida una vez sincronizada tu biblioteca. Funciona muy bien para una sola persona, pero también tiene sentido para un pequeño grupo de amigos compartiendo la misma instancia.
+
+Si usas Discogs a diario, y sobre todo si vendes discos allí, tu opinión es muy bienvenida. Abre issues con cualquier cosa que te estorbe o con ideas de mejora. Yo no vendo discos, así que ese tipo de comentarios me ayuda mucho.
 
 ## ¿Por qué usarlo?
 
@@ -179,7 +181,7 @@ Las credenciales de Discogs **no** se configuran con variables de entorno. Cada 
 
 ## Contribuir
 
-Forgejo es el upstream canónico de desarrollo para Discographic: `https://git.simonblanco.xyz/octo/discographic`. Para las reglas de la migración TypeScript-only, los comandos de verificación y la política de normalización en fronteras no confiables, consulta [CONTRIBUTING.md](./CONTRIBUTING.md). La publicación en GitHub queda fuera del alcance de esta migración.
+No se aceptan contribuciones directas como norma general, pero cualquier tipo de feedback es muy bienvenido y se agradece de verdad, incluidos los issues y los pull requests.
 
 ## Stack técnico
 
