@@ -1,4 +1,14 @@
-type StoredRadarWantlistPreview<Preview> = {
+import type {
+  RadarEnrichmentStatus,
+  RadarWantlistPreviewResponse,
+} from '../../shared/contracts/radar.js';
+
+export type RadarRuntimeEnrichmentState = Omit<
+  RadarEnrichmentStatus,
+  'isRunning' | 'isTerminal' | 'progressPercent'
+>;
+
+export type StoredRadarWantlistPreview<Preview = RadarWantlistPreviewResponse> = {
   userId: number;
   displayCurrency: string;
   preview: Preview;
@@ -6,8 +16,8 @@ type StoredRadarWantlistPreview<Preview> = {
 };
 
 const runningRadarEnrichments = new Set<number>();
-const radarEnrichmentStates = new Map<number, unknown>();
-const radarWantlistPreviewCache = new Map<string, StoredRadarWantlistPreview<unknown>>();
+const radarEnrichmentStates = new Map<number, RadarRuntimeEnrichmentState>();
+const radarWantlistPreviewCache = new Map<string, StoredRadarWantlistPreview<RadarWantlistPreviewResponse>>();
 
 export function isRadarEnrichmentRunning(userId: number): boolean {
   return runningRadarEnrichments.has(userId);
@@ -26,26 +36,29 @@ export function clearRadarEnrichmentRunning(userId: number): void {
   runningRadarEnrichments.delete(userId);
 }
 
-export function getRadarEnrichmentState<State>(userId: number): State | null {
-  return (radarEnrichmentStates.get(userId) as State | undefined) ?? null;
+export function getRadarEnrichmentState(userId: number): RadarRuntimeEnrichmentState | null {
+  return radarEnrichmentStates.get(userId) ?? null;
 }
 
-export function setRadarEnrichmentState<State>(userId: number, state: State): State {
+export function setRadarEnrichmentState(
+  userId: number,
+  state: RadarRuntimeEnrichmentState,
+): RadarRuntimeEnrichmentState {
   radarEnrichmentStates.set(userId, state);
   return state;
 }
 
-export function storeRadarWantlistPreview<Preview>(
+export function storeRadarWantlistPreview(
   previewId: string,
-  preview: StoredRadarWantlistPreview<Preview>,
+  preview: StoredRadarWantlistPreview<RadarWantlistPreviewResponse>,
 ): void {
   radarWantlistPreviewCache.set(previewId, preview);
 }
 
-export function getStoredRadarWantlistPreview<Preview>(
+export function getStoredRadarWantlistPreview(
   previewId: string,
-): StoredRadarWantlistPreview<Preview> | null {
-  return (radarWantlistPreviewCache.get(previewId) as StoredRadarWantlistPreview<Preview> | undefined) ?? null;
+): StoredRadarWantlistPreview<RadarWantlistPreviewResponse> | null {
+  return radarWantlistPreviewCache.get(previewId) ?? null;
 }
 
 export function deleteStoredRadarWantlistPreview(previewId: string): void {
