@@ -92,6 +92,26 @@ export type RadarResponse = {
   summary: RadarSummary;
 };
 
+export type RadarLocalDecisionPayload = {
+  local: {
+    priority: RadarPriority;
+    target_price: number | null;
+    minimum_condition: RadarMinimumCondition | null;
+    note: string;
+    hidden: boolean;
+    resolved: boolean;
+  };
+};
+
+export type RadarLocalDecisionUpdate = {
+  priority: RadarPriority;
+  targetPriceEur: number | null;
+  minimumCondition: RadarMinimumCondition | null;
+  note: string;
+  hidden: boolean;
+  resolved: boolean;
+};
+
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
