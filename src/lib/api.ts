@@ -41,6 +41,8 @@ import type {
   MeResponse,
   MessageResponse,
   PreferenceResponse,
+  RadarWantlistPreviewResponse,
+  RadarWantlistTemplateFormat,
   UpdateReleasePatch,
   UserListResponse,
   WallCollectionResponse,
@@ -172,6 +174,16 @@ export const api = {
   syncRadar: async (): Promise<RadarSyncResponse> => (
     normalizeRadarSyncResponse(await request('/radar/sync', { method: 'POST' }))
   ),
+  previewRadarWantlist: (file: File): Promise<RadarWantlistPreviewResponse> => {
+    const form = new FormData();
+    form.append('file', file);
+    return request('/radar/wantlist/preview', { method: 'POST', body: form });
+  },
+  downloadRadarWantlistTemplate: (format: RadarWantlistTemplateFormat) => {
+    const locale = getLocaleHeader();
+    const query = toQueryString({ format, locale });
+    window.open(`${API_BASE}/radar/wantlist/template?${query}`, '_blank', 'noopener');
+  },
   getCollection: async (params: CollectionQuery = {}): Promise<CollectionPageResponse> => {
     const response = await request<RawCollectionResponse>(`/collection?${toQueryString(params)}`);
     const normalized = normalizeCollectionResponse(response);

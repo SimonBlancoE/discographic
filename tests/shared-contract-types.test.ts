@@ -27,6 +27,8 @@ import {
 import {
   normalizeRadarResponse,
   type RadarResponse,
+  type RadarWantlistPreviewResponse,
+  type RadarWantlistTemplateFormat,
 } from '../shared/contracts/radar.js';
 import {
   normalizeImportSyncState,
@@ -50,6 +52,33 @@ describe('shared contract types', () => {
     const release: CollectionRelease = normalizeCollectionRelease({ id: '7' });
     const collection: CollectionResponse = normalizeCollectionResponse({});
     const radar: RadarResponse = normalizeRadarResponse({});
+    const radarWantlistTemplateFormat: RadarWantlistTemplateFormat = 'csv';
+    const radarWantlistPreview: RadarWantlistPreviewResponse = {
+      summary: {
+        totalRows: 1,
+        validRows: 1,
+        invalidRows: 0,
+      },
+      mappedColumns: [
+        { header: 'release_id', key: 'release_id', required: true },
+      ],
+      ignoredColumns: [],
+      rows: [
+        {
+          row: 2,
+          release_id: 7,
+          artist: null,
+          title: null,
+          year: null,
+          notes: null,
+          date_added: null,
+          target_price: null,
+          minimum_condition: null,
+          priority: null,
+        },
+      ],
+      errors: [],
+    };
     const syncStatus: SyncStatusState = normalizeSyncStatus({});
     const importSyncState: ImportSyncState = normalizeImportSyncState({});
     const locale: Locale = resolveLocale('en');
@@ -64,6 +93,8 @@ describe('shared contract types', () => {
     expect(release.id).toBe(7);
     expect(collection.releases).toEqual([]);
     expect(radar.items).toEqual([]);
+    expect(radarWantlistTemplateFormat).toBe('csv');
+    expect(radarWantlistPreview.summary.validRows).toBe(1);
     expect(syncStatus.locale).toBe('es');
     expect(importSyncState.status).toBe('idle');
     expect(locale).toBe('en');
@@ -74,6 +105,7 @@ describe('shared contract types', () => {
     expectTypeOf(release).toMatchTypeOf<CollectionRelease>();
     expectTypeOf(collection).toMatchTypeOf<CollectionResponse>();
     expectTypeOf(radar).toMatchTypeOf<RadarResponse>();
+    expectTypeOf(radarWantlistPreview).toMatchTypeOf<RadarWantlistPreviewResponse>();
     expectTypeOf(syncStatus).toMatchTypeOf<SyncStatusState>();
     expectTypeOf(importSyncState).toMatchTypeOf<ImportSyncState>();
     expectTypeOf({ en: {}, es: {} }).toMatchTypeOf<MessagesByLocale>();
