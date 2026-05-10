@@ -130,6 +130,10 @@ function getVisibleRadarItems(radar: RadarResponse): RadarRelease[] {
   return radar.items.filter((item) => item.opportunity.default_visible);
 }
 
+function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
+  return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
+}
+
 type RadarReleaseCardProps = {
   item: RadarRelease;
   t: Translate;
@@ -152,6 +156,7 @@ function RadarReleaseCard({
 
   const displayCurrency = item.display_currency || 'EUR';
   const releaseKey = item.id ?? item.release_id ?? 0;
+  const opportunityReasons = getOrderedOpportunityReasons(item);
 
   async function handleSave() {
     if (item.id == null) {
@@ -180,18 +185,16 @@ function RadarReleaseCard({
           <p className="text-sm text-slate-300">
             #{item.release_id} · {item.marketplace.status}
           </p>
-          {item.opportunity.reasons.length ? (
+          {opportunityReasons.length ? (
             <div className="flex flex-wrap gap-2">
-              {RADAR_OPPORTUNITY_REASON_ORDER
-                .filter((reason) => item.opportunity.reasons.includes(reason))
-                .map((reason) => (
-                  <span
-                    key={reason}
-                    className="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-950/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-100"
-                  >
-                    {t(`radar.opportunity.${reason}`)}
-                  </span>
-                ))}
+              {opportunityReasons.map((reason) => (
+                <span
+                  key={reason}
+                  className="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-950/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-100"
+                >
+                  {t(`radar.opportunity.${reason}`)}
+                </span>
+              ))}
             </div>
           ) : null}
         </div>
