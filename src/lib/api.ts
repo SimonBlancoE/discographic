@@ -16,7 +16,12 @@ import {
   type ReleaseDetail,
   type WallRelease,
 } from '../../shared/contracts/release.js';
-import { normalizeRadarResponse, type RadarResponse } from '../../shared/contracts/radar.js';
+import {
+  normalizeRadarResponse,
+  normalizeRadarSyncResponse,
+  type RadarResponse,
+  type RadarSyncResponse,
+} from '../../shared/contracts/radar.js';
 import {
   normalizeImportSyncState,
   normalizeSyncStatus,
@@ -164,6 +169,9 @@ export const api = {
   }),
   getStats: async (): Promise<DashboardStats> => normalizeDashboardStats(await request('/stats')),
   getRadar: async (): Promise<RadarResponse> => normalizeRadarResponse(await request('/radar')),
+  syncRadar: async (): Promise<RadarSyncResponse> => (
+    normalizeRadarSyncResponse(await request('/radar/sync', { method: 'POST' }))
+  ),
   getCollection: async (params: CollectionQuery = {}): Promise<CollectionPageResponse> => {
     const response = await request<RawCollectionResponse>(`/collection?${toQueryString(params)}`);
     const normalized = normalizeCollectionResponse(response);
