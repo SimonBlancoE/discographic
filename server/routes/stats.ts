@@ -1,11 +1,12 @@
 // @ts-nocheck
 import express from 'express';
-import db, { getSettingForUser, parseJson } from '../db.js';
+import db, { getRadarForUser, getSettingForUser, parseJson } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
 import { countMeaningfulNoteRows } from '../services/notes.js';
 import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
+import { RADAR_OPPORTUNITY_REASON } from '../../shared/contracts/radar.js';
 
 const router = express.Router();
 
@@ -30,10 +31,43 @@ function countJsonValues(rows, mapValue) {
     .sort((left, right) => right.count - left.count);
 }
 
+function buildRadarDashboardSummary(radar) {
+  const items = Array.isArray(radar?.items) ? radar.items : [];
+  const summary = {
+    totalWanted: Number(radar?.summary?.total) || 0,
+    activeOpportunities: 0,
+    belowTarget: 0,
+    alreadyOwned: 0
+  };
+
+  for (const item of items) {
+    const opportunity = item?.opportunity;
+
+    if (!opportunity?.default_visible) {
+      continue;
+    }
+
+    if (opportunity.reasons?.length > 0) {
+      summary.activeOpportunities += 1;
+    }
+
+    if (opportunity.reasons?.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET)) {
+      summary.belowTarget += 1;
+    }
+
+    if (opportunity.is_in_collection) {
+      summary.alreadyOwned += 1;
+    }
+  }
+
+  return summary;
+}
+
 router.get('/', async (req, res) => {
   try {
     const userId = req.session.userId;
     const displayCurrency = normalizeCurrency(req.query.currency || getSettingForUser(userId, 'currency', DEFAULT_CURRENCY));
+    const radar = getRadarForUser(userId);
     const totalRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ?').get(userId).count;
     const ratedRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND rating > 0').get(userId).count;
     const notesRecords = countMeaningfulNoteRows(
@@ -140,6 +174,7 @@ router.get('/', async (req, res) => {
         estimated_value: await convertAmount(release.estimated_value, DEFAULT_CURRENCY, displayCurrency)
       }))),
       artists,
+      radar: buildRadarDashboardSummary(radar),
       lastSync,
       displayCurrency
     }));

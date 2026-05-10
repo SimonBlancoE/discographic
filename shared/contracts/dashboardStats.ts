@@ -26,6 +26,12 @@ export type DashboardLastSync = {
   records_synced: number;
   status: string | null;
 };
+export type DashboardRadarSummary = {
+  totalWanted: number;
+  activeOpportunities: number;
+  belowTarget: number;
+  alreadyOwned: number;
+};
 export type DashboardStats = {
   totals: {
     total_records: number;
@@ -45,6 +51,7 @@ export type DashboardStats = {
   growth: GrowthRow[];
   topValue: TopValueRow[];
   artists: ArtistCountRow[];
+  radar: DashboardRadarSummary;
   lastSync: DashboardLastSync | null;
   displayCurrency: string | null;
 };
@@ -155,6 +162,17 @@ function normalizeLastSync(lastSync: unknown): DashboardLastSync | null {
   };
 }
 
+function normalizeRadarSummary(radar: unknown): DashboardRadarSummary {
+  const source = asRecord(radar) ?? {};
+
+  return {
+    totalWanted: asNumber(source.totalWanted),
+    activeOpportunities: asNumber(source.activeOpportunities),
+    belowTarget: asNumber(source.belowTarget),
+    alreadyOwned: asNumber(source.alreadyOwned),
+  };
+}
+
 export function normalizeDashboardStats(payload: UnknownRecord = {}): DashboardStats {
   const totals = asRecord(payload?.totals) ?? {};
 
@@ -177,6 +195,7 @@ export function normalizeDashboardStats(payload: UnknownRecord = {}): DashboardS
     growth: normalizeGrowthRows(payload.growth),
     topValue: normalizeTopValueRows(payload.topValue),
     artists: normalizeArtistRows(payload.artists),
+    radar: normalizeRadarSummary(payload.radar),
     lastSync: normalizeLastSync(payload.lastSync),
     displayCurrency: typeof payload.displayCurrency === 'string' ? payload.displayCurrency : null
   };
