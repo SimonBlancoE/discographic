@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { DashboardStats, NamedCountRow } from '../../shared/contracts/dashboardStats.js';
+import type { DashboardRadarSummary, DashboardStats, NamedCountRow } from '../../shared/contracts/dashboardStats.js';
 import ConfettiBurst from '../components/ConfettiBurst';
 import AchievementsPanel from '../components/AchievementsPanel';
 import HeroCarousel from '../components/HeroCarousel';
@@ -22,10 +22,26 @@ import { useToast } from '../lib/ToastContext';
 
 const MILESTONES = [100, 500, 1000, 2500, 5000];
 const RADAR_SUMMARY_METRICS = [
-  { labelKey: 'dashboard.radar.totalWanted', valueKey: 'totalWanted', accent: 'from-cyan-300/40 via-cyan-300/10 to-transparent' },
-  { labelKey: 'dashboard.radar.activeOpportunities', valueKey: 'activeOpportunities', accent: 'from-emerald-300/40 via-emerald-300/10 to-transparent' },
-  { labelKey: 'dashboard.radar.belowTarget', valueKey: 'belowTarget', accent: 'from-amber-300/40 via-amber-300/10 to-transparent' },
-  { labelKey: 'dashboard.radar.alreadyOwned', valueKey: 'alreadyOwned', accent: 'from-rose-300/40 via-rose-300/10 to-transparent' },
+  {
+    labelKey: 'dashboard.radar.totalWanted',
+    valueKey: 'totalWanted',
+    accent: 'from-cyan-300/40 via-cyan-300/10 to-transparent'
+  },
+  {
+    labelKey: 'dashboard.radar.activeOpportunities',
+    valueKey: 'activeOpportunities',
+    accent: 'from-emerald-300/40 via-emerald-300/10 to-transparent'
+  },
+  {
+    labelKey: 'dashboard.radar.belowTarget',
+    valueKey: 'belowTarget',
+    accent: 'from-amber-300/40 via-amber-300/10 to-transparent'
+  },
+  {
+    labelKey: 'dashboard.radar.alreadyOwned',
+    valueKey: 'alreadyOwned',
+    accent: 'from-rose-300/40 via-rose-300/10 to-transparent'
+  },
 ] as const;
 
 function getMilestone(total: number): number | null {
@@ -192,7 +208,7 @@ function CoveragePanel({ totals }: { totals: DashboardStats['totals'] }) {
   );
 }
 
-function RadarSummaryPanel({ stats }: { stats: DashboardStats }) {
+function RadarSummaryPanel({ radar }: { radar: DashboardRadarSummary }) {
   const { t } = useI18n();
 
   return (
@@ -213,7 +229,7 @@ function RadarSummaryPanel({ stats }: { stats: DashboardStats }) {
           <div key={labelKey} className="relative overflow-hidden rounded-[24px] border border-white/5 bg-slate-950/45 p-4">
             <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${accent}`} />
             <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{t(labelKey)}</p>
-            <p className="mt-3 font-display text-3xl text-white">{formatNumber(stats.radar[valueKey])}</p>
+            <p className="mt-3 font-display text-3xl text-white">{formatNumber(radar[valueKey])}</p>
           </div>
         ))}
       </div>
@@ -378,7 +394,7 @@ function Dashboard() {
         {statCards.map((card) => <StatCard key={card.label} {...card} />)}
       </section>
 
-      <RadarSummaryPanel stats={stats} />
+      <RadarSummaryPanel radar={stats.radar} />
 
       <CoveragePanel totals={stats.totals} />
 
