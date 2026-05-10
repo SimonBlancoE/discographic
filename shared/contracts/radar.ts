@@ -77,6 +77,20 @@ export type RadarResponse = {
   summary: RadarSummary;
 };
 
+export type RadarSyncResult = {
+  totalFetched: number;
+  added: number;
+  updated: number;
+  reactivated: number;
+  markedMissing: number;
+  ignored: number;
+};
+
+export type RadarSyncResponse = {
+  radar: RadarResponse;
+  result: RadarSyncResult;
+};
+
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
@@ -210,6 +224,28 @@ export function normalizeRadarResponse(payload: unknown = {}): RadarResponse {
       .map((item) => normalizeRadarRelease(item))
       .filter(isValidRadarRelease),
     summary: normalizeRadarSummary(source.summary),
+  };
+}
+
+export function normalizeRadarSyncResult(payload: unknown = {}): RadarSyncResult {
+  const source = asRecord(payload) ?? {};
+
+  return {
+    totalFetched: asCount(source.totalFetched),
+    added: asCount(source.added),
+    updated: asCount(source.updated),
+    reactivated: asCount(source.reactivated),
+    markedMissing: asCount(source.markedMissing),
+    ignored: asCount(source.ignored),
+  };
+}
+
+export function normalizeRadarSyncResponse(payload: unknown = {}): RadarSyncResponse {
+  const source = asRecord(payload) ?? {};
+
+  return {
+    radar: normalizeRadarResponse(source.radar),
+    result: normalizeRadarSyncResult(source.result),
   };
 }
 

@@ -69,6 +69,25 @@ class DiscogsClient {
     );
   }
 
+  getWantlist(page = 1, perPage = 100) {
+    return this.request(
+      `/users/${this.username}/wants?page=${page}&per_page=${perPage}&sort=added&sort_order=desc`
+    );
+  }
+
+  async getAllWantlist(perPage = 100) {
+    const firstPage = await this.getWantlist(1, perPage);
+    const totalPages = Math.max(firstPage?.pagination?.pages || 0, firstPage ? 1 : 0);
+    const wants = [...(firstPage?.wants || [])];
+
+    for (let page = 2; page <= totalPages; page += 1) {
+      const payload = await this.getWantlist(page, perPage);
+      wants.push(...(payload?.wants || []));
+    }
+
+    return wants;
+  }
+
   getRelease(releaseId) {
     return this.request(`/releases/${releaseId}`);
   }
