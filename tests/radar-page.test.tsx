@@ -11,10 +11,10 @@ const authState = vi.hoisted(() => ({
 }));
 
 const messages = {
+  'radar.eyebrow': 'Radar',
   'radar.blockedTitle': 'Connect your Discogs account',
   'radar.blockedBody': 'Radar needs a configured Discogs account before it can show your buying workspace.',
   'radar.openSettings': 'Open Settings',
-  'radar.emptyEyebrow': 'Radar',
   'radar.emptyTitle': 'Your Radar is ready',
   'radar.emptyBody': 'Wantlist data will appear here in the next slice.',
   'radar.accountUnavailable': 'Discogs account status could not be loaded. Reload the page or review Settings before opening Radar.'
@@ -47,6 +47,7 @@ describe('Radar page', () => {
   it('shows a blocked state with a Settings link when the Discogs account is not configured', () => {
     const html = renderRadar();
 
+    expect(html).toContain(messages['radar.eyebrow']);
     expect(html).toContain(messages['radar.blockedTitle']);
     expect(html).toContain(messages['radar.blockedBody']);
     expect(html).toContain('href="/settings"');
@@ -58,7 +59,7 @@ describe('Radar page', () => {
 
     const html = renderRadar();
 
-    expect(html).toContain(messages['radar.emptyEyebrow']);
+    expect(html).toContain(messages['radar.eyebrow']);
     expect(html).toContain(messages['radar.emptyTitle']);
     expect(html).toContain(messages['radar.emptyBody']);
     expect(html).not.toContain('href="/settings"');

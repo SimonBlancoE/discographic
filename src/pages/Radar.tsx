@@ -13,7 +13,7 @@ function Radar() {
   if (!capabilities.canUseRadar) {
     return (
       <section className="glass-panel mx-auto max-w-3xl space-y-5 p-8 text-center">
-        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('nav.radar')}</p>
+        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
         <div className="space-y-3">
           <h2 className="font-display text-4xl text-white">{t('radar.blockedTitle')}</h2>
           <p className="text-base text-slate-300">{t('radar.blockedBody')}</p>
@@ -29,7 +29,7 @@ function Radar() {
 
   return (
     <section className="glass-panel mx-auto max-w-4xl space-y-4 p-8">
-      <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.emptyEyebrow')}</p>
+      <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
       <div className="space-y-3">
         <h2 className="font-display text-4xl text-white">{t('radar.emptyTitle')}</h2>
         <p className="max-w-2xl text-base text-slate-300">{t('radar.emptyBody')}</p>
