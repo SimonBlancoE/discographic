@@ -71,6 +71,16 @@ If you use Discogs every day, especially if you sell records there, your feedbac
 - **Achievements** - tiered unlockables and hidden badges.
 - **Random picker** - for when you want the app to choose tonight's record.
 
+## Radar v1 guardrails
+
+Radar v1 is a local Wantlist workspace, not a Marketplace automation layer.
+
+- It uses release-level Marketplace stats and local decisions only.
+- It does not implement seller recommendations, combined purchasing, shipping logic, listing-level availability, exact condition filtering, scheduled jobs, automatic alerts, price history, or complex scoring.
+- It does not write Radar decisions, notes, or Wantlist membership back to Discogs in v1.
+- Minimum condition is stored as a future-facing preference and is informational only in v1.
+- The older "Wantlist Price Alerts" direction is superseded by the Radar v1 PRD unless it is explicitly revived in a later plan.
+
 ## Quick start
 
 If you just want to run it, this is the path.

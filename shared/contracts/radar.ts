@@ -81,10 +81,6 @@ export type RadarRelease = {
   marketplace: {
     status: MarketplaceStatus;
     estimated_price: number | null;
-    listing_status: string | null;
-    listing_price: number | null;
-    listing_currency: string | null;
-    listing_price_eur: number | null;
     last_checked_at: string | null;
   };
   timestamps: {
@@ -383,10 +379,6 @@ export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
     marketplace: {
       status: asMarketplaceStatus(marketplace.status),
       estimated_price: asNumber(marketplace.estimated_price),
-      listing_status: asNullableText(marketplace.listing_status),
-      listing_price: asNumber(marketplace.listing_price),
-      listing_currency: asNullableText(marketplace.listing_currency),
-      listing_price_eur: asNumber(marketplace.listing_price_eur),
       last_checked_at: asNullableText(marketplace.last_checked_at),
     },
     timestamps: {

@@ -43,10 +43,6 @@ type RadarRow = {
   source_last_seen_at: string | null;
   marketplace_status: string | null;
   estimated_price: number | null;
-  listing_status: string | null;
-  listing_price: number | null;
-  listing_currency: string | null;
-  listing_price_eur: number | null;
   marketplace_last_checked_at: string | null;
   marketplace_last_unavailable_at: string | null;
   marketplace_available_again_at: string | null;
@@ -97,10 +93,6 @@ const RADAR_COLUMN_DEFINITIONS: RadarColumnDefinition[] = [
   { name: 'source_last_seen_at', sqlType: 'TEXT DEFAULT NULL' },
   { name: 'marketplace_status', sqlType: `TEXT NOT NULL DEFAULT '${MARKETPLACE_STATUS.PENDING}'` },
   { name: 'estimated_price', sqlType: 'REAL DEFAULT NULL' },
-  { name: 'listing_status', sqlType: 'TEXT DEFAULT NULL' },
-  { name: 'listing_price', sqlType: 'REAL DEFAULT NULL' },
-  { name: 'listing_currency', sqlType: 'TEXT DEFAULT NULL' },
-  { name: 'listing_price_eur', sqlType: 'REAL DEFAULT NULL' },
   { name: 'marketplace_last_checked_at', sqlType: 'TEXT DEFAULT NULL' },
   { name: 'marketplace_last_unavailable_at', sqlType: 'TEXT DEFAULT NULL' },
   { name: 'marketplace_available_again_at', sqlType: 'TEXT DEFAULT NULL' },
@@ -129,10 +121,6 @@ const RADAR_SELECT_COLUMNS = [
   'source_last_seen_at',
   'marketplace_status',
   'estimated_price',
-  'listing_status',
-  'listing_price',
-  'listing_currency',
-  'listing_price_eur',
   'marketplace_last_checked_at',
   'marketplace_last_unavailable_at',
   'marketplace_available_again_at',
@@ -319,10 +307,6 @@ function toRadarItem(row: RadarRow, ownedReleaseIds: ReadonlySet<number>) {
     marketplace: {
       status: row.marketplace_status,
       estimated_price: row.estimated_price,
-      listing_status: row.listing_status,
-      listing_price: row.listing_price,
-      listing_currency: row.listing_currency,
-      listing_price_eur: row.listing_price_eur,
       last_checked_at: row.marketplace_last_checked_at,
     },
     timestamps: {
@@ -433,10 +417,6 @@ export function migrateRadarStorage(db: Database.Database): void {
       source_last_seen_at TEXT DEFAULT NULL,
       marketplace_status TEXT NOT NULL DEFAULT '${MARKETPLACE_STATUS.PENDING}',
       estimated_price REAL DEFAULT NULL,
-      listing_status TEXT DEFAULT NULL,
-      listing_price REAL DEFAULT NULL,
-      listing_currency TEXT DEFAULT NULL,
-      listing_price_eur REAL DEFAULT NULL,
       marketplace_last_checked_at TEXT DEFAULT NULL,
       marketplace_last_unavailable_at TEXT DEFAULT NULL,
       marketplace_available_again_at TEXT DEFAULT NULL,
