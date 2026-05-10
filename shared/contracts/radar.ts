@@ -117,28 +117,24 @@ function asRecord(value: unknown): UnknownRecord | null {
     : null;
 }
 
+function valueFromSet<T extends string>(value: unknown, allowedValues: ReadonlySet<T>, fallback: T): T {
+  return allowedValues.has(value as T) ? (value as T) : fallback;
+}
+
 function asRadarPriority(value: unknown): RadarPriority {
-  return RADAR_PRIORITIES.has(value as RadarPriority)
-    ? (value as RadarPriority)
-    : RADAR_PRIORITY.NORMAL;
+  return valueFromSet(value, RADAR_PRIORITIES, RADAR_PRIORITY.NORMAL);
 }
 
 function asRadarSourceOrigin(value: unknown): RadarSourceOrigin {
-  return RADAR_SOURCE_ORIGINS.has(value as RadarSourceOrigin)
-    ? (value as RadarSourceOrigin)
-    : RADAR_SOURCE_ORIGIN.NONE;
+  return valueFromSet(value, RADAR_SOURCE_ORIGINS, RADAR_SOURCE_ORIGIN.NONE);
 }
 
 function asRadarSourceStatus(value: unknown): RadarSourceStatus {
-  return RADAR_SOURCE_STATUSES.has(value as RadarSourceStatus)
-    ? (value as RadarSourceStatus)
-    : RADAR_SOURCE_STATUS.ACTIVE;
+  return valueFromSet(value, RADAR_SOURCE_STATUSES, RADAR_SOURCE_STATUS.ACTIVE);
 }
 
 function asMarketplaceStatus(value: unknown): MarketplaceStatus {
-  return MARKETPLACE_STATUSES.has(value as MarketplaceStatus)
-    ? (value as MarketplaceStatus)
-    : MARKETPLACE_STATUS.PENDING;
+  return valueFromSet(value, MARKETPLACE_STATUSES, MARKETPLACE_STATUS.PENDING);
 }
 
 function isValidRadarRelease(release: RadarRelease): release is RadarRelease & { id: number; release_id: number } {
