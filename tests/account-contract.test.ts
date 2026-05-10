@@ -35,6 +35,7 @@ describe('account contract', () => {
       },
       capabilities: {
         canUseCollection: false,
+        canUseRadar: false,
         canSyncDiscogs: false,
         canImport: false,
         canExport: false,
@@ -61,6 +62,7 @@ describe('account contract', () => {
     expect(state.preferences.currency).toBe('USD');
     expect(state.capabilities.canManageAccount).toBe(true);
     expect(state.capabilities.canUseCollection).toBe(false);
+    expect(state.capabilities.canUseRadar).toBe(false);
     expect(state.capabilities.canAdminUsers).toBe(true);
   });
 
@@ -78,6 +80,7 @@ describe('account contract', () => {
     expect(state.preferences.currency).toBe('GBP');
     expect(state.capabilities).toEqual({
       canUseCollection: true,
+      canUseRadar: true,
       canSyncDiscogs: true,
       canImport: true,
       canExport: true,
@@ -100,6 +103,7 @@ describe('account contract', () => {
     });
     expect(state.preferences.currency).toBe(DEFAULT_CURRENCY);
     expect(state.capabilities.canUseCollection).toBe(false);
+    expect(state.capabilities.canUseRadar).toBe(false);
     expect(state.capabilities.canManageAccount).toBe(false);
   });
 
