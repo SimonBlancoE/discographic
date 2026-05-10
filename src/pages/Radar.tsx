@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   RADAR_MINIMUM_CONDITION,
+  RADAR_OPPORTUNITY_REASON,
   RADAR_PRIORITY,
   normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
+  type RadarOpportunityReason,
   type RadarEnrichmentStatus,
   type RadarLocalDecisionPayload,
   type RadarMinimumCondition,
@@ -54,6 +56,13 @@ const RADAR_MINIMUM_CONDITION_OPTIONS = [
   RADAR_MINIMUM_CONDITION.FAIR,
   RADAR_MINIMUM_CONDITION.POOR,
 ] as const;
+
+const RADAR_OPPORTUNITY_REASON_ORDER: RadarOpportunityReason[] = [
+  RADAR_OPPORTUNITY_REASON.BELOW_TARGET,
+  RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE,
+  RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN,
+  RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
+];
 
 const ENRICH_POLL_MS = 2000;
 
@@ -117,6 +126,14 @@ function createReleasePayload(draft: RadarReleaseDraft): RadarLocalDecisionPaylo
   };
 }
 
+function getVisibleRadarItems(radar: RadarResponse): RadarRelease[] {
+  return radar.items.filter((item) => item.opportunity.default_visible);
+}
+
+function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
+  return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
+}
+
 type RadarReleaseCardProps = {
   item: RadarRelease;
   t: Translate;
@@ -139,6 +156,7 @@ function RadarReleaseCard({
 
   const displayCurrency = item.display_currency || 'EUR';
   const releaseKey = item.id ?? item.release_id ?? 0;
+  const opportunityReasons = getOrderedOpportunityReasons(item);
 
   async function handleSave() {
     if (item.id == null) {
@@ -167,6 +185,18 @@ function RadarReleaseCard({
           <p className="text-sm text-slate-300">
             #{item.release_id} · {item.marketplace.status}
           </p>
+          {opportunityReasons.length ? (
+            <div className="flex flex-wrap gap-2">
+              {opportunityReasons.map((reason) => (
+                <span
+                  key={reason}
+                  className="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-950/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-100"
+                >
+                  {t(`radar.opportunity.${reason}`)}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
         <a
           href={`https://www.discogs.com/release/${item.release_id}`}
@@ -294,6 +324,8 @@ function renderRadarContent(
   t: Translate,
   onSave: RadarSaveHandler,
 ) {
+  const visibleItems = getVisibleRadarItems(radar);
+
   if (loading) {
     return (
       <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-8 text-center text-slate-300">
@@ -310,7 +342,7 @@ function renderRadarContent(
     );
   }
 
-  if (radar.items.length === 0) {
+  if (visibleItems.length === 0) {
     return (
       <div className="space-y-3 rounded-3xl border border-dashed border-white/15 bg-slate-950/20 p-8">
         <h2 className="font-display text-4xl text-white">{t('radar.emptyTitle')}</h2>
@@ -321,7 +353,7 @@ function renderRadarContent(
 
   return (
     <ul className="grid gap-4">
-      {radar.items.map((item) => (
+      {visibleItems.map((item) => (
         <RadarReleaseCard key={item.id ?? item.release_id} item={item} t={t} onSave={onSave} />
       ))}
     </ul>
