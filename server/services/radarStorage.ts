@@ -2,9 +2,12 @@ import type Database from 'better-sqlite3';
 import {
   MARKETPLACE_STATUS,
   normalizeRadarResponse,
+  RADAR_MINIMUM_CONDITION,
   RADAR_PRIORITY,
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
+  type RadarLocalDecisionUpdate,
+  type RadarPriority,
   type RadarResponse,
   type RadarSourceOrigin,
 } from '../../shared/contracts/radar.js';
@@ -58,6 +61,11 @@ type RadarSummaryParams = {
 };
 
 type RadarSummaryRow = Record<keyof RadarResponse['summary'], number | null>;
+
+type StoredRadarLocalDecisionUpdate = RadarLocalDecisionUpdate & {
+  userId: number;
+  radarId: number;
+};
 
 const RADAR_TABLE = 'radar_releases';
 
@@ -250,6 +258,54 @@ export function migrateRadarStorage(db: Database.Database): void {
 
 export function clearRadarRows(db: Database.Database, userId: number): void {
   db.prepare(`DELETE FROM ${RADAR_TABLE} WHERE user_id = ?`).run(userId);
+}
+
+export function updateRadarLocalDecision(
+  db: Database.Database,
+  {
+    userId,
+    radarId,
+    priority,
+    targetPriceEur,
+    minimumCondition,
+    note,
+    hidden,
+    resolved,
+  }: StoredRadarLocalDecisionUpdate,
+): boolean {
+  const normalizedPriority = Object.values(RADAR_PRIORITY).includes(priority)
+    ? priority
+    : RADAR_PRIORITY.NORMAL;
+  const normalizedTargetPriceEur =
+    targetPriceEur == null || !Number.isFinite(targetPriceEur) ? null : Number(targetPriceEur.toFixed(2));
+  const normalizedMinimumCondition = minimumCondition != null
+    && Object.values(RADAR_MINIMUM_CONDITION).includes(minimumCondition)
+    ? minimumCondition
+    : null;
+  const normalizedNote = typeof note === 'string' && note.trim() ? note.trim() : '';
+
+  const result = db.prepare(`
+    UPDATE ${RADAR_TABLE}
+    SET local_priority = @priority,
+        local_target_price_eur = @targetPriceEur,
+        local_minimum_condition = @minimumCondition,
+        local_note = @note,
+        local_hidden = @hidden,
+        local_resolved = @resolved,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = @radarId AND user_id = @userId
+  `).run({
+    userId,
+    radarId,
+    priority: normalizedPriority,
+    targetPriceEur: normalizedTargetPriceEur,
+    minimumCondition: normalizedMinimumCondition,
+    note: normalizedNote,
+    hidden: hidden ? 1 : 0,
+    resolved: resolved ? 1 : 0,
+  });
+
+  return result.changes > 0;
 }
 
 export function getRadarSnapshot(db: Database.Database, userId: number): RadarResponse {
