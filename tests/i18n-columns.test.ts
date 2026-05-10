@@ -96,7 +96,30 @@ const RADAR_KEYS = [
   'radar.summary.failed',
   'radar.summary.unavailable',
   'radar.emptyTitle',
-  'radar.emptyBody'
+  'radar.emptyBody',
+  'radar.openDiscogs',
+  'radar.priority',
+  'radar.priority.low',
+  'radar.priority.normal',
+  'radar.priority.high',
+  'radar.targetPrice',
+  'radar.minimumCondition',
+  'radar.minimumCondition.info',
+  'radar.minimumCondition.none',
+  'radar.minimumCondition.M',
+  'radar.minimumCondition.NM',
+  'radar.minimumCondition.VG+',
+  'radar.minimumCondition.VG',
+  'radar.minimumCondition.G+',
+  'radar.minimumCondition.G',
+  'radar.minimumCondition.F',
+  'radar.minimumCondition.P',
+  'radar.note',
+  'radar.hidden',
+  'radar.resolved',
+  'radar.save',
+  'radar.saving',
+  'radar.saveFailed'
 ];
 
 const VISUAL_I18N_KEYS = [

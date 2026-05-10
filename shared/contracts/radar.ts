@@ -9,6 +9,19 @@ export const RADAR_PRIORITY = Object.freeze({
 } as const);
 export type RadarPriority = (typeof RADAR_PRIORITY)[keyof typeof RADAR_PRIORITY];
 
+export const RADAR_MINIMUM_CONDITION = Object.freeze({
+  MINT: 'M',
+  NEAR_MINT: 'NM',
+  VERY_GOOD_PLUS: 'VG+',
+  VERY_GOOD: 'VG',
+  GOOD_PLUS: 'G+',
+  GOOD: 'G',
+  FAIR: 'F',
+  POOR: 'P',
+} as const);
+export type RadarMinimumCondition =
+  (typeof RADAR_MINIMUM_CONDITION)[keyof typeof RADAR_MINIMUM_CONDITION];
+
 export const RADAR_SOURCE_ORIGIN = Object.freeze({
   NONE: 'none',
   DISCOGS: 'discogs',
@@ -34,8 +47,9 @@ export type RadarRelease = {
   date_added: string | null;
   local: {
     priority: RadarPriority;
+    target_price: number | null;
     target_price_eur: number | null;
-    minimum_condition: string | null;
+    minimum_condition: RadarMinimumCondition | null;
     note: string;
     hidden: boolean;
     resolved: boolean;
@@ -58,6 +72,7 @@ export type RadarRelease = {
     created_at: string | null;
     updated_at: string | null;
   };
+  display_currency: string | null;
 };
 
 export type RadarSummary = {
@@ -78,6 +93,7 @@ export type RadarResponse = {
 };
 
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
+const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
 const MARKETPLACE_STATUSES = new Set<MarketplaceStatus>(Object.values(MARKETPLACE_STATUS));
@@ -125,6 +141,12 @@ function asRadarPriority(value: unknown): RadarPriority {
   return valueFromSet(value, RADAR_PRIORITIES, RADAR_PRIORITY.NORMAL);
 }
 
+function asRadarMinimumCondition(value: unknown): RadarMinimumCondition | null {
+  return RADAR_MINIMUM_CONDITIONS.has(value as RadarMinimumCondition)
+    ? (value as RadarMinimumCondition)
+    : null;
+}
+
 function asRadarSourceOrigin(value: unknown): RadarSourceOrigin {
   return valueFromSet(value, RADAR_SOURCE_ORIGINS, RADAR_SOURCE_ORIGIN.NONE);
 }
@@ -159,8 +181,9 @@ export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
     date_added: asNullableText(source.date_added),
     local: {
       priority: asRadarPriority(local.priority),
+      target_price: asNumber(local.target_price),
       target_price_eur: asNumber(local.target_price_eur),
-      minimum_condition: asNullableText(local.minimum_condition),
+      minimum_condition: asRadarMinimumCondition(local.minimum_condition),
       note: asText(local.note),
       hidden: asBoolean(local.hidden),
       resolved: asBoolean(local.resolved),
@@ -183,6 +206,7 @@ export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
       created_at: asNullableText(timestamps.created_at),
       updated_at: asNullableText(timestamps.updated_at),
     },
+    display_currency: asNullableText(source.display_currency),
   };
 }
 
