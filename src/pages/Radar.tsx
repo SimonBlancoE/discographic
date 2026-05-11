@@ -120,14 +120,21 @@ function renderWantlistSyncResult(wantlist: RadarSyncResult, t: Translate) {
   );
 }
 
-function renderRadarGettingStarted(
-  onStartUpdate: () => void,
-  onShowWantlistImport: () => void,
-  loading: boolean,
-  actionBusy: boolean,
-  updateRunning: boolean,
-  t: Translate,
-) {
+type RadarGettingStartedProps = {
+  onStartUpdate: () => void;
+  onShowWantlistImport: () => void;
+  updateActionDisabled: boolean;
+  updateRunning: boolean;
+  t: Translate;
+};
+
+function renderRadarGettingStarted({
+  onStartUpdate,
+  onShowWantlistImport,
+  updateActionDisabled,
+  updateRunning,
+  t,
+}: RadarGettingStartedProps) {
   return (
     <div
       data-radar-getting-started="true"
@@ -144,7 +151,7 @@ function renderRadarGettingStarted(
           <button
             type="button"
             onClick={onStartUpdate}
-            disabled={loading || actionBusy || updateRunning}
+            disabled={updateActionDisabled}
             className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
           >
             {updateRunning ? t('radar.updating') : t('radar.updateAction')}
@@ -547,8 +554,9 @@ function Radar() {
   const filteredItems = getFilteredRadarItems(radar.items, selectedFilter);
   const hasWantlistSyncResult = updateRun.wantlist.totalFetched > 0;
   const showGettingStarted = !loading && !loadFailed && radar.items.length === 0;
+  const updateActionDisabled = loading || actionBusy || updateRun.isRunning;
 
-  function applyUpdatedRadarState(nextStatus: RadarUpdateRunStatus, nextRadar: RadarResponse) {
+  function applyRadarUpdateResult(nextStatus: RadarUpdateRunStatus, nextRadar: RadarResponse) {
     if (nextStatus.wantlist.totalFetched > 0) {
       setSelectedFilter('all');
     }
@@ -631,7 +639,7 @@ function Radar() {
 
         const nextRadar = await api.getRadar();
         if (!cancelled) {
-          applyUpdatedRadarState(nextStatus, nextRadar);
+          applyRadarUpdateResult(nextStatus, nextRadar);
         }
       } catch {
         if (!cancelled) {
@@ -658,7 +666,7 @@ function Radar() {
       const nextStatus = await api.startRadarUpdateRun();
       setUpdateStatusError('');
       if (!nextStatus.isRunning) {
-        applyUpdatedRadarState(nextStatus, await api.getRadar());
+        applyRadarUpdateResult(nextStatus, await api.getRadar());
       } else {
         setUpdateRun(nextStatus);
       }
@@ -679,7 +687,7 @@ function Radar() {
       ]);
 
       setUpdateStatusError('');
-      applyUpdatedRadarState(nextStatus, nextRadar);
+      applyRadarUpdateResult(nextStatus, nextRadar);
     } catch {
       setUpdateStatusError(t('radar.updateStatusError'));
     } finally {
@@ -739,7 +747,7 @@ function Radar() {
           <button
             type="button"
             onClick={handleStartUpdate}
-            disabled={loading || actionBusy || updateRun.isRunning}
+            disabled={updateActionDisabled}
             className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
           >
             {updateRun.isRunning ? t('radar.updating') : t('radar.updateAction')}
@@ -756,14 +764,13 @@ function Radar() {
       ) : null}
 
       {showGettingStarted
-        ? renderRadarGettingStarted(
-          () => void handleStartUpdate(),
-          showWantlistImportPanel,
-          loading,
-          actionBusy,
-          updateRun.isRunning,
+        ? renderRadarGettingStarted({
+          onStartUpdate: () => void handleStartUpdate(),
+          onShowWantlistImport: showWantlistImportPanel,
+          updateActionDisabled,
+          updateRunning: updateRun.isRunning,
           t,
-        )
+        })
         : null}
 
       <RadarOperationalHeader
