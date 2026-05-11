@@ -153,6 +153,11 @@ function parseRadarNote(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function parseRadarId(value: unknown): number | null {
+  const radarId = Number(value);
+  return Number.isInteger(radarId) && radarId >= 1 ? radarId : null;
+}
+
 function getDisplayCurrency(userId: number): string {
   return normalizeCurrency(getSettingForUser(userId, 'currency') ?? DEFAULT_CURRENCY);
 }
@@ -277,8 +282,8 @@ router.put('/:id', async (req, res) => {
       return res.status(401).json({ error: req.t('backend.auth.required') });
     }
 
-    const radarId = Number(req.params.id);
-    if (!Number.isInteger(radarId) || radarId < 1) {
+    const radarId = parseRadarId(req.params.id);
+    if (radarId == null) {
       return res.status(400).json({ error: 'Radar release id is invalid' });
     }
 
@@ -398,8 +403,8 @@ router.get('/:id', async (req, res) => {
       return res.status(401).json({ error: req.t('backend.auth.required') });
     }
 
-    const radarId = Number(req.params.id);
-    if (!Number.isInteger(radarId) || radarId < 1) {
+    const radarId = parseRadarId(req.params.id);
+    if (radarId == null) {
       return res.status(400).json({ error: 'Radar release id is invalid' });
     }
 

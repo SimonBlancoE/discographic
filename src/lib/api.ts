@@ -177,7 +177,9 @@ export const api = {
   }),
   getStats: async (): Promise<DashboardStats> => normalizeDashboardStats(await request('/stats')),
   getRadar: async (): Promise<RadarResponse> => normalizeRadarResponse(await request('/radar')),
-  getRadarRelease: async (id: string | number): Promise<RadarRelease> => normalizeRadarRelease(await request(`/radar/${id}`)),
+  getRadarRelease: async (id: string | number): Promise<RadarRelease> => (
+    normalizeRadarRelease(await request(`/radar/${id}`))
+  ),
   getRadarStatus: async (): Promise<RadarUpdateRunStatus> => normalizeRadarUpdateRunStatus(await request('/radar/status')),
   startRadarUpdateRun: async (): Promise<RadarUpdateRunStatus> => (
     normalizeRadarUpdateRunStatus(await request('/radar/update', { method: 'POST' }))
