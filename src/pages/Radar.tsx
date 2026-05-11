@@ -120,6 +120,49 @@ function renderWantlistSyncResult(wantlist: RadarSyncResult, t: Translate) {
   );
 }
 
+function renderRadarGettingStarted(
+  onStartUpdate: () => void,
+  onShowWantlistImport: () => void,
+  loading: boolean,
+  actionBusy: boolean,
+  updateRunning: boolean,
+  t: Translate,
+) {
+  return (
+    <div
+      data-radar-getting-started="true"
+      className="rounded-3xl border border-brand-200/20 bg-brand-400/10 p-6"
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.28em] text-brand-100">{t('radar.eyebrow')}</p>
+          <h2 className="font-display text-3xl text-white">{t('radar.gettingStartedTitle')}</h2>
+          <p className="max-w-3xl text-sm text-slate-200">{t('radar.gettingStartedBody')}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onStartUpdate}
+            disabled={loading || actionBusy || updateRunning}
+            className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {updateRunning ? t('radar.updating') : t('radar.updateAction')}
+          </button>
+          <button
+            type="button"
+            onClick={onShowWantlistImport}
+            aria-controls={RADAR_WANTLIST_IMPORT_SECTION_ID}
+            className="secondary-button"
+          >
+            {t('radar.importAction')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function hasRadarAttentionIssue(item: RadarRelease): boolean {
   return item.marketplace.status === MARKETPLACE_STATUS.PENDING
     || item.marketplace.status === MARKETPLACE_STATUS.FAILED
@@ -503,6 +546,7 @@ function Radar() {
   const [selectedFilter, setSelectedFilter] = useState<RadarFilterId>('all');
   const filteredItems = getFilteredRadarItems(radar.items, selectedFilter);
   const hasWantlistSyncResult = updateRun.wantlist.totalFetched > 0;
+  const showGettingStarted = !loading && !loadFailed && radar.items.length === 0;
 
   useEffect(() => {
     if (accountUnavailable || !capabilities.canUseRadar) {
@@ -701,6 +745,17 @@ function Radar() {
           {updateError}
         </div>
       ) : null}
+
+      {showGettingStarted
+        ? renderRadarGettingStarted(
+          () => void handleStartUpdate(),
+          showWantlistImportPanel,
+          loading,
+          actionBusy,
+          updateRun.isRunning,
+          t,
+        )
+        : null}
 
       <RadarOperationalHeader
         items={radar.items}
