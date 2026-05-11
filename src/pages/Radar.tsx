@@ -86,6 +86,10 @@ type RadarStateLabelKey =
   | 'radar.state.resolved'
   | 'radar.state.missingFromSource';
 
+type RadarCollectionMatchLabelKey =
+  | 'radar.collectionMatch.single'
+  | 'radar.collectionMatch.multiple';
+
 const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, RadarStateLabelKey>> = {
   [MARKETPLACE_STATUS.PENDING]: 'radar.state.pending',
   [MARKETPLACE_STATUS.UNAVAILABLE]: 'radar.state.unavailable',
@@ -156,6 +160,12 @@ function createReleasePayload(draft: RadarReleaseDraft): RadarLocalDecisionPaylo
 
 function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
   return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
+}
+
+function getCollectionMatchLabelKey(copyCount: number): RadarCollectionMatchLabelKey {
+  return copyCount === 1
+    ? 'radar.collectionMatch.single'
+    : 'radar.collectionMatch.multiple';
 }
 
 function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolean {
@@ -305,12 +315,9 @@ function RadarReleaseCard({
               data-radar-collection={String(releaseKey)}
               className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
             >
-              {t(
-                collectionMatch.copy_count === 1
-                  ? 'radar.collectionMatch.single'
-                  : 'radar.collectionMatch.multiple',
-                { count: collectionMatch.copy_count },
-              )}
+              {t(getCollectionMatchLabelKey(collectionMatch.copy_count), {
+                count: collectionMatch.copy_count,
+              })}
             </Link>
           ) : null}
           {hasLabels ? (

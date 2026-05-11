@@ -15,6 +15,7 @@ import {
   RADAR_MINIMUM_CONDITION,
   RADAR_PRIORITY,
   RADAR_SOURCE_STATUS,
+  type RadarCollectionMatch,
 } from '../shared/contracts/radar.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -534,10 +535,7 @@ describe('radar storage', () => {
         reasons: string[];
         default_visible: boolean;
         is_in_collection: boolean;
-        collection_match: {
-          primary_release_id: number | null;
-          copy_count: number;
-        } | null;
+        collection_match: RadarCollectionMatch | null;
       };
     }>;
 

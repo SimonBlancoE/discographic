@@ -45,6 +45,11 @@ export const RADAR_OPPORTUNITY_REASON = Object.freeze({
 export type RadarOpportunityReason =
   (typeof RADAR_OPPORTUNITY_REASON)[keyof typeof RADAR_OPPORTUNITY_REASON];
 
+export type RadarCollectionMatch = {
+  primary_release_id: number | null;
+  copy_count: number;
+};
+
 export const RADAR_ENRICH_STATUS = Object.freeze({
   IDLE: 'idle',
   RUNNING: 'running',
@@ -91,10 +96,7 @@ export type RadarRelease = {
     reasons: RadarOpportunityReason[];
     default_visible: boolean;
     is_in_collection: boolean;
-    collection_match: {
-      primary_release_id: number | null;
-      copy_count: number;
-    } | null;
+    collection_match: RadarCollectionMatch | null;
   };
   display_currency: string | null;
 };
@@ -346,6 +348,23 @@ function isValidRadarRelease(release: RadarRelease): release is RadarRelease & {
   return release.id != null && release.release_id != null;
 }
 
+function normalizeRadarCollectionMatch(value: unknown): RadarCollectionMatch | null {
+  const collectionMatch = asRecord(value);
+  if (!collectionMatch) {
+    return null;
+  }
+
+  const normalizedCollectionMatch = {
+    primary_release_id: asNumber(collectionMatch.primary_release_id),
+    copy_count: asCount(collectionMatch.copy_count),
+  };
+
+  return normalizedCollectionMatch.primary_release_id != null
+    && normalizedCollectionMatch.copy_count > 0
+    ? normalizedCollectionMatch
+    : null;
+}
+
 export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
   const source = asRecord(release) ?? {};
   const local = asRecord(source.local) ?? {};
@@ -353,13 +372,6 @@ export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
   const marketplace = asRecord(source.marketplace) ?? {};
   const timestamps = asRecord(source.timestamps) ?? {};
   const opportunity = asRecord(source.opportunity) ?? {};
-  const collectionMatch = asRecord(opportunity.collection_match);
-  const normalizedCollectionMatch = collectionMatch
-    ? {
-        primary_release_id: asNumber(collectionMatch.primary_release_id),
-        copy_count: asCount(collectionMatch.copy_count),
-      }
-    : null;
   const reasons = asArray(opportunity.reasons)
     .map((reason) => asRadarOpportunityReason(reason))
     .filter((reason): reason is RadarOpportunityReason => reason != null);
@@ -400,11 +412,7 @@ export function normalizeRadarRelease(release: unknown = {}): RadarRelease {
       reasons,
       default_visible: asBoolean(opportunity.default_visible),
       is_in_collection: asBoolean(opportunity.is_in_collection),
-      collection_match: normalizedCollectionMatch != null
-        && normalizedCollectionMatch.primary_release_id != null
-        && normalizedCollectionMatch.copy_count > 0
-        ? normalizedCollectionMatch
-        : null,
+      collection_match: normalizeRadarCollectionMatch(opportunity.collection_match),
     },
     display_currency: asNullableText(source.display_currency),
   };

@@ -8,7 +8,7 @@ import {
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
   type RadarLocalDecisionUpdate,
-  type RadarRelease,
+  type RadarCollectionMatch,
   type RadarOpportunityReason,
   type RadarResponse,
   type RadarSourceOrigin,
@@ -73,7 +73,9 @@ type RadarAvailabilityTransition = {
   clearAvailableAgain: boolean;
 };
 
-type RadarCollectionMatch = NonNullable<RadarRelease['opportunity']['collection_match']>;
+type CollectionMatchRow = RadarCollectionMatch & {
+  release_id: number;
+};
 
 const RADAR_TABLE = 'radar_releases';
 const HIDDEN_OR_INACTIVE_SORT_BUCKET = 99;
@@ -194,7 +196,7 @@ function isAvailableAgain(row: RadarRow): boolean {
 
 function getOpportunityReasons(
   row: RadarRow,
-  collectionMatches: ReadonlyMap<number, RadarCollectionMatch>,
+  isInCollection: boolean,
 ): RadarOpportunityReason[] {
   const reasons: RadarOpportunityReason[] = [];
 
@@ -210,7 +212,7 @@ function getOpportunityReasons(
     reasons.push(RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN);
   }
 
-  if (collectionMatches.has(row.release_id)) {
+  if (isInCollection) {
     reasons.push(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION);
   }
 
@@ -278,9 +280,10 @@ function getTimestampRank(value: string | null): number {
 }
 
 function toRadarItem(row: RadarRow, collectionMatches: ReadonlyMap<number, RadarCollectionMatch>) {
-  const reasons = getOpportunityReasons(row, collectionMatches);
-  const defaultVisible = isDefaultVisible(row);
   const collectionMatch = collectionMatches.get(row.release_id) ?? null;
+  const isInCollection = collectionMatch != null;
+  const reasons = getOpportunityReasons(row, isInCollection);
+  const defaultVisible = isDefaultVisible(row);
 
   return {
     id: row.id,
@@ -316,7 +319,7 @@ function toRadarItem(row: RadarRow, collectionMatches: ReadonlyMap<number, Radar
     opportunity: {
       reasons,
       default_visible: defaultVisible,
-      is_in_collection: collectionMatch != null,
+      is_in_collection: isInCollection,
       collection_match: collectionMatch,
     },
   };
@@ -336,7 +339,7 @@ function getCollectionMatches(db: Database.Database, userId: number): Map<number
     return new Map<number, RadarCollectionMatch>();
   }
 
-  const primaryReleaseOrder = hasColumn(db, 'releases', 'date_added')
+  const primaryReleaseOrderClause = hasColumn(db, 'releases', 'date_added')
     ? `
         CASE WHEN r2.date_added IS NULL OR r2.date_added = '' THEN 1 ELSE 0 END ASC,
         r2.date_added DESC,
@@ -344,7 +347,7 @@ function getCollectionMatches(db: Database.Database, userId: number): Map<number
       `
     : 'r2.id DESC';
 
-  const rows = db.prepare<[{ userId: number }], RadarCollectionMatch & { release_id: number }>(`
+  const rows = db.prepare<[{ userId: number }], CollectionMatchRow>(`
     SELECT
       r.release_id,
       COUNT(*) AS copy_count,
@@ -353,7 +356,7 @@ function getCollectionMatches(db: Database.Database, userId: number): Map<number
         FROM releases r2
         WHERE r2.user_id = @userId
           AND r2.release_id = r.release_id
-        ORDER BY ${primaryReleaseOrder}
+        ORDER BY ${primaryReleaseOrderClause}
         LIMIT 1
       ) AS primary_release_id
     FROM releases AS r

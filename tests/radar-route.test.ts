@@ -284,10 +284,12 @@ describe('radar route', () => {
   });
 
   it('returns navigable collection matches as stable Radar contract data for no match, one copy, and multiple copies', async () => {
+    const baseRadarItem = createRadarSnapshot().items[0];
+
     getRadarForUser.mockReturnValue({
       items: [
         {
-          ...createRadarSnapshot().items[0],
+          ...baseRadarItem,
           id: 1,
           release_id: 401,
           opportunity: {
@@ -298,7 +300,7 @@ describe('radar route', () => {
           },
         },
         {
-          ...createRadarSnapshot().items[0],
+          ...baseRadarItem,
           id: 2,
           release_id: 402,
           opportunity: {
@@ -312,7 +314,7 @@ describe('radar route', () => {
           },
         },
         {
-          ...createRadarSnapshot().items[0],
+          ...baseRadarItem,
           id: 3,
           release_id: 403,
           opportunity: {
