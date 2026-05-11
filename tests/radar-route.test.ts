@@ -409,6 +409,34 @@ describe('radar route', () => {
     });
   });
 
+  it('returns a single Radar release snapshot for a valid id', async () => {
+    const response = await fetch(`${baseUrl}/api/radar/1`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      id: 1,
+      release_id: 303,
+      title: 'Editable Release',
+      artist: 'Artist C',
+      opportunity: {
+        collection_match: {
+          primary_release_id: 55,
+          copy_count: 2,
+        },
+      },
+      display_currency: 'USD',
+    });
+  });
+
+  it('returns 404 when a Radar release id does not exist', async () => {
+    const response = await fetch(`${baseUrl}/api/radar/999`);
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Radar release not found',
+    });
+  });
+
   it('applies a validated wantlist preview using display-currency target prices and returns the refreshed Radar snapshot', async () => {
     const form = new FormData();
     form.append('file', new Blob(['release_id,target_price\n303,12.5\n']), 'wantlist.csv');

@@ -3,10 +3,8 @@ import { Link } from 'react-router-dom';
 import {
   RADAR_OPPORTUNITY_REASON,
   RADAR_PRIORITY,
-  RADAR_SOURCE_STATUS,
   normalizeRadarResponse,
   normalizeRadarUpdateRunStatus,
-  type RadarOpportunityReason,
   type RadarRelease,
   type RadarResponse,
   type RadarSyncResult,
@@ -19,6 +17,12 @@ import { getErrorMessage } from '../lib/errors';
 import { formatCurrency, formatDate } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { api } from '../lib/api';
+import {
+  getOrderedRadarOpportunityReasons,
+  getRadarCollectionMatchLabelKey,
+  getRadarStateLabelKeys,
+  type RadarStateLabelKey,
+} from '../lib/radarPresentation';
 import type { Translate } from '../lib/types';
 
 const UPDATE_STATUS_CARDS = [
@@ -26,13 +30,6 @@ const UPDATE_STATUS_CARDS = [
   { labelKey: 'radar.updateTotal', valueKey: 'total' },
   { labelKey: 'radar.updatePending', valueKey: 'pending' },
 ] as const;
-
-const RADAR_OPPORTUNITY_REASON_ORDER: RadarOpportunityReason[] = [
-  RADAR_OPPORTUNITY_REASON.BELOW_TARGET,
-  RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE,
-  RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN,
-  RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
-];
 
 type RadarFilterId =
   | 'all'
@@ -85,18 +82,6 @@ const RADAR_AUXILIARY_FILTERS = [
   labelKey: string;
 }[];
 
-type RadarStateLabelKey =
-  | 'radar.state.pending'
-  | 'radar.state.unavailable'
-  | 'radar.state.failed'
-  | 'radar.state.hidden'
-  | 'radar.state.resolved'
-  | 'radar.state.missingFromSource';
-
-type RadarCollectionMatchLabelKey =
-  | 'radar.collectionMatch.single'
-  | 'radar.collectionMatch.multiple';
-
 const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, RadarStateLabelKey>> = {
   [MARKETPLACE_STATUS.PENDING]: 'radar.state.pending',
   [MARKETPLACE_STATUS.UNAVAILABLE]: 'radar.state.unavailable',
@@ -107,7 +92,6 @@ const RADAR_RELEASE_FIELD_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.2em] 
 const RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS = 'mt-1 font-semibold text-white';
 const RADAR_RELEASE_FIELD_VALUE_CLASS = 'mt-1 text-slate-200';
 const UPDATE_POLL_MS = 2000;
-
 function createEmptyRadarResponse(): RadarResponse {
   return normalizeRadarResponse({});
 }
@@ -131,16 +115,6 @@ function renderWantlistSyncResult(wantlist: RadarSyncResult, t: Translate) {
       </p>
     </div>
   );
-}
-
-function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
-  return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
-}
-
-function getCollectionMatchLabelKey(copyCount: number): RadarCollectionMatchLabelKey {
-  return copyCount === 1
-    ? 'radar.collectionMatch.single'
-    : 'radar.collectionMatch.multiple';
 }
 
 function hasRadarAttentionIssue(item: RadarRelease): boolean {
@@ -195,29 +169,6 @@ function getRadarPrimaryMetricCounts(items: RadarRelease[]): Record<RadarPrimary
   }
 
   return counts;
-}
-
-function getRadarStateLabelKeys(item: RadarRelease): RadarStateLabelKey[] {
-  const labelKeys: RadarStateLabelKey[] = [];
-  const marketplaceStateLabelKey = RADAR_MARKETPLACE_STATE_LABEL_KEYS[item.marketplace.status];
-
-  if (marketplaceStateLabelKey) {
-    labelKeys.push(marketplaceStateLabelKey);
-  }
-
-  if (item.source.status === RADAR_SOURCE_STATUS.MISSING) {
-    labelKeys.push('radar.state.missingFromSource');
-  }
-
-  if (item.local.hidden) {
-    labelKeys.push('radar.state.hidden');
-  }
-
-  if (item.local.resolved) {
-    labelKeys.push('radar.state.resolved');
-  }
-
-  return labelKeys;
 }
 
 type RadarFilterBarProps = {
@@ -380,7 +331,7 @@ function RadarReleaseRow({
   t,
 }: RadarReleaseRowProps) {
   const releaseKey = item.id ?? item.release_id ?? 0;
-  const opportunityReasons = getOrderedOpportunityReasons(item);
+  const opportunityReasons = getOrderedRadarOpportunityReasons(item);
   const stateLabelKeys = getRadarStateLabelKeys(item);
   const collectionMatch = item.opportunity.collection_match;
   const hasLabels = stateLabelKeys.length > 0 || opportunityReasons.length > 0;
@@ -410,7 +361,13 @@ function RadarReleaseRow({
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">#{item.release_id}</p>
               <p className="truncate text-sm text-slate-300">{item.artist}</p>
-              <p className="font-display text-xl leading-tight text-white">{item.title}</p>
+              <Link
+                to={`/radar/${releaseKey}`}
+                data-radar-detail={String(releaseKey)}
+                className="block font-display text-xl leading-tight text-white no-underline transition hover:text-brand-100"
+              >
+                {item.title}
+              </Link>
               {item.year ? <p className="text-sm text-slate-500">{item.year}</p> : null}
             </div>
 
@@ -429,7 +386,7 @@ function RadarReleaseRow({
                 data-radar-collection={String(releaseKey)}
                 className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
               >
-                {t(getCollectionMatchLabelKey(collectionMatch.copy_count), {
+                {t(getRadarCollectionMatchLabelKey(collectionMatch.copy_count), {
                   count: collectionMatch.copy_count,
                 })}
               </Link>

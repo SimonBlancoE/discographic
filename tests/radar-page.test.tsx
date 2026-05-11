@@ -806,6 +806,37 @@ describe('Radar page', () => {
     expect(text).toContain('View 3 copies in your collection');
   });
 
+  it('shows a navigable Radar detail link for each release row', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        createRadarRelease({
+          id: 22,
+          release_id: 622,
+          title: 'Single Match',
+          artist: 'Artist B',
+        }),
+      ],
+      summary: {
+        total: 1,
+        active: 1,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 0,
+        pending: 1,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
+
+    const rendered = await renderRadar();
+    const detailLink = rendered.querySelector('a[data-radar-detail="22"]') as HTMLAnchorElement | null;
+
+    expect(detailLink?.getAttribute('href')).toBe('/radar/22');
+    expect(detailLink?.textContent).toContain('Single Match');
+  });
+
   it('filters Radar rows from the normalized list contract and shows natural state labels', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
