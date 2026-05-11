@@ -548,6 +548,15 @@ function Radar() {
   const hasWantlistSyncResult = updateRun.wantlist.totalFetched > 0;
   const showGettingStarted = !loading && !loadFailed && radar.items.length === 0;
 
+  function applyUpdatedRadarState(nextStatus: RadarUpdateRunStatus, nextRadar: RadarResponse) {
+    if (nextStatus.wantlist.totalFetched > 0) {
+      setSelectedFilter('all');
+    }
+
+    setUpdateRun(nextStatus);
+    setRadar(nextRadar);
+  }
+
   useEffect(() => {
     if (accountUnavailable || !capabilities.canUseRadar) {
       setRadar(createEmptyRadarResponse());
@@ -622,7 +631,7 @@ function Radar() {
 
         const nextRadar = await api.getRadar();
         if (!cancelled) {
-          setRadar(nextRadar);
+          applyUpdatedRadarState(nextStatus, nextRadar);
         }
       } catch {
         if (!cancelled) {
@@ -647,10 +656,11 @@ function Radar() {
 
     try {
       const nextStatus = await api.startRadarUpdateRun();
-      setUpdateRun(nextStatus);
       setUpdateStatusError('');
       if (!nextStatus.isRunning) {
-        setRadar(await api.getRadar());
+        applyUpdatedRadarState(nextStatus, await api.getRadar());
+      } else {
+        setUpdateRun(nextStatus);
       }
     } catch (error) {
       setUpdateError(t('radar.updateError', { error: getErrorMessage(error, t('client.networkError')) }));
@@ -669,8 +679,7 @@ function Radar() {
       ]);
 
       setUpdateStatusError('');
-      setUpdateRun(nextStatus);
-      setRadar(nextRadar);
+      applyUpdatedRadarState(nextStatus, nextRadar);
     } catch {
       setUpdateStatusError(t('radar.updateStatusError'));
     } finally {
