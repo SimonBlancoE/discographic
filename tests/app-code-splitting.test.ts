@@ -6,6 +6,7 @@ const lazyPages = [
   'Dashboard',
   'Collection',
   'Radar',
+  'RadarReleaseDetail',
   'CollectionWall',
   'ReleaseDetail',
   'Settings',
@@ -31,5 +32,6 @@ describe('App route code splitting', () => {
     expect(appSource).toContain("to=\"/radar\"");
     expect(appSource).toContain("t('nav.radar')");
     expect(appSource).toContain('<Route path="/radar" element={<Radar />} />');
+    expect(appSource).toContain('<Route path="/radar/:id" element={<RadarReleaseDetail />} />');
   });
 });

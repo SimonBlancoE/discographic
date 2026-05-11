@@ -418,9 +418,13 @@ function RadarReleaseCard({
     <li className="rounded-3xl border border-white/10 bg-slate-950/30 p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
-          <p className="font-display text-2xl text-white">
+          <Link
+            to={`/radar/${item.id}`}
+            data-radar-detail={String(releaseKey)}
+            className="font-display text-2xl text-white no-underline transition hover:text-brand-100"
+          >
             {item.artist} - {item.title}
-          </p>
+          </Link>
           <p className="text-sm text-slate-300">#{item.release_id}</p>
           {collectionMatch?.primary_release_id != null ? (
             <Link
