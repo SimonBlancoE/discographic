@@ -65,13 +65,21 @@ type RadarFilterId =
   | 'pending'
   | 'failed';
 
-const RADAR_PRIMARY_METRICS: ReadonlyArray<{ id: Extract<RadarFilterId, 'opportunities' | 'below_target' | 'high_priority' | 'in_collection' | 'attention'>; labelKey: string }> = [
+type RadarPrimaryMetricId = Extract<
+  RadarFilterId,
+  'opportunities' | 'below_target' | 'high_priority' | 'in_collection' | 'attention'
+>;
+
+const RADAR_PRIMARY_METRICS = [
   { id: 'opportunities', labelKey: 'radar.filter.opportunities' },
   { id: 'below_target', labelKey: 'radar.filter.belowTarget' },
   { id: 'high_priority', labelKey: 'radar.filter.highPriority' },
   { id: 'in_collection', labelKey: 'radar.filter.inCollection' },
   { id: 'attention', labelKey: 'radar.filter.attention' },
-] as const;
+] as const satisfies readonly {
+  id: RadarPrimaryMetricId;
+  labelKey: string;
+}[];
 
 const RADAR_SECONDARY_SUMMARY_CHIPS = [
   { labelKey: 'radar.summary.total', valueKey: 'total' },
@@ -82,14 +90,20 @@ const RADAR_SECONDARY_SUMMARY_CHIPS = [
   { labelKey: 'radar.summary.pending', valueKey: 'pending' },
   { labelKey: 'radar.summary.failed', valueKey: 'failed' },
   { labelKey: 'radar.summary.unavailable', valueKey: 'unavailable' },
-] as const;
+] as const satisfies readonly {
+  labelKey: string;
+  valueKey: keyof RadarResponse['summary'];
+}[];
 
 const RADAR_AUXILIARY_FILTERS = [
   { id: 'all', labelKey: 'radar.filter.all' },
   { id: 'hidden_resolved', labelKey: 'radar.filter.hiddenResolved' },
   { id: 'pending', labelKey: 'radar.filter.pending' },
   { id: 'failed', labelKey: 'radar.filter.failed' },
-] as const;
+] as const satisfies readonly {
+  id: RadarFilterId;
+  labelKey: string;
+}[];
 
 type RadarStateLabelKey =
   | 'radar.state.pending'
@@ -205,8 +219,24 @@ function getFilteredRadarItems(items: RadarRelease[], filterId: RadarFilterId): 
   return items.filter((item) => matchesRadarFilter(item, filterId));
 }
 
-function getRadarFilterCount(items: RadarRelease[], filterId: RadarFilterId): number {
-  return getFilteredRadarItems(items, filterId).length;
+function getRadarPrimaryMetricCounts(items: RadarRelease[]): Record<RadarPrimaryMetricId, number> {
+  const counts: Record<RadarPrimaryMetricId, number> = {
+    opportunities: 0,
+    below_target: 0,
+    high_priority: 0,
+    in_collection: 0,
+    attention: 0,
+  };
+
+  for (const item of items) {
+    for (const { id } of RADAR_PRIMARY_METRICS) {
+      if (matchesRadarFilter(item, id)) {
+        counts[id] += 1;
+      }
+    }
+  }
+
+  return counts;
 }
 
 function getRadarStateLabelKeys(item: RadarRelease): RadarStateLabelKey[] {
@@ -238,19 +268,23 @@ type RadarFilterBarProps = {
   onFilterChange: (filterId: RadarFilterId) => void;
 };
 
+type RadarOperationalHeaderProps = {
+  items: RadarRelease[];
+  summary: RadarResponse['summary'];
+  selectedFilter: RadarFilterId;
+  t: Translate;
+  onFilterChange: (filterId: RadarFilterId) => void;
+};
+
 function RadarOperationalHeader({
   items,
   summary,
   selectedFilter,
   t,
   onFilterChange,
-}: {
-  items: RadarRelease[];
-  summary: RadarResponse['summary'];
-  selectedFilter: RadarFilterId;
-  t: Translate;
-  onFilterChange: (filterId: RadarFilterId) => void;
-}) {
+}: RadarOperationalHeaderProps) {
+  const metricCounts = getRadarPrimaryMetricCounts(items);
+
   return (
     <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-6">
       <div className="grid gap-3 xl:grid-cols-5">
@@ -271,7 +305,7 @@ function RadarOperationalHeader({
               className={`min-h-28 rounded-3xl border p-4 text-left transition ${buttonClassName}`}
             >
               <p className="text-xs uppercase leading-5 tracking-[0.22em] text-slate-400">{t(labelKey)}</p>
-              <p className="mt-4 font-display text-4xl text-white">{getRadarFilterCount(items, id)}</p>
+              <p className="mt-4 font-display text-4xl text-white">{metricCounts[id]}</p>
             </button>
           );
         })}
