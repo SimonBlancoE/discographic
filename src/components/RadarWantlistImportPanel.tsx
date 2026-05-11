@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent, type Ref } from 'react';
 import type { RadarResponse } from '../../shared/contracts/radar.js';
 import { api } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
@@ -179,15 +179,24 @@ function ApplyResultBanner({ result, t }: { result: RadarWantlistApplyResponse['
     <div className="space-y-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-emerald-100">
       <p className="text-sm">{t('radar.import.applySummary', { imported: result.imported, skipped: result.skipped })}</p>
       <p className="text-sm text-emerald-200/90">{t('radar.import.applyBreakdown', { added: result.added, updated: result.updated })}</p>
+      <p className="text-sm text-emerald-50">{t('radar.import.applyNextStep')}</p>
     </div>
   );
 }
 
 type RadarWantlistImportPanelProps = {
   onApplied: (radar: RadarResponse) => void;
+  sectionId?: string;
+  sectionRef?: Ref<HTMLElement>;
+  headingRef?: Ref<HTMLHeadingElement>;
 };
 
-function RadarWantlistImportPanel({ onApplied }: RadarWantlistImportPanelProps) {
+function RadarWantlistImportPanel({
+  onApplied,
+  sectionId,
+  sectionRef,
+  headingRef,
+}: RadarWantlistImportPanelProps) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<ImportPhase>('idle');
   const [preview, setPreview] = useState<RadarWantlistPreviewResponse | null>(null);
@@ -244,9 +253,15 @@ function RadarWantlistImportPanel({ onApplied }: RadarWantlistImportPanelProps) 
   }
 
   return (
-    <section className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/30 p-6">
+    <section
+      id={sectionId}
+      ref={sectionRef}
+      className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/30 p-6"
+    >
       <div className="space-y-2">
-        <h2 className="font-display text-3xl text-white">{t('radar.import.title')}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="font-display text-3xl text-white outline-none">
+          {t('radar.import.title')}
+        </h2>
         <p className="max-w-3xl text-sm text-slate-300">{t('radar.import.description')}</p>
         <p className="text-sm text-slate-400">{t('radar.import.requiredHint')}</p>
       </div>

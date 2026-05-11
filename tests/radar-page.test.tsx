@@ -30,6 +30,7 @@ const messages = {
   'radar.blockedBody': 'Radar needs a configured Discogs account before it can show your buying workspace.',
   'radar.openSettings': 'Open Settings',
   'radar.updateAction': 'Update Radar',
+  'radar.importAction': 'Import file',
   'radar.updating': 'Updating Radar...',
   'radar.updateError': 'Radar could not start updating: boom',
   'radar.updateStatusError': 'Radar update status could not be loaded. Try again in a moment.',
@@ -77,7 +78,7 @@ const messages = {
   'radar.emptyBody': 'Your list is empty for now. When Wantlist releases arrive, Radar will keep their local decisions and market state here.',
   'radar.accountUnavailable': 'Discogs account status could not be loaded. Reload the page or review Settings before opening Radar.',
   'radar.import.title': 'Wantlist fallback import',
-  'radar.import.description': 'Upload a CSV or XLSX file to preview valid and invalid Wantlist rows before anything is applied.',
+  'radar.import.description': 'Use a CSV or XLSX file as a manual fallback or supplemental Wantlist source before you run a full Radar update.',
   'radar.import.requiredHint': 'Required: release_id. Optional: artist, title, year, notes, date added, target price, minimum condition, priority.',
   'radar.import.upload': 'Upload CSV/XLSX',
   'radar.import.downloadCsvTemplate': 'CSV template',
@@ -95,6 +96,7 @@ const messages = {
   'radar.import.applying': 'Importing preview...',
   'radar.import.applySummary': 'Imported 1 valid rows. Skipped 1 invalid rows.',
   'radar.import.applyBreakdown': '1 new · 0 merged',
+  'radar.import.applyNextStep': 'Radar was updated locally. Review the imported releases below, then use Update Radar when you want to refresh Wantlist data and prices from Discogs.',
   'radar.import.applyFailed': 'Radar could not import this preview: boom',
   'radar.openDiscogs': 'Open on Discogs',
   'radar.priority': 'Priority',
@@ -264,6 +266,14 @@ async function clickRadarFilter(rendered: HTMLDivElement, filter: string) {
     button.click();
     await Promise.resolve();
   });
+}
+
+function findButtonByText(rendered: HTMLDivElement, text: string): HTMLButtonElement | null {
+  return Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === text) ?? null;
+}
+
+function findHeadingByText(rendered: HTMLDivElement, text: string): HTMLHeadingElement | null {
+  return Array.from(rendered.querySelectorAll('h2')).find((heading) => heading.textContent === text) ?? null;
 }
 
 describe('Radar page', () => {
@@ -1075,18 +1085,78 @@ describe('Radar page', () => {
 
   it('shows Wantlist template actions, preview validation, and applies the preview into Radar', async () => {
     authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        createRadarRelease({
+          id: 21,
+          release_id: 611,
+          title: 'Operational Opportunity',
+          artist: 'Artist Ops',
+          local: {
+            priority: 'high',
+            target_price: 22,
+            target_price_eur: 22,
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 19,
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+          opportunity: {
+            reasons: ['below_target'],
+            default_visible: true,
+            is_in_collection: false,
+          },
+        }),
+      ],
+      summary: {
+        total: 1,
+        active: 1,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 1,
+        pending: 0,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
 
     const rendered = await renderRadar();
-    const csvButton = Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === messages['radar.import.downloadCsvTemplate']);
-    const xlsxButton = Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === messages['radar.import.downloadXlsxTemplate']);
+    const importAction = findButtonByText(rendered, messages['radar.importAction']);
+    const csvButton = findButtonByText(rendered, messages['radar.import.downloadCsvTemplate']);
+    const xlsxButton = findButtonByText(rendered, messages['radar.import.downloadXlsxTemplate']);
     const uploadInput = rendered.querySelector('input[type="file"]') as HTMLInputElement | null;
+    const importHeading = findHeadingByText(rendered, messages['radar.import.title']);
+    const radarList = rendered.querySelector('ul');
 
+    expect(importAction).not.toBeNull();
     expect(rendered.textContent).toContain(messages['radar.import.title']);
     expect(rendered.textContent).toContain(messages['radar.import.description']);
     expect(rendered.textContent).toContain(messages['radar.import.requiredHint']);
     expect(csvButton).not.toBeNull();
     expect(xlsxButton).not.toBeNull();
     expect(uploadInput).not.toBeNull();
+    expect(importHeading).not.toBeNull();
+    expect(radarList).not.toBeNull();
+
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(importHeading, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    await act(async () => {
+      importAction?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(importHeading);
+    const importFollowsRadarList = Boolean(
+      radarList?.compareDocumentPosition(importHeading as HTMLHeadingElement) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(importFollowsRadarList).toBe(true);
 
     await act(async () => {
       csvButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1122,9 +1192,7 @@ describe('Radar page', () => {
     expect(text).toContain('Kraftwerk');
     expect(text).toContain(messages['radar.import.rowError']);
 
-    const applyButton = Array.from(rendered.querySelectorAll('button')).find(
-      (button) => button.textContent === messages['radar.import.apply'],
-    );
+    const applyButton = findButtonByText(rendered, messages['radar.import.apply']);
 
     expect(applyButton).not.toBeNull();
 
@@ -1137,7 +1205,9 @@ describe('Radar page', () => {
     expect(applyRadarWantlistPreview).toHaveBeenCalledWith('preview-1');
     expect(rendered.textContent ?? '').toContain(messages['radar.import.applySummary']);
     expect(rendered.textContent ?? '').toContain(messages['radar.import.applyBreakdown']);
+    expect(rendered.textContent ?? '').toContain(messages['radar.import.applyNextStep']);
     expect(rendered.textContent ?? '').toContain('Computer World');
+    expect(startRadarUpdateRun).not.toHaveBeenCalled();
   });
 
   it('shows stopped Radar update state after a run has been halted', async () => {
