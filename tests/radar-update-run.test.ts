@@ -342,4 +342,23 @@ describe('Radar update run', () => {
       { id: 2, release_id: 222, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
     ]);
   });
+
+  it('shows a user-facing failure message instead of leaking raw Discogs errors', async () => {
+    const discogs = createDiscogsClient();
+    discogs.getAllWantlist = vi.fn().mockRejectedValue(
+      new Error('Discogs 404: {"message":"User does not exist or may have been deleted."}'),
+    );
+
+    expect(startUpdateRun(discogs)).toBe(true);
+
+    await waitFor(() => getStatus().isTerminal);
+
+    expect(getStatus()).toMatchObject({
+      phase: 'failed',
+      isRunning: false,
+      isTerminal: true,
+      canStop: false,
+      message: 'Radar could not finish updating. Review your Discogs account or try again in a moment.',
+    });
+  });
 });
