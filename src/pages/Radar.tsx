@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  RADAR_MINIMUM_CONDITION,
   RADAR_OPPORTUNITY_REASON,
   RADAR_PRIORITY,
-  RADAR_SOURCE_STATUS,
   normalizeRadarResponse,
   normalizeRadarUpdateRunStatus,
-  type RadarOpportunityReason,
   type RadarLocalDecisionPayload,
   type RadarMinimumCondition,
   type RadarPriority,
@@ -16,12 +13,21 @@ import {
   type RadarSyncResult,
   type RadarUpdateRunStatus,
 } from '../../shared/contracts/radar.js';
-import { MARKETPLACE_STATUS, type MarketplaceStatus } from '../../shared/contracts/marketplace.js';
+import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import RadarWantlistImportPanel from '../components/RadarWantlistImportPanel';
 import { useAuth } from '../lib/AuthContext';
 import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../lib/I18nContext';
 import { api } from '../lib/api';
+import {
+  RADAR_MINIMUM_CONDITION_OPTIONS,
+  RADAR_PRIORITY_OPTIONS,
+  createRadarReleaseDraft,
+  createRadarReleasePayload,
+  getOrderedRadarOpportunityReasons,
+  getRadarCollectionMatchLabelKey,
+  getRadarStateLabelKeys,
+} from '../lib/radarPresentation';
 import type { Translate } from '../lib/types';
 
 const UPDATE_STATUS_CARDS = [
@@ -29,30 +35,6 @@ const UPDATE_STATUS_CARDS = [
   { labelKey: 'radar.updateTotal', valueKey: 'total' },
   { labelKey: 'radar.updatePending', valueKey: 'pending' },
 ] as const;
-
-const RADAR_PRIORITY_OPTIONS: RadarPriority[] = [
-  RADAR_PRIORITY.LOW,
-  RADAR_PRIORITY.NORMAL,
-  RADAR_PRIORITY.HIGH,
-];
-
-const RADAR_MINIMUM_CONDITION_OPTIONS = [
-  RADAR_MINIMUM_CONDITION.MINT,
-  RADAR_MINIMUM_CONDITION.NEAR_MINT,
-  RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS,
-  RADAR_MINIMUM_CONDITION.VERY_GOOD,
-  RADAR_MINIMUM_CONDITION.GOOD_PLUS,
-  RADAR_MINIMUM_CONDITION.GOOD,
-  RADAR_MINIMUM_CONDITION.FAIR,
-  RADAR_MINIMUM_CONDITION.POOR,
-] as const;
-
-const RADAR_OPPORTUNITY_REASON_ORDER: RadarOpportunityReason[] = [
-  RADAR_OPPORTUNITY_REASON.BELOW_TARGET,
-  RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE,
-  RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN,
-  RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
-];
 
 type RadarFilterId =
   | 'all'
@@ -105,34 +87,7 @@ const RADAR_AUXILIARY_FILTERS = [
   labelKey: string;
 }[];
 
-type RadarStateLabelKey =
-  | 'radar.state.pending'
-  | 'radar.state.unavailable'
-  | 'radar.state.failed'
-  | 'radar.state.hidden'
-  | 'radar.state.resolved'
-  | 'radar.state.missingFromSource';
-
-type RadarCollectionMatchLabelKey =
-  | 'radar.collectionMatch.single'
-  | 'radar.collectionMatch.multiple';
-
-const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, RadarStateLabelKey>> = {
-  [MARKETPLACE_STATUS.PENDING]: 'radar.state.pending',
-  [MARKETPLACE_STATUS.UNAVAILABLE]: 'radar.state.unavailable',
-  [MARKETPLACE_STATUS.FAILED]: 'radar.state.failed',
-};
-
 const UPDATE_POLL_MS = 2000;
-
-type RadarReleaseDraft = {
-  priority: RadarPriority;
-  targetPrice: string;
-  minimumCondition: RadarMinimumCondition | '';
-  note: string;
-  hidden: boolean;
-  resolved: boolean;
-};
 
 type RadarSaveHandler = (id: number, payload: RadarLocalDecisionPayload) => Promise<void>;
 
@@ -159,40 +114,6 @@ function renderWantlistSyncResult(wantlist: RadarSyncResult, t: Translate) {
       </p>
     </div>
   );
-}
-
-function createReleaseDraft(item: RadarRelease): RadarReleaseDraft {
-  return {
-    priority: item.local.priority,
-    targetPrice: item.local.target_price == null ? '' : item.local.target_price.toFixed(2),
-    minimumCondition: item.local.minimum_condition ?? '',
-    note: item.local.note,
-    hidden: item.local.hidden,
-    resolved: item.local.resolved,
-  };
-}
-
-function createReleasePayload(draft: RadarReleaseDraft): RadarLocalDecisionPayload {
-  return {
-    local: {
-      priority: draft.priority,
-      target_price: draft.targetPrice.trim() ? Number(draft.targetPrice) : null,
-      minimum_condition: draft.minimumCondition || null,
-      note: draft.note,
-      hidden: draft.hidden,
-      resolved: draft.resolved,
-    },
-  };
-}
-
-function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
-  return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
-}
-
-function getCollectionMatchLabelKey(copyCount: number): RadarCollectionMatchLabelKey {
-  return copyCount === 1
-    ? 'radar.collectionMatch.single'
-    : 'radar.collectionMatch.multiple';
 }
 
 function hasRadarAttentionIssue(item: RadarRelease): boolean {
@@ -247,29 +168,6 @@ function getRadarPrimaryMetricCounts(items: RadarRelease[]): Record<RadarPrimary
   }
 
   return counts;
-}
-
-function getRadarStateLabelKeys(item: RadarRelease): RadarStateLabelKey[] {
-  const labelKeys: RadarStateLabelKey[] = [];
-  const marketplaceStateLabelKey = RADAR_MARKETPLACE_STATE_LABEL_KEYS[item.marketplace.status];
-
-  if (marketplaceStateLabelKey) {
-    labelKeys.push(marketplaceStateLabelKey);
-  }
-
-  if (item.source.status === RADAR_SOURCE_STATUS.MISSING) {
-    labelKeys.push('radar.state.missingFromSource');
-  }
-
-  if (item.local.hidden) {
-    labelKeys.push('radar.state.hidden');
-  }
-
-  if (item.local.resolved) {
-    labelKeys.push('radar.state.resolved');
-  }
-
-  return labelKeys;
 }
 
 type RadarFilterBarProps = {
@@ -381,18 +279,18 @@ function RadarReleaseCard({
   t,
   onSave,
 }: RadarReleaseCardProps) {
-  const [draft, setDraft] = useState(() => createReleaseDraft(item));
+  const [draft, setDraft] = useState(() => createRadarReleaseDraft(item));
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
-    setDraft(createReleaseDraft(item));
+    setDraft(createRadarReleaseDraft(item));
     setSaveFailed(false);
   }, [item]);
 
   const displayCurrency = item.display_currency || 'EUR';
   const releaseKey = item.id ?? item.release_id ?? 0;
-  const opportunityReasons = getOrderedOpportunityReasons(item);
+  const opportunityReasons = getOrderedRadarOpportunityReasons(item);
   const stateLabelKeys = getRadarStateLabelKeys(item);
   const collectionMatch = item.opportunity.collection_match;
   const hasLabels = stateLabelKeys.length > 0 || opportunityReasons.length > 0;
@@ -406,7 +304,7 @@ function RadarReleaseCard({
     setSaveFailed(false);
 
     try {
-      await onSave(item.id, createReleasePayload(draft));
+      await onSave(item.id, createRadarReleasePayload(draft));
     } catch {
       setSaveFailed(true);
     } finally {
@@ -432,7 +330,7 @@ function RadarReleaseCard({
               data-radar-collection={String(releaseKey)}
               className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
             >
-              {t(getCollectionMatchLabelKey(collectionMatch.copy_count), {
+              {t(getRadarCollectionMatchLabelKey(collectionMatch.copy_count), {
                 count: collectionMatch.copy_count,
               })}
             </Link>

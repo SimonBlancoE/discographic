@@ -1,149 +1,28 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  RADAR_MINIMUM_CONDITION,
-  RADAR_OPPORTUNITY_REASON,
-  RADAR_PRIORITY,
-  RADAR_SOURCE_ORIGIN,
-  RADAR_SOURCE_STATUS,
   type RadarCollectionMatch,
-  type RadarLocalDecisionPayload,
   type RadarMinimumCondition,
-  type RadarOpportunityReason,
   type RadarPriority,
   type RadarRelease,
 } from '../../shared/contracts/radar.js';
-import { MARKETPLACE_STATUS, type MarketplaceStatus } from '../../shared/contracts/marketplace.js';
 import { api } from '../lib/api';
-import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../lib/I18nContext';
+import {
+  RADAR_MINIMUM_CONDITION_OPTIONS,
+  RADAR_PRIORITY_OPTIONS,
+  createRadarReleaseDraft,
+  createRadarReleasePayload,
+  formatRadarMarketplaceValue,
+  getOrderedRadarOpportunityReasons,
+  getRadarCollectionMatchLabelKey,
+  getRadarSourceOriginLabelKey,
+  getRadarSourceStatusLabelKey,
+  getRadarStateLabelKeys,
+  type RadarReleaseDraft,
+} from '../lib/radarPresentation';
 import type { Translate } from '../lib/types';
 import type { ApiError } from '../lib/types';
-
-const RADAR_PRIORITY_OPTIONS: RadarPriority[] = [
-  RADAR_PRIORITY.LOW,
-  RADAR_PRIORITY.NORMAL,
-  RADAR_PRIORITY.HIGH,
-];
-
-const RADAR_MINIMUM_CONDITION_OPTIONS = [
-  RADAR_MINIMUM_CONDITION.MINT,
-  RADAR_MINIMUM_CONDITION.NEAR_MINT,
-  RADAR_MINIMUM_CONDITION.VERY_GOOD_PLUS,
-  RADAR_MINIMUM_CONDITION.VERY_GOOD,
-  RADAR_MINIMUM_CONDITION.GOOD_PLUS,
-  RADAR_MINIMUM_CONDITION.GOOD,
-  RADAR_MINIMUM_CONDITION.FAIR,
-  RADAR_MINIMUM_CONDITION.POOR,
-] as const;
-
-const RADAR_OPPORTUNITY_REASON_ORDER: RadarOpportunityReason[] = [
-  RADAR_OPPORTUNITY_REASON.BELOW_TARGET,
-  RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE,
-  RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN,
-  RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
-];
-
-type RadarStateLabelKey =
-  | 'radar.state.pending'
-  | 'radar.state.unavailable'
-  | 'radar.state.failed'
-  | 'radar.state.hidden'
-  | 'radar.state.resolved'
-  | 'radar.state.missingFromSource';
-
-type RadarCollectionMatchLabelKey =
-  | 'radar.collectionMatch.single'
-  | 'radar.collectionMatch.multiple';
-
-type RadarReleaseDraft = {
-  priority: RadarPriority;
-  targetPrice: string;
-  minimumCondition: RadarMinimumCondition | '';
-  note: string;
-  hidden: boolean;
-  resolved: boolean;
-};
-
-const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, RadarStateLabelKey>> = {
-  [MARKETPLACE_STATUS.PENDING]: 'radar.state.pending',
-  [MARKETPLACE_STATUS.UNAVAILABLE]: 'radar.state.unavailable',
-  [MARKETPLACE_STATUS.FAILED]: 'radar.state.failed',
-};
-
-function createReleaseDraft(item: RadarRelease): RadarReleaseDraft {
-  return {
-    priority: item.local.priority,
-    targetPrice: item.local.target_price == null ? '' : item.local.target_price.toFixed(2),
-    minimumCondition: item.local.minimum_condition ?? '',
-    note: item.local.note,
-    hidden: item.local.hidden,
-    resolved: item.local.resolved,
-  };
-}
-
-function createReleasePayload(draft: RadarReleaseDraft): RadarLocalDecisionPayload {
-  return {
-    local: {
-      priority: draft.priority,
-      target_price: draft.targetPrice.trim() ? Number(draft.targetPrice) : null,
-      minimum_condition: draft.minimumCondition || null,
-      note: draft.note,
-      hidden: draft.hidden,
-      resolved: draft.resolved,
-    },
-  };
-}
-
-function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
-  return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
-}
-
-function getCollectionMatchLabelKey(copyCount: number): RadarCollectionMatchLabelKey {
-  return copyCount === 1 ? 'radar.collectionMatch.single' : 'radar.collectionMatch.multiple';
-}
-
-function getRadarStateLabelKeys(item: RadarRelease): RadarStateLabelKey[] {
-  const labelKeys: RadarStateLabelKey[] = [];
-  const marketplaceStateLabelKey = RADAR_MARKETPLACE_STATE_LABEL_KEYS[item.marketplace.status];
-
-  if (marketplaceStateLabelKey) {
-    labelKeys.push(marketplaceStateLabelKey);
-  }
-
-  if (item.source.status === RADAR_SOURCE_STATUS.MISSING) {
-    labelKeys.push('radar.state.missingFromSource');
-  }
-
-  if (item.local.hidden) {
-    labelKeys.push('radar.state.hidden');
-  }
-
-  if (item.local.resolved) {
-    labelKeys.push('radar.state.resolved');
-  }
-
-  return labelKeys;
-}
-
-function getRadarSourceOriginLabelKey(origin: RadarRelease['source']['origin']) {
-  switch (origin) {
-    case RADAR_SOURCE_ORIGIN.DISCOGS:
-      return 'radar.sourceOrigin.discogs';
-    case RADAR_SOURCE_ORIGIN.FILE:
-      return 'radar.sourceOrigin.file';
-    case RADAR_SOURCE_ORIGIN.BOTH:
-      return 'radar.sourceOrigin.both';
-    default:
-      return 'radar.sourceOrigin.none';
-  }
-}
-
-function getRadarSourceStatusLabelKey(status: RadarRelease['source']['status']) {
-  return status === RADAR_SOURCE_STATUS.MISSING
-    ? 'radar.sourceStatus.missing'
-    : 'radar.sourceStatus.active';
-}
 
 function getCollectionLink(item: RadarRelease, collectionMatch: RadarCollectionMatch | null, t: Translate) {
   if (collectionMatch?.primary_release_id == null) {
@@ -156,20 +35,27 @@ function getCollectionLink(item: RadarRelease, collectionMatch: RadarCollectionM
       data-radar-collection={String(item.id ?? item.release_id ?? 0)}
       className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
     >
-      {t(getCollectionMatchLabelKey(collectionMatch.copy_count), {
+      {t(getRadarCollectionMatchLabelKey(collectionMatch.copy_count), {
         count: collectionMatch.copy_count,
       })}
     </Link>
   );
 }
 
-function formatMarketplaceValue(item: RadarRelease): string {
-  if (item.marketplace.estimated_price == null) {
-    return '-';
-  }
+type RadarDetailFrameProps = {
+  children: ReactNode;
+  t: Translate;
+};
 
-  const displayCurrency = item.display_currency || 'EUR';
-  return `${item.marketplace.estimated_price.toFixed(2)} ${displayCurrency}`;
+function RadarDetailFrame({ children, t }: RadarDetailFrameProps) {
+  return (
+    <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
+      <Link to="/radar" data-radar-detail-back="true" className="inline-flex items-center gap-2 text-sm text-brand-200 transition hover:text-brand-100">
+        {t('radar.detailBack')}
+      </Link>
+      {children}
+    </section>
+  );
 }
 
 function RadarReleaseDetail() {
@@ -199,7 +85,7 @@ function RadarReleaseDetail() {
         }
 
         setRelease(payload);
-        setDraft(createReleaseDraft(payload));
+        setDraft(createRadarReleaseDraft(payload));
       } catch (error) {
         if (cancelled) {
           return;
@@ -247,10 +133,11 @@ function RadarReleaseDetail() {
     setSaveFailed(false);
 
     try {
-      const nextRadar = await api.updateRadarRelease(release.id, createReleasePayload(draft));
-      const nextRelease = nextRadar.items.find((item) => item.id === release.id) ?? await api.getRadarRelease(release.id);
+      const nextRadar = await api.updateRadarRelease(release.id, createRadarReleasePayload(draft));
+      const updatedRelease = nextRadar.items.find((item) => item.id === release.id);
+      const nextRelease = updatedRelease ?? (await api.getRadarRelease(release.id));
       setRelease(nextRelease);
-      setDraft(createReleaseDraft(nextRelease));
+      setDraft(createRadarReleaseDraft(nextRelease));
     } catch {
       setSaveFailed(true);
     } finally {
@@ -258,56 +145,48 @@ function RadarReleaseDetail() {
     }
   }
 
+  function updateDraft(patch: Partial<RadarReleaseDraft>) {
+    setDraft((current) => current ? { ...current, ...patch } : current);
+  }
+
   if (loading) {
     return (
-      <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
-        <Link to="/radar" data-radar-detail-back="true" className="inline-flex items-center gap-2 text-sm text-brand-200 transition hover:text-brand-100">
-          {t('radar.detailBack')}
-        </Link>
+      <RadarDetailFrame t={t}>
         <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-8 text-center text-slate-300">
           {t('radar.detailLoading')}
         </div>
-      </section>
+      </RadarDetailFrame>
     );
   }
 
   if (loadFailed) {
     return (
-      <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
-        <Link to="/radar" data-radar-detail-back="true" className="inline-flex items-center gap-2 text-sm text-brand-200 transition hover:text-brand-100">
-          {t('radar.detailBack')}
-        </Link>
+      <RadarDetailFrame t={t}>
         <div className="rounded-3xl border border-rose-300/20 bg-rose-950/20 p-8 text-center text-rose-100">
           {t('radar.detailLoadFailed')}
         </div>
-      </section>
+      </RadarDetailFrame>
     );
   }
 
   if (notFound || !release || !draft) {
     return (
-      <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
-        <Link to="/radar" data-radar-detail-back="true" className="inline-flex items-center gap-2 text-sm text-brand-200 transition hover:text-brand-100">
-          {t('radar.detailBack')}
-        </Link>
+      <RadarDetailFrame t={t}>
         <div className="rounded-3xl border border-dashed border-white/15 bg-slate-950/20 p-8 text-center text-slate-300">
           {t('radar.detailNotFound')}
         </div>
-      </section>
+      </RadarDetailFrame>
     );
   }
 
   const releaseKey = release.id ?? release.release_id ?? 0;
+  const displayCurrency = release.display_currency || 'EUR';
   const collectionMatch = release.opportunity.collection_match;
-  const opportunityReasons = getOrderedOpportunityReasons(release);
+  const opportunityReasons = getOrderedRadarOpportunityReasons(release);
   const stateLabelKeys = getRadarStateLabelKeys(release);
 
   return (
-    <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
-      <Link to="/radar" data-radar-detail-back="true" className="inline-flex items-center gap-2 text-sm text-brand-200 transition hover:text-brand-100">
-        {t('radar.detailBack')}
-      </Link>
-
+    <RadarDetailFrame t={t}>
       <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
@@ -349,7 +228,7 @@ function RadarReleaseDetail() {
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.detailMarketplacePrice')}</p>
-            <p className="mt-3 text-lg text-white">{formatMarketplaceValue(release)}</p>
+            <p className="mt-3 text-lg text-white">{formatRadarMarketplaceValue(release)}</p>
           </article>
           <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.detailSourceOrigin')}</p>
@@ -369,10 +248,7 @@ function RadarReleaseDetail() {
             <select
               name={`radar-priority-${releaseKey}`}
               value={draft.priority}
-              onChange={(event) => setDraft((current) => current ? {
-                ...current,
-                priority: event.target.value as RadarPriority,
-              } : current)}
+              onChange={(event) => updateDraft({ priority: event.target.value as RadarPriority })}
               className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
             >
               {RADAR_PRIORITY_OPTIONS.map((priority) => (
@@ -384,7 +260,7 @@ function RadarReleaseDetail() {
           </label>
 
           <label className="space-y-2 text-sm text-slate-200">
-            <span>{t('radar.targetPrice')} ({release.display_currency || 'EUR'})</span>
+            <span>{t('radar.targetPrice')} ({displayCurrency})</span>
             <input
               type="number"
               inputMode="decimal"
@@ -394,7 +270,7 @@ function RadarReleaseDetail() {
               value={draft.targetPrice}
               onInput={(event) => {
                 const target = event.target as HTMLInputElement;
-                setDraft((current) => current ? { ...current, targetPrice: target.value } : current);
+                updateDraft({ targetPrice: target.value });
               }}
               className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
             />
@@ -405,10 +281,7 @@ function RadarReleaseDetail() {
             <select
               name={`radar-minimum-condition-${releaseKey}`}
               value={draft.minimumCondition}
-              onChange={(event) => setDraft((current) => current ? {
-                ...current,
-                minimumCondition: event.target.value as RadarMinimumCondition | '',
-              } : current)}
+              onChange={(event) => updateDraft({ minimumCondition: event.target.value as RadarMinimumCondition | '' })}
               className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
             >
               <option value="">{t('radar.minimumCondition.none')}</option>
@@ -428,7 +301,7 @@ function RadarReleaseDetail() {
               value={draft.note}
               onInput={(event) => {
                 const target = event.target as HTMLTextAreaElement;
-                setDraft((current) => current ? { ...current, note: target.value } : current);
+                updateDraft({ note: target.value });
               }}
               rows={4}
               className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
@@ -442,7 +315,7 @@ function RadarReleaseDetail() {
               type="checkbox"
               name={`radar-hidden-${releaseKey}`}
               checked={draft.hidden}
-              onChange={(event) => setDraft((current) => current ? { ...current, hidden: event.target.checked } : current)}
+              onChange={(event) => updateDraft({ hidden: event.target.checked })}
             />
             <span>{t('radar.hidden')}</span>
           </label>
@@ -452,7 +325,7 @@ function RadarReleaseDetail() {
               type="checkbox"
               name={`radar-resolved-${releaseKey}`}
               checked={draft.resolved}
-              onChange={(event) => setDraft((current) => current ? { ...current, resolved: event.target.checked } : current)}
+              onChange={(event) => updateDraft({ resolved: event.target.checked })}
             />
             <span>{t('radar.resolved')}</span>
           </label>
@@ -471,7 +344,7 @@ function RadarReleaseDetail() {
           {saveFailed ? <p className="text-sm text-rose-200">{t('radar.saveFailed')}</p> : null}
         </div>
       </div>
-    </section>
+    </RadarDetailFrame>
   );
 }
 
