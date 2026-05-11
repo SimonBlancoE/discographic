@@ -613,6 +613,89 @@ describe('Radar page', () => {
     expect(text).toContain('New Artist');
   });
 
+  it('returns to the full Radar list after a completed update finishes from a filtered view', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValueOnce({
+      items: [
+        createRadarRelease({
+          id: 31,
+          release_id: 931,
+          title: 'Visible Opportunity',
+          artist: 'Artist Visible',
+          local: {
+            priority: 'high',
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 18,
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+          opportunity: {
+            reasons: ['high_priority_available'],
+            default_visible: true,
+            is_in_collection: false,
+          },
+        }),
+      ],
+      summary: {
+        total: 1,
+        active: 1,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 1,
+        pending: 0,
+        failed: 0,
+        unavailable: 0,
+      },
+    }).mockResolvedValueOnce({
+      items: [
+        createRadarRelease({
+          id: 32,
+          release_id: 932,
+          title: 'Fresh Pending Want',
+          artist: 'Artist Pending',
+          opportunity: {
+            reasons: [],
+            default_visible: false,
+            is_in_collection: false,
+          },
+        }),
+      ],
+      summary: {
+        total: 1,
+        active: 1,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 0,
+        pending: 1,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
+
+    const rendered = await renderRadar();
+
+    await clickRadarFilter(rendered, 'opportunities');
+    expect(rendered.textContent ?? '').toContain('Visible Opportunity');
+    expect(rendered.textContent ?? '').not.toContain('Fresh Pending Want');
+
+    const updateButton = findButtonByText(rendered, messages['radar.updateAction']);
+
+    await act(async () => {
+      updateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const text = rendered.textContent ?? '';
+
+    expect(text).toContain(messages['radar.syncResultTitle']);
+    expect(text).toContain('Fresh Pending Want');
+    expect(text).not.toContain(messages['radar.filterEmptyTitle']);
+  });
+
   it('shows explicit opportunity reasons and keeps hidden or resolved rows out of the opportunities filter', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
