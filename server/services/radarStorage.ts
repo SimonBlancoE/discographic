@@ -8,6 +8,7 @@ import {
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
   type RadarLocalDecisionUpdate,
+  type RadarCollectionMatch,
   type RadarOpportunityReason,
   type RadarResponse,
   type RadarSourceOrigin,
@@ -70,6 +71,10 @@ type RadarAvailabilityTransition = {
   markUnavailableNow: boolean;
   markAvailableAgainNow: boolean;
   clearAvailableAgain: boolean;
+};
+
+type CollectionMatchRow = RadarCollectionMatch & {
+  release_id: number;
 };
 
 const RADAR_TABLE = 'radar_releases';
@@ -189,7 +194,10 @@ function isAvailableAgain(row: RadarRow): boolean {
   return hasAvailableMarketplacePrice(row) && typeof row.marketplace_available_again_at === 'string';
 }
 
-function getOpportunityReasons(row: RadarRow, ownedReleaseIds: ReadonlySet<number>): RadarOpportunityReason[] {
+function getOpportunityReasons(
+  row: RadarRow,
+  isInCollection: boolean,
+): RadarOpportunityReason[] {
   const reasons: RadarOpportunityReason[] = [];
 
   if (isBelowTarget(row)) {
@@ -204,7 +212,7 @@ function getOpportunityReasons(row: RadarRow, ownedReleaseIds: ReadonlySet<numbe
     reasons.push(RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN);
   }
 
-  if (ownedReleaseIds.has(row.release_id)) {
+  if (isInCollection) {
     reasons.push(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION);
   }
 
@@ -271,8 +279,10 @@ function getTimestampRank(value: string | null): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function toRadarItem(row: RadarRow, ownedReleaseIds: ReadonlySet<number>) {
-  const reasons = getOpportunityReasons(row, ownedReleaseIds);
+function toRadarItem(row: RadarRow, collectionMatches: ReadonlyMap<number, RadarCollectionMatch>) {
+  const collectionMatch = collectionMatches.get(row.release_id) ?? null;
+  const isInCollection = collectionMatch != null;
+  const reasons = getOpportunityReasons(row, isInCollection);
   const defaultVisible = isDefaultVisible(row);
 
   return {
@@ -309,7 +319,8 @@ function toRadarItem(row: RadarRow, ownedReleaseIds: ReadonlySet<number>) {
     opportunity: {
       reasons,
       default_visible: defaultVisible,
-      is_in_collection: ownedReleaseIds.has(row.release_id),
+      is_in_collection: isInCollection,
+      collection_match: collectionMatch,
     },
   };
 }
@@ -323,22 +334,50 @@ type SortableRadarItem = {
   dateRank: number;
 };
 
-function getOwnedReleaseIds(db: Database.Database, userId: number): Set<number> {
+function getCollectionMatches(db: Database.Database, userId: number): Map<number, RadarCollectionMatch> {
   if (!tableExists(db, 'releases')) {
-    return new Set<number>();
+    return new Map<number, RadarCollectionMatch>();
   }
 
-  const rows = db.prepare<[{ userId: number }], { release_id: number }>(`
-    SELECT DISTINCT release_id
-    FROM releases
-    WHERE user_id = @userId
+  const primaryReleaseOrderClause = hasColumn(db, 'releases', 'date_added')
+    ? `
+        CASE WHEN r2.date_added IS NULL OR r2.date_added = '' THEN 1 ELSE 0 END ASC,
+        r2.date_added DESC,
+        r2.id DESC
+      `
+    : 'r2.id DESC';
+
+  const rows = db.prepare<[{ userId: number }], CollectionMatchRow>(`
+    SELECT
+      r.release_id,
+      COUNT(*) AS copy_count,
+      (
+        SELECT r2.id
+        FROM releases r2
+        WHERE r2.user_id = @userId
+          AND r2.release_id = r.release_id
+        ORDER BY ${primaryReleaseOrderClause}
+        LIMIT 1
+      ) AS primary_release_id
+    FROM releases AS r
+    WHERE r.user_id = @userId
+    GROUP BY r.release_id
   `).all({ userId });
 
-  return new Set(rows.map((row) => row.release_id));
+  return new Map(rows.map((row) => [
+    row.release_id,
+    {
+      primary_release_id: row.primary_release_id,
+      copy_count: row.copy_count,
+    },
+  ]));
 }
 
-function toSortableRadarItem(row: RadarRow, ownedReleaseIds: ReadonlySet<number>): SortableRadarItem {
-  const item = toRadarItem(row, ownedReleaseIds);
+function toSortableRadarItem(
+  row: RadarRow,
+  collectionMatches: ReadonlyMap<number, RadarCollectionMatch>,
+): SortableRadarItem {
+  const item = toRadarItem(row, collectionMatches);
 
   return {
     item,
@@ -469,7 +508,7 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
     WHERE user_id = @userId
     ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
   `).all({ userId });
-  const ownedReleaseIds = getOwnedReleaseIds(db, userId);
+  const collectionMatches = getCollectionMatches(db, userId);
 
   const summary = db.prepare<
     [RadarSummaryParams],
@@ -499,7 +538,7 @@ export function getRadarSnapshot(db: Database.Database, userId: number): RadarRe
     unavailableStatus: MARKETPLACE_STATUS.UNAVAILABLE,
   });
   const items = rows
-    .map((row) => toSortableRadarItem(row, ownedReleaseIds))
+    .map((row) => toSortableRadarItem(row, collectionMatches))
     .sort(compareSortableRadarItems)
     .map(({ item }) => item);
 
