@@ -103,6 +103,9 @@ const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, Rada
   [MARKETPLACE_STATUS.FAILED]: 'radar.state.failed',
 };
 
+const RADAR_RELEASE_FIELD_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.2em] text-slate-500';
+const RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS = 'mt-1 font-semibold text-white';
+const RADAR_RELEASE_FIELD_VALUE_CLASS = 'mt-1 text-slate-200';
 const UPDATE_POLL_MS = 2000;
 
 function createEmptyRadarResponse(): RadarResponse {
@@ -326,6 +329,47 @@ function getRadarCurrentPrice(item: RadarRelease, t: Translate): string {
   return stateLabelKey ? t(stateLabelKey) : '-';
 }
 
+type RadarReleaseField = {
+  labelKey: string;
+  value: string;
+  valueClassName: string;
+};
+
+function getRadarReleaseFields(item: RadarRelease, t: Translate): RadarReleaseField[] {
+  const displayCurrency = item.display_currency || 'EUR';
+  const targetPrice = item.local.target_price == null
+    ? '-'
+    : formatCurrency(item.local.target_price, displayCurrency);
+
+  return [
+    {
+      labelKey: 'radar.currentPrice',
+      value: getRadarCurrentPrice(item, t),
+      valueClassName: RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS,
+    },
+    {
+      labelKey: 'radar.targetPrice',
+      value: targetPrice,
+      valueClassName: RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS,
+    },
+    {
+      labelKey: 'radar.priority',
+      value: t(`radar.priority.${item.local.priority}`),
+      valueClassName: RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS,
+    },
+    {
+      labelKey: 'radar.wantlistDate',
+      value: formatDate(item.date_added),
+      valueClassName: RADAR_RELEASE_FIELD_VALUE_CLASS,
+    },
+    {
+      labelKey: 'radar.lastPriceReview',
+      value: formatDate(item.marketplace.last_checked_at),
+      valueClassName: RADAR_RELEASE_FIELD_VALUE_CLASS,
+    },
+  ];
+}
+
 type RadarReleaseRowProps = {
   item: RadarRelease;
   t: Translate;
@@ -335,19 +379,12 @@ function RadarReleaseRow({
   item,
   t,
 }: RadarReleaseRowProps) {
-  const displayCurrency = item.display_currency || 'EUR';
   const releaseKey = item.id ?? item.release_id ?? 0;
   const opportunityReasons = getOrderedOpportunityReasons(item);
   const stateLabelKeys = getRadarStateLabelKeys(item);
   const collectionMatch = item.opportunity.collection_match;
   const hasLabels = stateLabelKeys.length > 0 || opportunityReasons.length > 0;
-  const currentPrice = getRadarCurrentPrice(item, t);
-  const targetPrice = item.local.target_price == null
-    ? '-'
-    : formatCurrency(item.local.target_price, displayCurrency);
-  const priorityLabel = t(`radar.priority.${item.local.priority}`);
-  const wantlistDate = formatDate(item.date_added);
-  const lastReviewDate = formatDate(item.marketplace.last_checked_at);
+  const releaseFields = getRadarReleaseFields(item, t);
 
   return (
     <li className="px-4 py-4 sm:px-5">
@@ -378,26 +415,12 @@ function RadarReleaseRow({
             </div>
 
             <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{t('radar.currentPrice')}</dt>
-                <dd className="mt-1 font-semibold text-white">{currentPrice}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{t('radar.targetPrice')}</dt>
-                <dd className="mt-1 font-semibold text-white">{targetPrice}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{t('radar.priority')}</dt>
-                <dd className="mt-1 font-semibold text-white">{priorityLabel}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{t('radar.wantlistDate')}</dt>
-                <dd className="mt-1 text-slate-200">{wantlistDate}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{t('radar.lastPriceReview')}</dt>
-                <dd className="mt-1 text-slate-200">{lastReviewDate}</dd>
-              </div>
+              {releaseFields.map(({ labelKey, value, valueClassName }) => (
+                <div key={labelKey}>
+                  <dt className={RADAR_RELEASE_FIELD_LABEL_CLASS}>{t(labelKey)}</dt>
+                  <dd className={valueClassName}>{value}</dd>
+                </div>
+              ))}
             </dl>
 
             {collectionMatch?.primary_release_id != null ? (

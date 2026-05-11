@@ -433,20 +433,6 @@ describe('Radar page', () => {
         updated: 0,
       },
     });
-    updateRadarRelease.mockResolvedValue({
-      items: [],
-      summary: {
-        total: 0,
-        active: 0,
-        hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 0,
-        pending: 0,
-        failed: 0,
-        unavailable: 0,
-      },
-    });
     stopRadarUpdateRun.mockResolvedValue({
       phase: 'stopped',
       current: 1,
@@ -1171,14 +1157,12 @@ describe('Radar page', () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
       items: [
-        {
+        createRadarRelease({
           id: 7,
-          user_id: 1,
           release_id: 303,
           title: 'Editable Release',
           artist: 'Artist C',
           year: 1998,
-          cover_url: null,
           date_added: '2026-05-10T00:00:00Z',
           local: {
             priority: 'normal',
@@ -1189,19 +1173,10 @@ describe('Radar page', () => {
             hidden: false,
             resolved: false,
           },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
-          },
           marketplace: {
             status: 'priced',
             estimated_price: 24,
             last_checked_at: '2026-05-10T00:00:00Z',
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T01:00:00Z',
           },
           opportunity: {
             reasons: ['high_priority_available'],
@@ -1209,66 +1184,12 @@ describe('Radar page', () => {
             is_in_collection: false,
           },
           display_currency: 'USD',
-        },
+        }),
       ],
       summary: {
         total: 1,
         active: 1,
         hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 1,
-        pending: 0,
-        failed: 0,
-        unavailable: 0,
-      },
-    });
-    updateRadarRelease.mockResolvedValue({
-      items: [
-        {
-          id: 7,
-          user_id: 1,
-          release_id: 303,
-          title: 'Editable Release',
-          artist: 'Artist C',
-          year: 1998,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
-          local: {
-            priority: 'high',
-            target_price: 14.5,
-            target_price_eur: 12.08,
-            minimum_condition: 'NM',
-            note: 'Watch copy',
-            hidden: true,
-            resolved: false,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
-          },
-          marketplace: {
-            status: 'priced',
-            estimated_price: 24,
-            last_checked_at: '2026-05-10T00:00:00Z',
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T02:00:00Z',
-          },
-          opportunity: {
-            reasons: [],
-            default_visible: true,
-            is_in_collection: false,
-          },
-          display_currency: 'USD',
-        },
-      ],
-      summary: {
-        total: 1,
-        active: 0,
-        hidden: 1,
         resolved: 0,
         missingFromSource: 0,
         priced: 1,
