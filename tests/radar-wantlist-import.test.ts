@@ -74,6 +74,29 @@ describe('radar wantlist import preview', () => {
       { row: 3, column: 'Prioridad', value: 'urgent', reason: messages['backend.radarImport.invalidPriority'] },
     ]);
   });
+
+  it('rejects negative target prices', () => {
+    const csv = [
+      'release_id,target_price',
+      '12345,-1',
+    ].join('\n');
+
+    const preview = buildRadarWantlistPreview(parseRadarWantlistWorkbook(Buffer.from(csv), 'wantlist.csv', t), t);
+
+    expect(preview.summary).toEqual({
+      totalRows: 1,
+      validRows: 0,
+      invalidRows: 1,
+    });
+    expect(preview.errors).toEqual([
+      {
+        row: 2,
+        column: 'target_price',
+        value: '-1',
+        reason: messages['backend.radarImport.invalidTargetPrice'],
+      },
+    ]);
+  });
 });
 
 describe('radar wantlist import workbook parsing', () => {

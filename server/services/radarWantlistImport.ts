@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import * as XLSX from 'xlsx';
 import {
   RADAR_MINIMUM_CONDITION,
@@ -14,6 +15,18 @@ import {
   type RadarWantlistTemplateFormat,
 } from '../../shared/contracts/radar.js';
 import type Database from 'better-sqlite3';
+import {
+  DEFAULT_CURRENCY,
+  convertAmountWithRates,
+  getExchangeSnapshot,
+} from './exchangeRates.js';
+import {
+  cleanupExpiredRadarWantlistPreviews,
+  deleteStoredRadarWantlistPreview,
+  getStoredRadarWantlistPreview,
+  storeRadarWantlistPreview,
+  type StoredRadarWantlistPreview,
+} from './radarRuntimeState.js';
 
 type Translate = (key: string) => string;
 
@@ -25,6 +38,7 @@ type ResolvedRadarWantlistColumns = {
 };
 
 const DATA_ROW_NUMBER_OFFSET = 2;
+const WANTLIST_PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 const HEADER_ALIASES = new Map<string, RadarWantlistColumnKey>([
   ['releaseid', 'release_id'],
@@ -358,7 +372,7 @@ export function buildRadarWantlistPreview(rows: RawRow[], t: Translate): RadarWa
           }
 
           const targetPrice = parseRadarWantlistNumber(textValue);
-          if (targetPrice == null) {
+          if (targetPrice == null || targetPrice < 0) {
             rowErrors.push(
               createPreviewError(rowNumber, column, textValue, t('backend.radarImport.invalidTargetPrice')),
             );
@@ -460,6 +474,22 @@ type RadarWantlistApplyRow = Omit<RadarWantlistPreviewRow, 'target_price'> & {
   target_price_eur: number | null;
 };
 
+type CreateRadarWantlistImportPreviewInput = {
+  userId: number;
+  buffer: Buffer;
+  filename: string;
+  displayCurrency: string;
+  t: Translate;
+};
+
+type ApplyStoredRadarWantlistPreviewInput = {
+  db: Database.Database;
+  userId: number;
+  previewId: string;
+};
+
+export class RadarWantlistPreviewExpiredError extends Error {}
+
 type InsertRadarWantlistParams = [
   number,
   number,
@@ -495,6 +525,62 @@ function normalizeImportedText(value: string | null): string | null {
 
 function normalizeImportedPrice(value: number | null): number | null {
   return value == null || !Number.isFinite(value) ? null : Number(value.toFixed(2));
+}
+
+function convertNullableAmount(
+  amount: number | null,
+  fromCurrency: string,
+  toCurrency: string,
+  rates: Parameters<typeof convertAmountWithRates>[3],
+): number | null {
+  return amount == null ? null : convertAmountWithRates(amount, fromCurrency, toCurrency, rates);
+}
+
+function cacheRadarWantlistPreview(
+  userId: number,
+  displayCurrency: string,
+  preview: RadarWantlistPreviewResponse,
+): string {
+  cleanupExpiredRadarWantlistPreviews();
+
+  const previewId = crypto.randomBytes(16).toString('hex');
+  storeRadarWantlistPreview(previewId, {
+    userId,
+    displayCurrency,
+    preview,
+    expiresAt: Date.now() + WANTLIST_PREVIEW_TTL_MS,
+  });
+
+  return previewId;
+}
+
+function getCachedWantlistPreview(previewId: string, userId: number): StoredRadarWantlistPreview | null {
+  const cached = getStoredRadarWantlistPreview(previewId);
+
+  if (!cached || cached.userId !== userId) {
+    return null;
+  }
+
+  if (cached.expiresAt < Date.now()) {
+    deleteStoredRadarWantlistPreview(previewId);
+    return null;
+  }
+
+  return cached;
+}
+
+async function toRadarWantlistApplyRows(cached: StoredRadarWantlistPreview): Promise<RadarWantlistApplyRow[]> {
+  const snapshot = await getExchangeSnapshot([cached.displayCurrency]);
+
+  return cached.preview.rows.map((row) => ({
+    ...row,
+    target_price_eur: convertNullableAmount(
+      row.target_price,
+      cached.displayCurrency,
+      DEFAULT_CURRENCY,
+      snapshot.rates,
+    ),
+  }));
 }
 
 function importedTextOrFallback(value: string | null, fallback: string): string {
@@ -673,4 +759,47 @@ export function applyRadarWantlistImport(
   });
 
   return applyTx(userId, rows, importedAt);
+}
+
+export function createRadarWantlistImportPreview({
+  userId,
+  buffer,
+  filename,
+  displayCurrency,
+  t,
+}: CreateRadarWantlistImportPreviewInput): RadarWantlistPreviewResponse {
+  const rows = parseRadarWantlistWorkbook(buffer, filename, t);
+  const preview = buildRadarWantlistPreview(rows, t);
+
+  if (preview.summary.validRows === 0) {
+    return preview;
+  }
+
+  return {
+    ...preview,
+    previewId: cacheRadarWantlistPreview(userId, displayCurrency, preview),
+  };
+}
+
+export async function applyStoredRadarWantlistPreview({
+  db,
+  userId,
+  previewId,
+}: ApplyStoredRadarWantlistPreviewInput): Promise<RadarWantlistApplyResult> {
+  const cached = getCachedWantlistPreview(previewId, userId);
+  if (!cached) {
+    throw new RadarWantlistPreviewExpiredError('Radar Wantlist preview expired');
+  }
+
+  deleteStoredRadarWantlistPreview(previewId);
+
+  const applied = applyRadarWantlistImport(db, userId, await toRadarWantlistApplyRows(cached));
+
+  return {
+    totalRows: cached.preview.summary.totalRows,
+    imported: applied.imported,
+    skipped: cached.preview.summary.invalidRows,
+    added: applied.added,
+    updated: applied.updated,
+  };
 }

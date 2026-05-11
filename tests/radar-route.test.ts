@@ -15,9 +15,8 @@ const getSettingForUser = vi.hoisted(() => vi.fn());
 const updateRadarReleaseForUser = vi.hoisted(() => vi.fn());
 const getDiscogsClientForUser = vi.hoisted(() => vi.fn());
 const getExchangeSnapshot = vi.hoisted(() => vi.fn());
-const parseRadarWantlistWorkbook = vi.hoisted(() => vi.fn());
-const buildRadarWantlistPreview = vi.hoisted(() => vi.fn());
-const applyRadarWantlistImport = vi.hoisted(() => vi.fn());
+const createRadarWantlistImportPreview = vi.hoisted(() => vi.fn());
+const applyStoredRadarWantlistPreview = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({}));
 
 vi.mock('../server/db.js', () => ({
@@ -36,9 +35,9 @@ vi.mock('../server/services/exchangeRates.js', async () => {
 });
 
 vi.mock('../server/services/radarWantlistImport.js', () => ({
-  parseRadarWantlistWorkbook,
-  buildRadarWantlistPreview,
-  applyRadarWantlistImport,
+  RadarWantlistPreviewExpiredError: class RadarWantlistPreviewExpiredError extends Error {},
+  createRadarWantlistImportPreview,
+  applyStoredRadarWantlistPreview,
 }));
 
 vi.mock('../server/middleware/auth.js', () => ({
@@ -116,9 +115,8 @@ describe('radar route', () => {
     updateRadarReleaseForUser.mockReset();
     getDiscogsClientForUser.mockReset();
     getExchangeSnapshot.mockReset();
-    parseRadarWantlistWorkbook.mockReset();
-    buildRadarWantlistPreview.mockReset();
-    applyRadarWantlistImport.mockReset();
+    createRadarWantlistImportPreview.mockReset();
+    applyStoredRadarWantlistPreview.mockReset();
 
     getSettingForUser.mockReturnValue('USD');
     getExchangeSnapshot.mockResolvedValue({
@@ -131,9 +129,8 @@ describe('radar route', () => {
     });
     getRadarForUser.mockReturnValue(createRadarSnapshot());
     updateRadarReleaseForUser.mockReturnValue(true);
-    parseRadarWantlistWorkbook.mockReturnValue([{}]);
-    buildRadarWantlistPreview.mockReturnValue({
-      previewId: null,
+    createRadarWantlistImportPreview.mockReturnValue({
+      previewId: 'preview-1',
       summary: {
         totalRows: 2,
         validRows: 1,
@@ -167,10 +164,10 @@ describe('radar route', () => {
         },
       ],
     });
-    applyRadarWantlistImport.mockReturnValue({
-      totalRows: 1,
+    applyStoredRadarWantlistPreview.mockResolvedValue({
+      totalRows: 2,
       imported: 1,
-      skipped: 0,
+      skipped: 1,
       added: 0,
       updated: 1,
     });
@@ -283,6 +280,12 @@ describe('radar route', () => {
     expect(previewResponse.status).toBe(200);
     const previewPayload = await previewResponse.json();
     expect(previewPayload.previewId).toEqual(expect.any(String));
+    expect(createRadarWantlistImportPreview).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 1,
+      filename: 'wantlist.csv',
+      displayCurrency: 'USD',
+      t: expect.any(Function),
+    }));
 
     const applyResponse = await fetch(`${baseUrl}/api/radar/wantlist/apply`, {
       method: 'POST',
@@ -293,16 +296,11 @@ describe('radar route', () => {
     });
 
     expect(applyResponse.status).toBe(200);
-    expect(applyRadarWantlistImport).toHaveBeenCalledWith(
-      mockDb,
-      1,
-      [
-        expect.objectContaining({
-          release_id: 303,
-          target_price_eur: 10.42,
-        }),
-      ],
-    );
+    expect(applyStoredRadarWantlistPreview).toHaveBeenCalledWith({
+      db: mockDb,
+      userId: 1,
+      previewId: 'preview-1',
+    });
 
     await expect(applyResponse.json()).resolves.toMatchObject({
       ok: true,

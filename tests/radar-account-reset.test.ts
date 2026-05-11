@@ -12,9 +12,6 @@ const clearUserCollectionData = vi.hoisted(() => vi.fn());
 const setSettingForUser = vi.hoisted(() => vi.fn());
 const getDiscogsClientForUser = vi.hoisted(() => vi.fn());
 const getExchangeSnapshot = vi.hoisted(() => vi.fn());
-const parseRadarWantlistWorkbook = vi.hoisted(() => vi.fn());
-const buildRadarWantlistPreview = vi.hoisted(() => vi.fn());
-const applyRadarWantlistImport = vi.hoisted(() => vi.fn());
 const getPendingRadarEnrichmentCount = vi.hoisted(() => vi.fn());
 const getPendingRadarEnrichmentRows = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({}));
@@ -37,12 +34,6 @@ vi.mock('../server/services/exchangeRates.js', async () => {
     getExchangeSnapshot,
   };
 });
-
-vi.mock('../server/services/radarWantlistImport.js', () => ({
-  parseRadarWantlistWorkbook,
-  buildRadarWantlistPreview,
-  applyRadarWantlistImport,
-}));
 
 vi.mock('../server/services/radarEnrichmentQueue.js', () => ({
   getPendingRadarEnrichmentCount,
@@ -76,9 +67,6 @@ describe('Radar account reset workflow', () => {
     setSettingForUser.mockReset();
     getDiscogsClientForUser.mockReset();
     getExchangeSnapshot.mockReset();
-    parseRadarWantlistWorkbook.mockReset();
-    buildRadarWantlistPreview.mockReset();
-    applyRadarWantlistImport.mockReset();
     getPendingRadarEnrichmentCount.mockReset();
     getPendingRadarEnrichmentRows.mockReset();
 
@@ -100,34 +88,6 @@ describe('Radar account reset workflow', () => {
       fetchedAt: 0,
       date: '2026-05-10',
       rates: { EUR: 1 },
-    });
-    parseRadarWantlistWorkbook.mockReturnValue([{}]);
-    buildRadarWantlistPreview.mockReturnValue({
-      previewId: null,
-      summary: {
-        totalRows: 1,
-        validRows: 1,
-        invalidRows: 0,
-      },
-      mappedColumns: [
-        { header: 'release_id', key: 'release_id', required: true },
-      ],
-      ignoredColumns: [],
-      rows: [
-        {
-          row: 2,
-          release_id: 303,
-          artist: 'Artist C',
-          title: 'Editable Release',
-          year: 1998,
-          notes: 'Watch copy',
-          date_added: '2026-05-10',
-          target_price: 12.5,
-          minimum_condition: null,
-          priority: 'high',
-        },
-      ],
-      errors: [],
     });
     getPendingRadarEnrichmentCount.mockReturnValue(0);
     getPendingRadarEnrichmentRows.mockReturnValue([]);
