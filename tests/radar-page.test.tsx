@@ -1230,6 +1230,82 @@ describe('Radar page', () => {
     expect(startRadarUpdateRun).not.toHaveBeenCalled();
   });
 
+  it('returns to the full Radar list after applying an import from a filtered view', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        createRadarRelease({
+          id: 21,
+          release_id: 611,
+          title: 'Operational Opportunity',
+          artist: 'Artist Ops',
+          local: {
+            priority: 'high',
+            target_price: 22,
+            target_price_eur: 22,
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 19,
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+          opportunity: {
+            reasons: ['below_target'],
+            default_visible: true,
+            is_in_collection: false,
+          },
+        }),
+      ],
+      summary: {
+        total: 1,
+        active: 1,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 1,
+        pending: 0,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
+
+    const rendered = await renderRadar();
+
+    await clickRadarFilter(rendered, 'opportunities');
+    expect(rendered.textContent ?? '').toContain('Operational Opportunity');
+    expect(rendered.textContent ?? '').not.toContain('Computer World');
+
+    const uploadInput = rendered.querySelector('input[type="file"]') as HTMLInputElement | null;
+    const file = new File(['release_id\n12345\n'], 'wantlist.csv', { type: 'text/csv' });
+    Object.defineProperty(uploadInput, 'files', {
+      configurable: true,
+      value: [file],
+    });
+
+    await act(async () => {
+      uploadInput?.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const applyButton = findButtonByText(rendered, messages['radar.import.apply']);
+
+    await act(async () => {
+      applyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const text = rendered.textContent ?? '';
+    const allFilter = rendered.querySelector('button[data-radar-filter="all"]') as HTMLButtonElement | null;
+    const opportunitiesFilter = rendered.querySelector('button[data-radar-filter="opportunities"]') as HTMLButtonElement | null;
+
+    expect(text).toContain(messages['radar.import.applySummary']);
+    expect(text).toContain('Computer World');
+    expect(allFilter?.className).toContain('bg-brand-400/15');
+    expect(opportunitiesFilter?.className).not.toContain('bg-brand-400/15');
+  });
+
   it('shows stopped Radar update state after a run has been halted', async () => {
     authState.capabilities.canUseRadar = true;
     getRadarStatus.mockResolvedValue({
