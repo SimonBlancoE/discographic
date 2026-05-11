@@ -1206,6 +1206,12 @@ describe('Radar page', () => {
     expect(text).toContain('Kraftwerk');
     expect(text).toContain(messages['radar.import.rowError']);
 
+    const previewTable = rendered.querySelector('[data-radar-import-preview-table="true"]') as HTMLDivElement | null;
+
+    expect(previewTable).not.toBeNull();
+    expect(previewTable?.className).toContain('overflow-x-auto');
+    expect(previewTable?.className).toContain('overflow-y-auto');
+
     const applyButton = findButtonByText(rendered, messages['radar.import.apply']);
 
     expect(applyButton).not.toBeNull();

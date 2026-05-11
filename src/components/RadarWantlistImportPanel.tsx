@@ -120,8 +120,11 @@ function PreviewRowsTable({ rows, t }: { rows: PreviewRow[]; t: Translate }) {
     <div className="space-y-3">
       <h4 className="text-sm uppercase tracking-[0.25em] text-slate-400">{t('radar.import.previewRows')}</h4>
       <div className="overflow-hidden rounded-2xl border border-white/5">
-        <div className="max-h-72 overflow-y-auto">
-          <table className="min-w-full text-left text-sm">
+        <div
+          data-radar-import-preview-table="true"
+          className="max-h-72 overflow-x-auto overflow-y-auto"
+        >
+          <table className="min-w-[40rem] w-full text-left text-sm">
             <thead className="sticky top-0 bg-slate-950/95 text-slate-400">
               <tr>
                 <th className="px-4 py-3">release_id</th>
