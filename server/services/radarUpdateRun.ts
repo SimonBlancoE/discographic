@@ -106,6 +106,10 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function getFailureMessage(locale: string | undefined): string {
+  return radarT(locale, 'backend.radar.updateFailed');
+}
+
 function getReviewingMessage(locale: string | undefined, current: number, total: number): string {
   return radarT(locale, 'backend.radar.updateReviewing', { current, total });
 }
@@ -321,7 +325,7 @@ async function runClaimedRadarUpdateRun({
   } catch (error) {
     setUpdateRunState(userId, locale, {
       phase: RADAR_UPDATE_RUN_PHASE.FAILED,
-      message: getErrorMessage(error),
+      message: getFailureMessage(locale),
       wantlist,
       finishedAt: new Date().toISOString(),
     });

@@ -405,6 +405,11 @@ const PRICE_REVIEW_COPY = [
     en: '{processed} wanted releases reviewed. {pending} still need price review.'
   },
   {
+    key: 'backend.radar.updateFailed',
+    es: 'Radar no pudo completar la actualización. Revisa tu cuenta de Discogs o vuelve a intentarlo en un momento.',
+    en: 'Radar could not finish updating. Review your Discogs account or try again in a moment.'
+  },
+  {
     key: 'backend.radar.updateStopped',
     es: 'Radar detenido tras revisar {processed} releases. {pending} todavía necesitan revisión de precio.',
     en: 'Radar stopped after reviewing {processed} releases. {pending} still need price review.'
