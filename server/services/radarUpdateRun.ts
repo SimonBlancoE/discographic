@@ -195,6 +195,30 @@ function getFinishedMessage({
   return getCompletionMessage(locale, pending, processed);
 }
 
+function completeStoppedUpdateRun({
+  db,
+  userId,
+  locale,
+  wantlist,
+  processed,
+  total,
+}: Omit<RadarPriceReviewInput, 'discogs' | 'pendingRows'> & {
+  processed: number;
+  total: number;
+}): void {
+  const pending = getPendingRadarEnrichmentCount(db, userId);
+
+  setUpdateRunState(userId, locale, {
+    phase: RADAR_UPDATE_RUN_PHASE.STOPPED,
+    current: processed,
+    total,
+    pending,
+    message: radarT(locale, 'backend.radar.updateStopped', { processed, pending }),
+    wantlist,
+    finishedAt: new Date().toISOString(),
+  });
+}
+
 async function reviewPendingRadarPrices({
   db,
   userId,
@@ -270,6 +294,18 @@ async function runClaimedRadarUpdateRun({
 
     const pendingRows = getPendingRadarEnrichmentRows(db, userId);
     const totalPending = pendingRows.length;
+
+    if (!isRadarUpdateRunRunning(userId)) {
+      completeStoppedUpdateRun({
+        db,
+        userId,
+        locale,
+        wantlist,
+        processed: 0,
+        total: totalPending,
+      });
+      return;
+    }
 
     if (!totalPending) {
       setUpdateRunState(userId, locale, {
