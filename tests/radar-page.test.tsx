@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Radar from '../src/pages/Radar';
 import { formatCurrency, formatDate } from '../src/lib/format.js';
-import type { RadarRelease } from '../shared/contracts/radar.js';
+import type { RadarRelease, RadarResponse } from '../shared/contracts/radar.js';
 
 const authState = vi.hoisted(() => ({
   accountUnavailable: false,
@@ -207,6 +207,27 @@ function createRadarRelease(overrides: RadarReleaseFixture): RadarRelease {
   };
 }
 
+function createRadarResponse(
+  items: RadarRelease[] = [],
+  summary: Partial<RadarResponse['summary']> = {},
+): RadarResponse {
+  return {
+    items,
+    summary: {
+      total: items.length,
+      active: items.length,
+      hidden: 0,
+      resolved: 0,
+      missingFromSource: 0,
+      priced: 0,
+      pending: 0,
+      failed: 0,
+      unavailable: 0,
+      ...summary,
+    },
+  };
+}
+
 vi.mock('../src/lib/AuthContext', () => ({
   useAuth: () => authState,
 }));
@@ -278,6 +299,26 @@ function findHeadingByText(rendered: HTMLDivElement, text: string): HTMLHeadingE
   return Array.from(rendered.querySelectorAll('h2')).find((heading) => heading.textContent === text) ?? null;
 }
 
+async function uploadWantlistCsv(rendered: HTMLDivElement) {
+  const uploadInput = rendered.querySelector('input[type="file"]') as HTMLInputElement | null;
+
+  if (!uploadInput) {
+    throw new Error('Missing Radar Wantlist upload input');
+  }
+
+  const file = new File(['release_id\n12345\n'], 'wantlist.csv', { type: 'text/csv' });
+  Object.defineProperty(uploadInput, 'files', {
+    configurable: true,
+    value: [file],
+  });
+
+  await act(async () => {
+    uploadInput.dispatchEvent(new Event('change', { bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe('Radar page', () => {
   beforeEach(() => {
     authState.accountUnavailable = false;
@@ -290,20 +331,7 @@ describe('Radar page', () => {
     getRadarStatus.mockReset();
     startRadarUpdateRun.mockReset();
     stopRadarUpdateRun.mockReset();
-    getRadar.mockResolvedValue({
-      items: [],
-      summary: {
-        total: 0,
-        active: 0,
-        hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 0,
-        pending: 0,
-        failed: 0,
-        unavailable: 0,
-      },
-    });
+    getRadar.mockResolvedValue(createRadarResponse());
     getRadarStatus.mockResolvedValue({
       phase: 'idle',
       current: 0,
@@ -522,73 +550,25 @@ describe('Radar page', () => {
 
   it('runs a unified Radar update and shows the refreshed Wantlist result with the latest Radar list', async () => {
     authState.capabilities.canUseRadar = true;
-    getRadar.mockResolvedValueOnce({
-      items: [],
-      summary: {
-        total: 0,
-        active: 0,
-        hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 0,
-        pending: 0,
-        failed: 0,
-        unavailable: 0,
-      },
-    }).mockResolvedValueOnce({
-      items: [
-        {
-          id: 1,
-          user_id: 1,
-          release_id: 901,
-          title: 'Fresh Want',
-          artist: 'New Artist',
-          year: 2024,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
-          local: {
-            priority: 'normal',
-            target_price: null,
-            target_price_eur: null,
-            minimum_condition: null,
-            note: '',
-            hidden: false,
-            resolved: false,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T12:00:00Z',
-          },
-          marketplace: {
-            status: 'pending',
-            estimated_price: null,
-            last_checked_at: null,
-          },
-          timestamps: {
-            created_at: '2026-05-10T12:00:00Z',
-            updated_at: '2026-05-10T12:00:00Z',
-          },
-          opportunity: {
-            reasons: ['high_priority_available'],
-            default_visible: true,
-            is_in_collection: false,
-          },
-          display_currency: 'EUR',
-        },
-      ],
-      summary: {
-        total: 1,
-        active: 1,
-        hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 0,
-        pending: 1,
-        failed: 0,
-        unavailable: 0,
-      },
-    });
+    getRadar.mockResolvedValueOnce(createRadarResponse()).mockResolvedValueOnce(
+      createRadarResponse(
+        [
+          createRadarRelease({
+            id: 1,
+            release_id: 901,
+            title: 'Fresh Want',
+            artist: 'New Artist',
+            year: 2024,
+            opportunity: {
+              reasons: ['high_priority_available'],
+              default_visible: true,
+              is_in_collection: false,
+            },
+          }),
+        ],
+        { pending: 1 },
+      ),
+    );
 
     const rendered = await renderRadar();
     const updateButton = Array.from(rendered.querySelectorAll('button')).find(
@@ -615,65 +595,49 @@ describe('Radar page', () => {
 
   it('returns to the full Radar list after a completed update finishes from a filtered view', async () => {
     authState.capabilities.canUseRadar = true;
-    getRadar.mockResolvedValueOnce({
-      items: [
-        createRadarRelease({
-          id: 31,
-          release_id: 931,
-          title: 'Visible Opportunity',
-          artist: 'Artist Visible',
-          local: {
-            priority: 'high',
-          },
-          marketplace: {
-            status: 'priced',
-            estimated_price: 18,
-            last_checked_at: RADAR_TEST_TIMESTAMP,
-          },
-          opportunity: {
-            reasons: ['high_priority_available'],
-            default_visible: true,
-            is_in_collection: false,
-          },
-        }),
-      ],
-      summary: {
-        total: 1,
-        active: 1,
-        hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 1,
-        pending: 0,
-        failed: 0,
-        unavailable: 0,
-      },
-    }).mockResolvedValueOnce({
-      items: [
-        createRadarRelease({
-          id: 32,
-          release_id: 932,
-          title: 'Fresh Pending Want',
-          artist: 'Artist Pending',
-          opportunity: {
-            reasons: [],
-            default_visible: false,
-            is_in_collection: false,
-          },
-        }),
-      ],
-      summary: {
-        total: 1,
-        active: 1,
-        hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 0,
-        pending: 1,
-        failed: 0,
-        unavailable: 0,
-      },
-    });
+    getRadar.mockResolvedValueOnce(
+      createRadarResponse(
+        [
+          createRadarRelease({
+            id: 31,
+            release_id: 931,
+            title: 'Visible Opportunity',
+            artist: 'Artist Visible',
+            local: {
+              priority: 'high',
+            },
+            marketplace: {
+              status: 'priced',
+              estimated_price: 18,
+              last_checked_at: RADAR_TEST_TIMESTAMP,
+            },
+            opportunity: {
+              reasons: ['high_priority_available'],
+              default_visible: true,
+              is_in_collection: false,
+            },
+          }),
+        ],
+        { priced: 1 },
+      ),
+    ).mockResolvedValueOnce(
+      createRadarResponse(
+        [
+          createRadarRelease({
+            id: 32,
+            release_id: 932,
+            title: 'Fresh Pending Want',
+            artist: 'Artist Pending',
+            opportunity: {
+              reasons: [],
+              default_visible: false,
+              is_in_collection: false,
+            },
+          }),
+        ],
+        { pending: 1 },
+      ),
+    );
 
     const rendered = await renderRadar();
 
@@ -1263,17 +1227,7 @@ describe('Radar page', () => {
     expect(downloadRadarWantlistTemplate).toHaveBeenNthCalledWith(1, 'csv');
     expect(downloadRadarWantlistTemplate).toHaveBeenNthCalledWith(2, 'xlsx');
 
-    const file = new File(['release_id\n12345\n'], 'wantlist.csv', { type: 'text/csv' });
-    Object.defineProperty(uploadInput, 'files', {
-      configurable: true,
-      value: [file],
-    });
-
-    await act(async () => {
-      uploadInput?.dispatchEvent(new Event('change', { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await uploadWantlistCsv(rendered);
 
     const text = rendered.textContent ?? '';
 
@@ -1315,42 +1269,34 @@ describe('Radar page', () => {
 
   it('returns to the full Radar list after applying an import from a filtered view', async () => {
     authState.capabilities.canUseRadar = true;
-    getRadar.mockResolvedValue({
-      items: [
-        createRadarRelease({
-          id: 21,
-          release_id: 611,
-          title: 'Operational Opportunity',
-          artist: 'Artist Ops',
-          local: {
-            priority: 'high',
-            target_price: 22,
-            target_price_eur: 22,
-          },
-          marketplace: {
-            status: 'priced',
-            estimated_price: 19,
-            last_checked_at: RADAR_TEST_TIMESTAMP,
-          },
-          opportunity: {
-            reasons: ['below_target'],
-            default_visible: true,
-            is_in_collection: false,
-          },
-        }),
-      ],
-      summary: {
-        total: 1,
-        active: 1,
-        hidden: 0,
-        resolved: 0,
-        missingFromSource: 0,
-        priced: 1,
-        pending: 0,
-        failed: 0,
-        unavailable: 0,
-      },
-    });
+    getRadar.mockResolvedValue(
+      createRadarResponse(
+        [
+          createRadarRelease({
+            id: 21,
+            release_id: 611,
+            title: 'Operational Opportunity',
+            artist: 'Artist Ops',
+            local: {
+              priority: 'high',
+              target_price: 22,
+              target_price_eur: 22,
+            },
+            marketplace: {
+              status: 'priced',
+              estimated_price: 19,
+              last_checked_at: RADAR_TEST_TIMESTAMP,
+            },
+            opportunity: {
+              reasons: ['below_target'],
+              default_visible: true,
+              is_in_collection: false,
+            },
+          }),
+        ],
+        { priced: 1 },
+      ),
+    );
 
     const rendered = await renderRadar();
 
@@ -1358,18 +1304,7 @@ describe('Radar page', () => {
     expect(rendered.textContent ?? '').toContain('Operational Opportunity');
     expect(rendered.textContent ?? '').not.toContain('Computer World');
 
-    const uploadInput = rendered.querySelector('input[type="file"]') as HTMLInputElement | null;
-    const file = new File(['release_id\n12345\n'], 'wantlist.csv', { type: 'text/csv' });
-    Object.defineProperty(uploadInput, 'files', {
-      configurable: true,
-      value: [file],
-    });
-
-    await act(async () => {
-      uploadInput?.dispatchEvent(new Event('change', { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await uploadWantlistCsv(rendered);
 
     const applyButton = findButtonByText(rendered, messages['radar.import.apply']);
 

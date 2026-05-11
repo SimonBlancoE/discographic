@@ -98,18 +98,6 @@ function setUpdateRunState(
   });
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
-function getFailureMessage(locale: string | undefined): string {
-  return radarT(locale, 'backend.radar.updateFailed');
-}
-
 function getReviewingMessage(locale: string | undefined, current: number, total: number): string {
   return radarT(locale, 'backend.radar.updateReviewing', { current, total });
 }
@@ -322,10 +310,10 @@ async function runClaimedRadarUpdateRun({
       wantlist,
       finishedAt: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch {
     setUpdateRunState(userId, locale, {
       phase: RADAR_UPDATE_RUN_PHASE.FAILED,
-      message: getFailureMessage(locale),
+      message: radarT(locale, 'backend.radar.updateFailed'),
       wantlist,
       finishedAt: new Date().toISOString(),
     });
