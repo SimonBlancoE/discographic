@@ -264,6 +264,14 @@ async function clickRadarFilter(rendered: HTMLDivElement, filter: string) {
   });
 }
 
+function findButtonByText(rendered: HTMLDivElement, text: string): HTMLButtonElement | null {
+  return Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === text) ?? null;
+}
+
+function findHeadingByText(rendered: HTMLDivElement, text: string): HTMLHeadingElement | null {
+  return Array.from(rendered.querySelectorAll('h2')).find((heading) => heading.textContent === text) ?? null;
+}
+
 describe('Radar page', () => {
   beforeEach(() => {
     authState.accountUnavailable = false;
@@ -1094,15 +1102,11 @@ describe('Radar page', () => {
     });
 
     const rendered = await renderRadar();
-    const importAction = Array.from(rendered.querySelectorAll('button')).find(
-      (button) => button.textContent === messages['radar.importAction'],
-    );
-    const csvButton = Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === messages['radar.import.downloadCsvTemplate']);
-    const xlsxButton = Array.from(rendered.querySelectorAll('button')).find((button) => button.textContent === messages['radar.import.downloadXlsxTemplate']);
+    const importAction = findButtonByText(rendered, messages['radar.importAction']);
+    const csvButton = findButtonByText(rendered, messages['radar.import.downloadCsvTemplate']);
+    const xlsxButton = findButtonByText(rendered, messages['radar.import.downloadXlsxTemplate']);
     const uploadInput = rendered.querySelector('input[type="file"]') as HTMLInputElement | null;
-    const importHeading = Array.from(rendered.querySelectorAll('h2')).find(
-      (heading) => heading.textContent === messages['radar.import.title'],
-    ) as HTMLHeadingElement | undefined;
+    const importHeading = findHeadingByText(rendered, messages['radar.import.title']);
     const radarList = rendered.querySelector('ul');
 
     expect(importAction).not.toBeNull();
@@ -1112,11 +1116,11 @@ describe('Radar page', () => {
     expect(csvButton).not.toBeNull();
     expect(xlsxButton).not.toBeNull();
     expect(uploadInput).not.toBeNull();
-    expect(importHeading).toBeDefined();
+    expect(importHeading).not.toBeNull();
     expect(radarList).not.toBeNull();
 
     const scrollIntoView = vi.fn();
-    Object.defineProperty(importHeading as HTMLHeadingElement, 'scrollIntoView', {
+    Object.defineProperty(importHeading, 'scrollIntoView', {
       configurable: true,
       value: scrollIntoView,
     });
@@ -1128,9 +1132,10 @@ describe('Radar page', () => {
 
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(importHeading);
-    expect(
+    const importFollowsRadarList = Boolean(
       radarList?.compareDocumentPosition(importHeading as HTMLHeadingElement) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    );
+    expect(importFollowsRadarList).toBe(true);
 
     await act(async () => {
       csvButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1166,9 +1171,7 @@ describe('Radar page', () => {
     expect(text).toContain('Kraftwerk');
     expect(text).toContain(messages['radar.import.rowError']);
 
-    const applyButton = Array.from(rendered.querySelectorAll('button')).find(
-      (button) => button.textContent === messages['radar.import.apply'],
-    );
+    const applyButton = findButtonByText(rendered, messages['radar.import.apply']);
 
     expect(applyButton).not.toBeNull();
 

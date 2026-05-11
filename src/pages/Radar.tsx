@@ -30,6 +30,7 @@ const UPDATE_STATUS_CARDS = [
   { labelKey: 'radar.updatePending', valueKey: 'pending' },
 ] as const;
 
+const RADAR_WANTLIST_IMPORT_SECTION_ID = 'radar-wantlist-fallback';
 const RADAR_PRIORITY_OPTIONS: RadarPriority[] = [
   RADAR_PRIORITY.LOW,
   RADAR_PRIORITY.NORMAL,
@@ -782,14 +783,13 @@ function Radar() {
     }
   }
 
-  function focusWantlistImport() {
-    if (typeof importHeadingRef.current?.scrollIntoView === 'function') {
-      importHeadingRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    } else if (typeof importSectionRef.current?.scrollIntoView === 'function') {
-      importSectionRef.current.scrollIntoView({
+  function showWantlistImportPanel() {
+    const scrollTarget = typeof importHeadingRef.current?.scrollIntoView === 'function'
+      ? importHeadingRef.current
+      : importSectionRef.current;
+
+    if (typeof scrollTarget?.scrollIntoView === 'function') {
+      scrollTarget.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       });
@@ -826,8 +826,8 @@ function Radar() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={focusWantlistImport}
-            aria-controls="radar-wantlist-fallback"
+            onClick={showWantlistImportPanel}
+            aria-controls={RADAR_WANTLIST_IMPORT_SECTION_ID}
             className="secondary-button"
           >
             {t('radar.importAction')}
@@ -923,7 +923,7 @@ function Radar() {
       })}
 
       <RadarWantlistImportPanel
-        sectionId="radar-wantlist-fallback"
+        sectionId={RADAR_WANTLIST_IMPORT_SECTION_ID}
         sectionRef={importSectionRef}
         headingRef={importHeadingRef}
         onApplied={(nextRadar) => {
