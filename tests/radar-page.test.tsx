@@ -52,6 +52,7 @@ const messages = {
   'radar.filter.belowTarget': 'Below target',
   'radar.filter.highPriority': 'High priority',
   'radar.filter.inCollection': 'Already in collection',
+  'radar.filter.attention': 'Pending / incidents',
   'radar.filter.hiddenResolved': 'Hidden or resolved',
   'radar.filter.pending': 'Pending update',
   'radar.filter.failed': 'Update errors',
@@ -831,6 +832,13 @@ describe('Radar page', () => {
     expect(text()).toContain('Below Target');
     expect(text()).not.toContain('Back Again');
 
+    await clickRadarFilter(rendered, 'attention');
+    expect(text()).toContain('Pending Hidden');
+    expect(text()).toContain('Resolved Error');
+    expect(text()).toContain('No Price');
+    expect(text()).not.toContain('Below Target');
+    expect(text()).not.toContain('Back Again');
+
     await clickRadarFilter(rendered, 'hidden_resolved');
     expect(text()).toContain('Pending Hidden');
     expect(text()).toContain('Resolved Error');
@@ -843,6 +851,79 @@ describe('Radar page', () => {
     await clickRadarFilter(rendered, 'failed');
     expect(text()).toContain('Resolved Error');
     expect(text()).not.toContain('Pending Hidden');
+  });
+
+  it('renders operational metric filters in the header and applies the matching list view', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        createRadarRelease({
+          id: 21,
+          release_id: 611,
+          title: 'Operational Opportunity',
+          artist: 'Artist Ops',
+          local: {
+            priority: 'high',
+            target_price: 22,
+            target_price_eur: 22,
+          },
+          marketplace: {
+            status: 'priced',
+            estimated_price: 19,
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+          opportunity: {
+            reasons: ['below_target', 'high_priority_available', 'already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+          },
+        }),
+        createRadarRelease({
+          id: 22,
+          release_id: 612,
+          title: 'Waiting On Price',
+          artist: 'Artist Waits',
+        }),
+        createRadarRelease({
+          id: 23,
+          release_id: 613,
+          title: 'Needs Retry',
+          artist: 'Artist Retry',
+          marketplace: {
+            status: 'failed',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+        }),
+      ],
+      summary: {
+        total: 3,
+        active: 3,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 1,
+        pending: 1,
+        failed: 1,
+        unavailable: 0,
+      },
+    });
+
+    const rendered = await renderRadar();
+    const text = rendered.textContent ?? '';
+
+    expect(text).toContain(messages['radar.filter.opportunities']);
+    expect(text).toContain(messages['radar.filter.belowTarget']);
+    expect(text).toContain(messages['radar.filter.highPriority']);
+    expect(text).toContain(messages['radar.filter.inCollection']);
+    expect(text).toContain(messages['radar.filter.attention']);
+
+    await clickRadarFilter(rendered, 'attention');
+
+    const attentionText = rendered.textContent ?? '';
+
+    expect(attentionText).toContain('Waiting On Price');
+    expect(attentionText).toContain('Needs Retry');
+    expect(attentionText).not.toContain('Operational Opportunity');
   });
 
   it('shows Wantlist template actions, preview validation, and applies the preview into Radar', async () => {
