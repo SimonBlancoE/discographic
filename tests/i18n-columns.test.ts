@@ -112,6 +112,20 @@ const RADAR_KEYS = [
   'radar.filter.failed',
   'radar.filterEmptyTitle',
   'radar.filterEmptyBody',
+  'radar.enrichTitle',
+  'radar.enrichBody',
+  'radar.enrichState.idle',
+  'radar.enrichState.running',
+  'radar.enrichState.completed',
+  'radar.enrichState.failed',
+  'radar.enrichState.stopped',
+  'radar.enrichStart',
+  'radar.enrichStop',
+  'radar.enrichStatus',
+  'radar.enrichCurrent',
+  'radar.enrichTotal',
+  'radar.enrichPending',
+  'radar.enrichStatusError',
   'radar.emptyTitle',
   'radar.emptyBody',
   'radar.openDiscogs',
@@ -239,6 +253,49 @@ const DASHBOARD_RADAR_KEYS = [
   'dashboard.radar.alreadyOwned'
 ];
 
+const PRICE_REVIEW_UI_COPY = {
+  es: {
+    'radar.enrichTitle': 'Revisión de precios de Radar',
+    'radar.enrichStart': 'Revisar precios',
+    'radar.enrichStatusError': 'No se pudo cargar el estado de revisión de precios de Radar. Vuelve a intentarlo en un momento.',
+    'sync.enrichCompleted': 'Revisión de precios completada.',
+    'sync.enrichStartError': 'No se pudo iniciar la revisión de precios: {error}',
+    'sync.stopError': 'No se pudo detener la revisión de precios: {error}',
+    'sync.enrichValues': 'Actualizar precios',
+    'sync.pendingEnrich': '{count} discos pendientes de revisar precios',
+    'backend.sync.activeEnrich': 'Ya hay una revisión de precios en curso',
+    'backend.sync.pending': '{count} discos pendientes de revisar (precio, país, lista de temas).',
+    'backend.sync.enrichProgress': 'Revisando {current}/{total}...',
+    'backend.sync.enrichRemaining': '{processed} discos revisados. Quedan {pending} pendientes.',
+    'backend.sync.enrichDone': '{processed} discos revisados. Completado.',
+    'backend.radar.activeEnrich': 'Ya hay una revisión de precios de Radar en curso',
+    'backend.radar.ready': 'Radar listo para revisar precios de la Wantlist.',
+    'backend.radar.enrichProgress': 'Revisando precios de Radar {current}/{total}...',
+    'dashboard.noValues': 'Aún no hay valores individuales en caché. Aparecerán cuando se revisen los precios de los discos con datos de Discogs.',
+  },
+  en: {
+    'radar.enrichTitle': 'Radar price review',
+    'radar.enrichStart': 'Review prices',
+    'radar.enrichStatusError': 'Radar price review status could not be loaded. Try again in a moment.',
+    'sync.enrichCompleted': 'Price review completed.',
+    'sync.enrichStartError': 'Unable to start price review: {error}',
+    'sync.stopError': 'Unable to stop price review: {error}',
+    'sync.enrichValues': 'Update prices',
+    'sync.pendingEnrich': '{count} records pending price review',
+    'backend.sync.activeEnrich': 'A price review is already running',
+    'backend.sync.pending': '{count} records pending review (price, country, tracklist).',
+    'backend.sync.enrichProgress': 'Reviewing {current}/{total}...',
+    'backend.sync.enrichRemaining': '{processed} records reviewed. {pending} still pending.',
+    'backend.sync.enrichDone': '{processed} records reviewed. Completed.',
+    'backend.radar.activeEnrich': 'A Radar price review is already running',
+    'backend.radar.ready': 'Radar is ready to review Wantlist prices.',
+    'backend.radar.enrichProgress': 'Reviewing Radar prices {current}/{total}...',
+    'dashboard.noValues': 'There are no individual cached values yet. They will appear once record prices are reviewed with Discogs data.',
+  },
+} as const;
+
+const PRICE_REVIEW_JARGON_PATTERN = /enriquec|enrichment|enriching|enrich\b/i;
+
 describe('i18n keys for table columns', () => {
   it('all column i18n keys exist in Spanish locale', () => {
     for (const col of COLUMNS) {
@@ -357,6 +414,18 @@ describe('i18n keys for import/media/client fallbacks', () => {
     for (const label of NATURAL_RADAR_LABELS) {
       expect(messages.es[label.key]).toBe(label.es);
       expect(messages.en[label.key]).toBe(label.en);
+    }
+  });
+
+  it('uses price-review language across visible Radar and collection UI copy', () => {
+    for (const [key, value] of Object.entries(PRICE_REVIEW_UI_COPY.es)) {
+      expect(messages.es[key as keyof typeof messages.es]).toBe(value);
+      expect(messages.es[key as keyof typeof messages.es]).not.toMatch(PRICE_REVIEW_JARGON_PATTERN);
+    }
+
+    for (const [key, value] of Object.entries(PRICE_REVIEW_UI_COPY.en)) {
+      expect(messages.en[key as keyof typeof messages.en]).toBe(value);
+      expect(messages.en[key as keyof typeof messages.en]).not.toMatch(PRICE_REVIEW_JARGON_PATTERN);
     }
   });
 
