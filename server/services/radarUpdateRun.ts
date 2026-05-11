@@ -4,6 +4,7 @@ import {
   RADAR_UPDATE_RUN_PHASE,
   normalizeRadarUpdateRunStatus,
   type RadarSyncResult,
+  type RadarUpdateRunPhase,
   type RadarUpdateRunStatus,
 } from '../../shared/contracts/radar.js';
 import { translate } from '../../shared/i18n.js';
@@ -12,6 +13,7 @@ import { fetchMarketplaceValue } from './marketplaceValue.js';
 import {
   getPendingRadarEnrichmentCount,
   getPendingRadarEnrichmentRows,
+  type PendingRadarEnrichmentRow,
 } from './radarEnrichmentQueue.js';
 import {
   clearRadarUpdateRunRunning,
@@ -24,7 +26,7 @@ import {
 import { getRadarAvailabilityTransition } from './radarStorage.js';
 import { syncRadarWantlist } from './radarWantlist.js';
 
-const ENRICH_BATCH_SIZE = 30;
+const UPDATE_RUN_BATCH_SIZE = 30;
 
 type RadarMarketplaceValue = Awaited<ReturnType<typeof fetchMarketplaceValue>>;
 type MarketplaceClient = Parameters<typeof fetchMarketplaceValue>[0];
@@ -38,6 +40,11 @@ type RadarUpdateRunInput = {
   locale: string | undefined;
   discogs: DiscogsClient;
   onBackgroundError?: (error: unknown) => void;
+};
+
+type RadarPriceReviewInput = Omit<RadarUpdateRunInput, 'onBackgroundError'> & {
+  wantlist: RadarSyncResult;
+  pendingRows: PendingRadarEnrichmentRow[];
 };
 
 function radarT(locale: string | undefined, key: string, vars?: Record<string, string | number>): string {
@@ -61,7 +68,7 @@ function createIdleState(locale?: string): RadarRuntimeUpdateRunState {
     current: 0,
     total: 0,
     pending: 0,
-    message: radarT(locale, 'backend.radar.ready'),
+    message: radarT(locale, 'backend.radar.updateReady'),
     startedAt: null,
     finishedAt: null,
     wantlist: createEmptyWantlistResult(),
@@ -114,7 +121,7 @@ function getEstimatedPrice(marketplace: RadarMarketplaceValue): number | null {
 function updateRadarMarketplaceValue(
   db: Database.Database,
   userId: number,
-  row: { id: number; marketplace_status: string; release_id: number },
+  row: PendingRadarEnrichmentRow,
   marketplace: RadarMarketplaceValue,
 ): void {
   const estimatedPrice = getEstimatedPrice(marketplace);
@@ -150,10 +157,20 @@ function updateRadarMarketplaceValue(
   );
 }
 
-function getCompletionPhase(pending: number) {
-  return pending > 0
-    ? RADAR_UPDATE_RUN_PHASE.COMPLETED_WITH_ISSUES
-    : RADAR_UPDATE_RUN_PHASE.COMPLETED;
+function getCompletionPhase(pending: number): RadarUpdateRunPhase {
+  if (pending > 0) {
+    return RADAR_UPDATE_RUN_PHASE.COMPLETED_WITH_ISSUES;
+  }
+
+  return RADAR_UPDATE_RUN_PHASE.COMPLETED;
+}
+
+function getFinishedPhase(wasStopped: boolean, pending: number): RadarUpdateRunPhase {
+  if (wasStopped) {
+    return RADAR_UPDATE_RUN_PHASE.STOPPED;
+  }
+
+  return getCompletionPhase(pending);
 }
 
 function getCompletionMessage(
@@ -166,6 +183,74 @@ function getCompletionMessage(
   }
 
   return radarT(locale, 'backend.radar.updateCompleted', { processed });
+}
+
+function getFinishedMessage({
+  locale,
+  wasStopped,
+  pending,
+  processed,
+}: {
+  locale: string | undefined;
+  wasStopped: boolean;
+  pending: number;
+  processed: number;
+}): string {
+  if (wasStopped) {
+    return radarT(locale, 'backend.radar.updateStopped', { processed, pending });
+  }
+
+  return getCompletionMessage(locale, pending, processed);
+}
+
+async function reviewPendingRadarPrices({
+  db,
+  userId,
+  locale,
+  discogs,
+  wantlist,
+  pendingRows,
+}: RadarPriceReviewInput): Promise<number> {
+  const totalPending = pendingRows.length;
+  let processed = 0;
+
+  setUpdateRunState(userId, locale, {
+    phase: RADAR_UPDATE_RUN_PHASE.REVIEWING_PRICES,
+    current: 0,
+    total: totalPending,
+    pending: totalPending,
+    message: getReviewingMessage(locale, 0, totalPending),
+    wantlist,
+  });
+
+  for (
+    let offset = 0;
+    offset < pendingRows.length && isRadarUpdateRunRunning(userId);
+    offset += UPDATE_RUN_BATCH_SIZE
+  ) {
+    const rows = pendingRows.slice(offset, offset + UPDATE_RUN_BATCH_SIZE);
+
+    for (const row of rows) {
+      if (!isRadarUpdateRunRunning(userId)) {
+        break;
+      }
+
+      const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
+      updateRadarMarketplaceValue(db, userId, row, marketplace);
+
+      processed += 1;
+      setUpdateRunState(userId, locale, {
+        phase: RADAR_UPDATE_RUN_PHASE.REVIEWING_PRICES,
+        current: processed,
+        total: totalPending,
+        pending: getPendingRadarEnrichmentCount(db, userId),
+        message: getReviewingMessage(locale, processed, totalPending),
+        wantlist,
+      });
+    }
+  }
+
+  return processed;
 }
 
 async function runClaimedRadarUpdateRun({
@@ -207,51 +292,29 @@ async function runClaimedRadarUpdateRun({
       return;
     }
 
-    let processed = 0;
-
-    setUpdateRunState(userId, locale, {
-      phase: RADAR_UPDATE_RUN_PHASE.REVIEWING_PRICES,
-      current: 0,
-      total: totalPending,
-      pending: totalPending,
-      message: getReviewingMessage(locale, 0, totalPending),
+    const processed = await reviewPendingRadarPrices({
+      db,
+      userId,
+      locale,
+      discogs,
       wantlist,
+      pendingRows,
     });
-
-    for (let offset = 0; offset < pendingRows.length && isRadarUpdateRunRunning(userId); offset += ENRICH_BATCH_SIZE) {
-      const rows = pendingRows.slice(offset, offset + ENRICH_BATCH_SIZE);
-
-      for (const row of rows) {
-        if (!isRadarUpdateRunRunning(userId)) {
-          break;
-        }
-
-        const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
-        updateRadarMarketplaceValue(db, userId, row, marketplace);
-
-        processed += 1;
-        setUpdateRunState(userId, locale, {
-          phase: RADAR_UPDATE_RUN_PHASE.REVIEWING_PRICES,
-          current: processed,
-          total: totalPending,
-          pending: getPendingRadarEnrichmentCount(db, userId),
-          message: getReviewingMessage(locale, processed, totalPending),
-          wantlist,
-        });
-      }
-    }
 
     const finalPending = getPendingRadarEnrichmentCount(db, userId);
     const wasStopped = !isRadarUpdateRunRunning(userId) && finalPending > 0;
 
     setUpdateRunState(userId, locale, {
-      phase: wasStopped ? RADAR_UPDATE_RUN_PHASE.STOPPED : getCompletionPhase(finalPending),
+      phase: getFinishedPhase(wasStopped, finalPending),
       current: processed,
       total: totalPending,
       pending: finalPending,
-      message: wasStopped
-        ? radarT(locale, 'backend.radar.updateStopped', { processed, pending: finalPending })
-        : getCompletionMessage(locale, finalPending, processed),
+      message: getFinishedMessage({
+        locale,
+        wasStopped,
+        processed,
+        pending: finalPending,
+      }),
       wantlist,
       finishedAt: new Date().toISOString(),
     });
@@ -310,6 +373,6 @@ export function getRadarUpdateRunStatus(
   return normalizeRadarUpdateRunStatus({
     ...state,
     pending,
-    message: state.message || radarT(locale, 'backend.radar.ready'),
+    message: state.message || radarT(locale, 'backend.radar.updateReady'),
   });
 }

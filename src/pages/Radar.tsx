@@ -113,17 +113,17 @@ function createEmptyRadarUpdateRunStatus(): RadarUpdateRunStatus {
   return normalizeRadarUpdateRunStatus({});
 }
 
-function renderSyncResult(syncResult: RadarSyncResult, t: Translate) {
+function renderWantlistSyncResult(wantlist: RadarSyncResult, t: Translate) {
   return (
     <div className="rounded-3xl border border-emerald-300/20 bg-emerald-950/20 p-5 text-emerald-50">
       <p className="text-sm uppercase tracking-[0.28em] text-emerald-200">{t('radar.syncResultTitle')}</p>
-      <p className="mt-2 text-base">{t('radar.syncResultSummary', { count: syncResult.totalFetched })}</p>
+      <p className="mt-2 text-base">{t('radar.syncResultSummary', { count: wantlist.totalFetched })}</p>
       <p className="mt-2 text-sm text-emerald-100/90">
         {t('radar.syncBreakdown', {
-          added: syncResult.added,
-          updated: syncResult.updated,
-          reactivated: syncResult.reactivated,
-          markedMissing: syncResult.markedMissing,
+          added: wantlist.added,
+          updated: wantlist.updated,
+          reactivated: wantlist.reactivated,
+          markedMissing: wantlist.markedMissing,
         })}
       </p>
     </div>
@@ -508,6 +508,7 @@ function Radar() {
   const [updateError, setUpdateError] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<RadarFilterId>('all');
   const filteredItems = getFilteredRadarItems(radar.items, selectedFilter);
+  const hasWantlistSyncResult = updateRun.wantlist.totalFetched > 0;
 
   useEffect(() => {
     if (accountUnavailable || !capabilities.canUseRadar) {
@@ -679,7 +680,7 @@ function Radar() {
         </button>
       </div>
 
-      {updateRun.wantlist.totalFetched > 0 ? renderSyncResult(updateRun.wantlist, t) : null}
+      {hasWantlistSyncResult ? renderWantlistSyncResult(updateRun.wantlist, t) : null}
 
       {updateError ? (
         <div className="rounded-3xl border border-rose-300/20 bg-rose-950/20 p-5 text-rose-100">

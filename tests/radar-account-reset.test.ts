@@ -168,7 +168,7 @@ describe('Radar account reset workflow', () => {
     });
   });
 
-  it('resets stale Radar enrichment status when the Discogs account changes', async () => {
+  it('resets stale Radar update-run status when the Discogs account changes', async () => {
     markRadarUpdateRunRunning(1);
     setRadarUpdateRunState(1, {
       phase: 'reviewing_prices',
