@@ -832,6 +832,7 @@ function Radar() {
         sectionRef={importSectionRef}
         headingRef={importHeadingRef}
         onApplied={(nextRadar) => {
+          setSelectedFilter('all');
           setRadar(nextRadar);
           setLoadFailed(false);
         }}
