@@ -125,6 +125,7 @@ const RADAR_KEYS = [
   'radar.filter.belowTarget',
   'radar.filter.highPriority',
   'radar.filter.inCollection',
+  'radar.filter.attention',
   'radar.filter.hiddenResolved',
   'radar.filter.pending',
   'radar.filter.failed',
