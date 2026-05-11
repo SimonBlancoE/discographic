@@ -136,7 +136,6 @@ vi.mock('../src/lib/api', () => ({
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
-const originalConfirm = window.confirm;
 
 async function renderRadarDetail(path = '/radar/22') {
   container = document.createElement('div');
@@ -163,7 +162,6 @@ describe('Radar release detail page', () => {
   beforeEach(() => {
     getRadarRelease.mockReset();
     updateRadarRelease.mockReset();
-    window.confirm = originalConfirm;
     updateRadarRelease.mockResolvedValue({
       items: [],
       summary: {

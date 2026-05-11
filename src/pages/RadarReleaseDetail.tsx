@@ -1,4 +1,4 @@
-import { type ReactNode, useContext, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { Link, UNSAFE_NavigationContext, useBeforeUnload, useParams } from 'react-router-dom';
 import {
   type RadarCollectionMatch,
@@ -22,8 +22,7 @@ import {
   getRadarStateLabelKeys,
   type RadarReleaseDraft,
 } from '../lib/radarPresentation';
-import type { Translate } from '../lib/types';
-import type { ApiError } from '../lib/types';
+import type { ApiError, Translate } from '../lib/types';
 
 function getCollectionLink(item: RadarRelease, collectionMatch: RadarCollectionMatch | null, t: Translate) {
   if (collectionMatch?.primary_release_id == null) {
@@ -67,28 +66,60 @@ function RadarDetailFrame({ children, t }: RadarDetailFrameProps) {
   );
 }
 
-function RadarReleaseDetail() {
-  const { id = '' } = useParams();
-  const { t } = useI18n();
-  const navigationContext = useContext(UNSAFE_NavigationContext);
-  const [release, setRelease] = useState<RadarRelease | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [draft, setDraft] = useState<RadarReleaseDraft | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveFailed, setSaveFailed] = useState(false);
-  const savedDraft = release ? createRadarReleaseDraft(release) : null;
-  const hasUnsavedChanges = Boolean(draft && savedDraft && !areRadarReleaseDraftsEqual(draft, savedDraft));
+type RadarSaveStatusLabelKey =
+  | 'radar.saving'
+  | 'radar.saveStatus.saved'
+  | 'radar.saveStatus.unsaved'
+  | 'radar.saveStatus.failed';
 
-  useBeforeUnload((event) => {
+type RadarSaveStatus = {
+  labelKey: RadarSaveStatusLabelKey;
+  className: string;
+};
+
+type RadarSaveStatusInput = {
+  saving: boolean;
+  saveFailed: boolean;
+  hasUnsavedChanges: boolean;
+};
+
+function getRadarSaveStatus({ saving, saveFailed, hasUnsavedChanges }: RadarSaveStatusInput): RadarSaveStatus {
+  let labelKey: RadarSaveStatusLabelKey;
+
+  if (saving) {
+    labelKey = 'radar.saving';
+  } else if (saveFailed) {
+    labelKey = 'radar.saveStatus.failed';
+  } else if (hasUnsavedChanges) {
+    labelKey = 'radar.saveStatus.unsaved';
+  } else {
+    labelKey = 'radar.saveStatus.saved';
+  }
+
+  let className = 'text-emerald-100';
+
+  if (saveFailed) {
+    className = 'text-rose-200';
+  } else if (hasUnsavedChanges) {
+    className = 'text-amber-100';
+  }
+
+  return { labelKey, className };
+}
+
+function useUnsavedRadarChangesWarning(hasUnsavedChanges: boolean, confirmMessage: string) {
+  const navigationContext = useContext(UNSAFE_NavigationContext);
+
+  const handleBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
     if (!hasUnsavedChanges) {
       return;
     }
 
     event.preventDefault();
     event.returnValue = '';
-  });
+  }, [hasUnsavedChanges]);
+
+  useBeforeUnload(handleBeforeUnload);
 
   useEffect(() => {
     if (!hasUnsavedChanges) {
@@ -102,7 +133,7 @@ function RadarReleaseDetail() {
     }
 
     const unblock = navigator.block((transition) => {
-      if (!window.confirm(t('radar.unsavedChangesConfirm'))) {
+      if (!window.confirm(confirmMessage)) {
         return;
       }
 
@@ -111,7 +142,23 @@ function RadarReleaseDetail() {
     });
 
     return unblock;
-  }, [hasUnsavedChanges, navigationContext.navigator, t]);
+  }, [confirmMessage, hasUnsavedChanges, navigationContext.navigator]);
+}
+
+function RadarReleaseDetail() {
+  const { id = '' } = useParams();
+  const { t } = useI18n();
+  const [release, setRelease] = useState<RadarRelease | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [draft, setDraft] = useState<RadarReleaseDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const savedDraft = release ? createRadarReleaseDraft(release) : null;
+  const hasUnsavedChanges = Boolean(draft && savedDraft && !areRadarReleaseDraftsEqual(draft, savedDraft));
+
+  useUnsavedRadarChangesWarning(hasUnsavedChanges, t('radar.unsavedChangesConfirm'));
 
   useEffect(() => {
     let cancelled = false;
@@ -229,18 +276,7 @@ function RadarReleaseDetail() {
   const collectionMatch = release.opportunity.collection_match;
   const opportunityReasons = getOrderedRadarOpportunityReasons(release);
   const stateLabelKeys = getRadarStateLabelKeys(release);
-  const saveStatusLabelKey = saving
-    ? 'radar.saving'
-    : saveFailed
-      ? 'radar.saveStatus.failed'
-      : hasUnsavedChanges
-        ? 'radar.saveStatus.unsaved'
-        : 'radar.saveStatus.saved';
-  const saveStatusClassName = saveFailed
-    ? 'text-rose-200'
-    : hasUnsavedChanges
-      ? 'text-amber-100'
-      : 'text-emerald-100';
+  const saveStatus = getRadarSaveStatus({ saving, saveFailed, hasUnsavedChanges });
 
   return (
     <RadarDetailFrame t={t}>
@@ -399,8 +435,8 @@ function RadarReleaseDetail() {
             {saving ? t('radar.saving') : t('radar.save')}
           </button>
           <div className="space-y-1 text-sm md:text-right">
-            <p data-radar-save-status={String(releaseKey)} className={saveStatusClassName}>
-              {t(saveStatusLabelKey)}
+            <p data-radar-save-status={String(releaseKey)} className={saveStatus.className}>
+              {t(saveStatus.labelKey)}
             </p>
             {saveFailed ? <p className="text-rose-200">{t('radar.saveFailed')}</p> : null}
           </div>
