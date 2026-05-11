@@ -147,6 +147,8 @@ const RADAR_KEYS = [
   'radar.enrichStatusError',
   'radar.emptyTitle',
   'radar.emptyBody',
+  'radar.gettingStartedTitle',
+  'radar.gettingStartedBody',
   'radar.openDiscogs',
   'radar.priority',
   'radar.priority.low',
@@ -379,8 +381,8 @@ const PRICE_REVIEW_COPY = [
   },
   {
     key: 'backend.radar.enrichRemaining',
-    es: '{processed} releases deseados revisados. {pending} siguen pendientes o fallidos.',
-    en: '{processed} wanted releases reviewed. {pending} remain pending or failed.'
+    es: '{processed} releases deseados revisados. {pending} todavía necesitan revisión de precio.',
+    en: '{processed} wanted releases reviewed. {pending} still need price review.'
   },
   {
     key: 'backend.radar.enrichDone',
@@ -389,8 +391,8 @@ const PRICE_REVIEW_COPY = [
   },
   {
     key: 'backend.radar.enrichStopped',
-    es: 'Radar detenido tras revisar {processed} releases. {pending} siguen pendientes o fallidos.',
-    en: 'Radar stopped after reviewing {processed} releases. {pending} remain pending or failed.'
+    es: 'Radar detenido tras revisar {processed} releases. {pending} todavía necesitan revisión de precio.',
+    en: 'Radar stopped after reviewing {processed} releases. {pending} still need price review.'
   },
   {
     key: 'backend.radar.updateCompleted',
@@ -399,13 +401,13 @@ const PRICE_REVIEW_COPY = [
   },
   {
     key: 'backend.radar.updateCompletedWithIssues',
-    es: '{processed} releases deseados revisados. {pending} siguen pendientes o fallidos.',
-    en: '{processed} wanted releases reviewed. {pending} remain pending or failed.'
+    es: '{processed} releases deseados revisados. {pending} todavía necesitan revisión de precio.',
+    en: '{processed} wanted releases reviewed. {pending} still need price review.'
   },
   {
     key: 'backend.radar.updateStopped',
-    es: 'Radar detenido tras revisar {processed} releases. {pending} siguen pendientes o fallidos.',
-    en: 'Radar stopped after reviewing {processed} releases. {pending} remain pending or failed.'
+    es: 'Radar detenido tras revisar {processed} releases. {pending} todavía necesitan revisión de precio.',
+    en: 'Radar stopped after reviewing {processed} releases. {pending} still need price review.'
   }
 ] as const;
 

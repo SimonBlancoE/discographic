@@ -61,7 +61,7 @@ const messages = {
   'radar.filterEmptyTitle': 'No releases match this filter',
   'radar.filterEmptyBody': 'Try another Radar filter to inspect a different slice of your wanted releases.',
   'radar.updateTitle': 'Radar update run',
-  'radar.updateBody': 'Refresh Wantlist data first, then review pending or retryable Radar prices as one clear workflow.',
+  'radar.updateBody': 'Refresh Wantlist data first, then check any prices that still need review as one clear workflow.',
   'radar.updatePhase.idle': 'Ready',
   'radar.updatePhase.syncing': 'Updating Wantlist',
   'radar.updatePhase.reviewing_prices': 'Reviewing prices',
@@ -76,6 +76,8 @@ const messages = {
   'radar.updatePending': 'Pending',
   'radar.emptyTitle': 'Your Radar is ready',
   'radar.emptyBody': 'Your list is empty for now. When Wantlist releases arrive, Radar will keep their local decisions and market state here.',
+  'radar.gettingStartedTitle': 'Start with your Wantlist',
+  'radar.gettingStartedBody': 'Use Update Radar to pull your Discogs Wantlist and check prices in one run. If Discogs is not available, import a CSV or XLSX fallback instead.',
   'radar.accountUnavailable': 'Discogs account status could not be loaded. Reload the page or review Settings before opening Radar.',
   'radar.import.title': 'Wantlist fallback import',
   'radar.import.description': 'Use a CSV or XLSX file as a manual fallback or supplemental Wantlist source before you run a full Radar update.',
@@ -449,7 +451,7 @@ describe('Radar page', () => {
       total: 4,
       pending: 3,
       progressPercent: 25,
-      message: 'Radar stopped after reviewing 1 releases. 3 remain pending or failed.',
+      message: 'Radar stopped after reviewing 1 releases. 3 still need price review.',
       startedAt: '2026-05-10T10:00:00.000Z',
       finishedAt: '2026-05-10T10:01:00.000Z',
       wantlist: {
@@ -504,6 +506,18 @@ describe('Radar page', () => {
     expect(text).toContain(messages['radar.import.title']);
     expect(text).toContain(messages['radar.emptyTitle']);
     expect(text).toContain(messages['radar.emptyBody']);
+  });
+
+  it('shows plain-language getting-started guidance for a fresh Radar workspace', async () => {
+    authState.capabilities.canUseRadar = true;
+
+    const rendered = await renderRadar();
+    const gettingStarted = rendered.querySelector('[data-radar-getting-started="true"]');
+    const text = gettingStarted?.textContent ?? '';
+
+    expect(gettingStarted).not.toBeNull();
+    expect(text).toContain(messages['radar.gettingStartedTitle']);
+    expect(text).toContain(messages['radar.gettingStartedBody']);
   });
 
   it('runs a unified Radar update and shows the refreshed Wantlist result with the latest Radar list', async () => {
@@ -1218,7 +1232,7 @@ describe('Radar page', () => {
       total: 4,
       pending: 3,
       progressPercent: 25,
-      message: 'Radar stopped after reviewing 1 releases. 3 remain pending or failed.',
+      message: 'Radar stopped after reviewing 1 releases. 3 still need price review.',
       startedAt: '2026-05-10T10:00:00.000Z',
       finishedAt: '2026-05-10T10:01:00.000Z',
       wantlist: {
