@@ -40,6 +40,10 @@ const messages = {
   'radar.resolved': 'Resolved',
   'radar.save': 'Save local decision',
   'radar.saving': 'Saving...',
+  'radar.saveStatus.saved': 'All local changes saved.',
+  'radar.saveStatus.unsaved': 'You have unsaved local changes.',
+  'radar.saveStatus.failed': 'Saving failed. Your draft is still here.',
+  'radar.unsavedChangesConfirm': 'You have unsaved Radar changes. Leave this page?',
   'radar.saveFailed': 'Radar could not save your local decision. Try again.',
   'radar.state.pending': 'Pending update',
   'radar.state.unavailable': 'No price available',
@@ -132,6 +136,7 @@ vi.mock('../src/lib/api', () => ({
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
+const originalConfirm = window.confirm;
 
 async function renderRadarDetail(path = '/radar/22') {
   container = document.createElement('div');
@@ -158,6 +163,7 @@ describe('Radar release detail page', () => {
   beforeEach(() => {
     getRadarRelease.mockReset();
     updateRadarRelease.mockReset();
+    window.confirm = originalConfirm;
     updateRadarRelease.mockResolvedValue({
       items: [],
       summary: {
@@ -253,5 +259,213 @@ describe('Radar release detail page', () => {
 
     expect(text).toContain(messages['radar.detailNotFound']);
     expect(backLink?.getAttribute('href')).toBe('/radar');
+  });
+
+  it('marks local decision edits as unsaved and returns to a saved state after an explicit save', async () => {
+    const initialRelease = createRadarRelease({
+      id: 22,
+      release_id: 622,
+      title: 'Single Match',
+      artist: 'Artist B',
+      local: {
+        priority: 'normal',
+        target_price: 18,
+        target_price_eur: 18,
+        minimum_condition: 'VG+',
+        note: 'Need a cleaner copy',
+        hidden: false,
+        resolved: false,
+      },
+    });
+    const savedRelease = createRadarRelease({
+      id: 22,
+      release_id: 622,
+      title: 'Single Match',
+      artist: 'Artist B',
+      local: {
+        priority: 'high',
+        target_price: 20.5,
+        target_price_eur: 20.5,
+        minimum_condition: null,
+        note: 'Buy after payroll',
+        hidden: true,
+        resolved: true,
+      },
+    });
+
+    getRadarRelease.mockResolvedValue(initialRelease);
+    updateRadarRelease.mockResolvedValue({
+      items: [savedRelease],
+      summary: {
+        total: 1,
+        active: 0,
+        hidden: 1,
+        resolved: 1,
+        missingFromSource: 0,
+        priced: 0,
+        pending: 1,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
+
+    const rendered = await renderRadarDetail();
+    const saveButton = rendered.querySelector('button[data-radar-save="22"]') as HTMLButtonElement | null;
+    const prioritySelect = rendered.querySelector('select[name="radar-priority-22"]') as HTMLSelectElement | null;
+    const targetPriceInput = rendered.querySelector('input[name="radar-target-price-22"]') as HTMLInputElement | null;
+    const minimumConditionSelect = rendered.querySelector('select[name="radar-minimum-condition-22"]') as HTMLSelectElement | null;
+    const noteInput = rendered.querySelector('textarea[name="radar-note-22"]') as HTMLTextAreaElement | null;
+    const hiddenInput = rendered.querySelector('input[name="radar-hidden-22"]') as HTMLInputElement | null;
+    const resolvedInput = rendered.querySelector('input[name="radar-resolved-22"]') as HTMLInputElement | null;
+
+    expect(rendered.textContent ?? '').toContain(messages['radar.saveStatus.saved']);
+    expect(saveButton?.disabled).toBe(true);
+
+    await act(async () => {
+      if (prioritySelect) {
+        prioritySelect.value = 'high';
+        prioritySelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (targetPriceInput) {
+        targetPriceInput.value = '20.50';
+        targetPriceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      if (minimumConditionSelect) {
+        minimumConditionSelect.value = '';
+        minimumConditionSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (noteInput) {
+        noteInput.value = 'Buy after payroll';
+        noteInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      if (hiddenInput) {
+        hiddenInput.click();
+      }
+      if (resolvedInput) {
+        resolvedInput.click();
+      }
+    });
+
+    expect(rendered.textContent ?? '').toContain(messages['radar.saveStatus.unsaved']);
+    expect(saveButton?.disabled).toBe(false);
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateRadarRelease).toHaveBeenCalledWith(22, {
+      local: {
+        priority: 'high',
+        target_price: 20.5,
+        minimum_condition: null,
+        note: 'Buy after payroll',
+        hidden: true,
+        resolved: true,
+      },
+    });
+    expect(rendered.textContent ?? '').toContain(messages['radar.saveStatus.saved']);
+    expect(saveButton?.disabled).toBe(true);
+    expect(noteInput?.value).toBe('Buy after payroll');
+    expect(hiddenInput?.checked).toBe(true);
+    expect(resolvedInput?.checked).toBe(true);
+  });
+
+  it('keeps the draft intact after a failed save and allows retrying', async () => {
+    const release = createRadarRelease({
+      id: 22,
+      release_id: 622,
+      title: 'Single Match',
+      artist: 'Artist B',
+    });
+    const savedRelease = createRadarRelease({
+      id: 22,
+      release_id: 622,
+      title: 'Single Match',
+      artist: 'Artist B',
+      local: {
+        note: 'Retry this save',
+      },
+    });
+
+    getRadarRelease.mockResolvedValue(release);
+    updateRadarRelease
+      .mockRejectedValueOnce(new Error('save failed'))
+      .mockResolvedValueOnce({
+        items: [savedRelease],
+        summary: {
+          total: 1,
+          active: 1,
+          hidden: 0,
+          resolved: 0,
+          missingFromSource: 0,
+          priced: 0,
+          pending: 1,
+          failed: 0,
+          unavailable: 0,
+        },
+      });
+
+    const rendered = await renderRadarDetail();
+    const saveButton = rendered.querySelector('button[data-radar-save="22"]') as HTMLButtonElement | null;
+    const noteInput = rendered.querySelector('textarea[name="radar-note-22"]') as HTMLTextAreaElement | null;
+
+    await act(async () => {
+      if (noteInput) {
+        noteInput.value = 'Retry this save';
+        noteInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(rendered.textContent ?? '').toContain(messages['radar.saveStatus.failed']);
+    expect(rendered.textContent ?? '').toContain(messages['radar.saveFailed']);
+    expect(noteInput?.value).toBe('Retry this save');
+    expect(saveButton?.disabled).toBe(false);
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(updateRadarRelease).toHaveBeenCalledTimes(2);
+    expect(rendered.textContent ?? '').toContain(messages['radar.saveStatus.saved']);
+    expect(noteInput?.value).toBe('Retry this save');
+  });
+
+  it('guards browser unload when unsaved changes exist', async () => {
+    getRadarRelease.mockResolvedValue(
+      createRadarRelease({
+        id: 22,
+        release_id: 622,
+        title: 'Single Match',
+        artist: 'Artist B',
+      }),
+    );
+
+    const rendered = await renderRadarDetail();
+    const noteInput = rendered.querySelector('textarea[name="radar-note-22"]') as HTMLTextAreaElement | null;
+
+    await act(async () => {
+      if (noteInput) {
+        noteInput.value = 'Do not lose this draft';
+        noteInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    const event = new Event('beforeunload', { cancelable: true }) as Event & { returnValue?: string };
+    event.returnValue = undefined;
+
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(rendered.textContent ?? '').toContain('Do not lose this draft');
   });
 });
