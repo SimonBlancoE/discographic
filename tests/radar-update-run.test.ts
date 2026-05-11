@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MARKETPLACE_STATUS } from '../shared/contracts/radar.js';
+import { MARKETPLACE_STATUS, type RadarSyncResult } from '../shared/contracts/radar.js';
 import { resetRadarRuntimeState } from '../server/services/radarRuntimeState.js';
 
 const fetchMarketplaceValue = vi.hoisted(() => vi.fn());
@@ -34,6 +34,17 @@ type FakeRadarRow = {
   estimated_price: number | null;
 };
 
+type MarketplaceCheck = {
+  estimatedValue: number | null;
+  marketplaceStatus: string;
+  error: string | null;
+};
+
+type FakeDiscogsClient = {
+  getAllWantlist: () => Promise<unknown[]>;
+  getMarketplaceStats: (releaseId: number, currency: string) => Promise<null>;
+};
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
@@ -57,11 +68,52 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<voi
   }
 }
 
+function createWantlistResult(overrides: Partial<RadarSyncResult> = {}): RadarSyncResult {
+  return {
+    totalFetched: 0,
+    added: 0,
+    updated: 0,
+    reactivated: 0,
+    markedMissing: 0,
+    ignored: 0,
+    ...overrides,
+  };
+}
+
+function createDiscogsClient(wantlistRows: unknown[] = []): FakeDiscogsClient {
+  return {
+    getAllWantlist: async () => wantlistRows,
+    getMarketplaceStats: async () => null,
+  };
+}
+
+function createPendingRadarRow(id: number, releaseId: number): FakeRadarRow {
+  return {
+    id,
+    release_id: releaseId,
+    marketplace_status: MARKETPLACE_STATUS.PENDING,
+    estimated_price: null,
+  };
+}
+
 describe('Radar update run', () => {
   let rows: FakeRadarRow[];
   let db: {
     prepare: ReturnType<typeof vi.fn>;
   };
+
+  function getStatus() {
+    return getRadarUpdateRunStatus(db as never, 7, 'en');
+  }
+
+  function startUpdateRun(discogs: FakeDiscogsClient): boolean {
+    return startRadarUpdateRun({
+      db: db as never,
+      userId: 7,
+      locale: 'en',
+      discogs,
+    });
+  }
 
   beforeEach(() => {
     rows = [];
@@ -124,26 +176,19 @@ describe('Radar update run', () => {
       { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
       { id: 222, basic_information: { id: 222, title: 'Wanted B', year: 2002, artists: [{ name: 'Artist B' }] } },
     ];
-    const discogs = {
-      getAllWantlist: vi.fn().mockResolvedValue(wantlistRows),
-      getMarketplaceStats: vi.fn(),
-    };
+    const discogs = createDiscogsClient(wantlistRows);
 
     syncRadarWantlist.mockImplementation((_db, _userId, syncedRows) => {
       expect(syncedRows).toEqual(wantlistRows);
       rows = [
-        { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
-        { id: 2, release_id: 222, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
+        createPendingRadarRow(1, 111),
+        createPendingRadarRow(2, 222),
       ];
 
-      return {
+      return createWantlistResult({
         totalFetched: 2,
         added: 2,
-        updated: 0,
-        reactivated: 0,
-        markedMissing: 0,
-        ignored: 0,
-      };
+      });
     });
 
     fetchMarketplaceValue
@@ -158,16 +203,11 @@ describe('Radar update run', () => {
         error: 'temporary',
       });
 
-    expect(startRadarUpdateRun({
-      db: db as never,
-      userId: 7,
-      locale: 'en',
-      discogs,
-    })).toBe(true);
+    expect(startUpdateRun(discogs)).toBe(true);
 
-    await waitFor(() => getRadarUpdateRunStatus(db as never, 7, 'en').isTerminal);
+    await waitFor(() => getStatus().isTerminal);
 
-    expect(getRadarUpdateRunStatus(db as never, 7, 'en')).toMatchObject({
+    expect(getStatus()).toMatchObject({
       phase: 'completed_with_issues',
       current: 2,
       total: 2,
@@ -192,51 +232,30 @@ describe('Radar update run', () => {
   });
 
   it('reports active-run conflicts and exposes reviewing progress before completion', async () => {
-    const firstMarketplaceCheck = createDeferred<{
-      estimatedValue: number | null;
-      marketplaceStatus: string;
-      error: string | null;
-    }>();
-    const discogs = {
-      getAllWantlist: vi.fn().mockResolvedValue([
-        { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
-      ]),
-      getMarketplaceStats: vi.fn(),
-    };
+    const firstMarketplaceCheck = createDeferred<MarketplaceCheck>();
+    const discogs = createDiscogsClient([
+      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
+    ]);
 
     syncRadarWantlist.mockImplementation(() => {
       rows = [
-        { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
+        createPendingRadarRow(1, 111),
       ];
 
-      return {
+      return createWantlistResult({
         totalFetched: 1,
         added: 1,
-        updated: 0,
-        reactivated: 0,
-        markedMissing: 0,
-        ignored: 0,
-      };
+      });
     });
 
     fetchMarketplaceValue.mockReturnValueOnce(firstMarketplaceCheck.promise);
 
-    expect(startRadarUpdateRun({
-      db: db as never,
-      userId: 7,
-      locale: 'en',
-      discogs,
-    })).toBe(true);
+    expect(startUpdateRun(discogs)).toBe(true);
 
-    await waitFor(() => getRadarUpdateRunStatus(db as never, 7, 'en').phase === 'reviewing_prices');
+    await waitFor(() => getStatus().phase === 'reviewing_prices');
 
-    expect(startRadarUpdateRun({
-      db: db as never,
-      userId: 7,
-      locale: 'en',
-      discogs,
-    })).toBe(false);
-    expect(getRadarUpdateRunStatus(db as never, 7, 'en')).toMatchObject({
+    expect(startUpdateRun(discogs)).toBe(false);
+    expect(getStatus()).toMatchObject({
       phase: 'reviewing_prices',
       current: 0,
       total: 1,
@@ -252,9 +271,9 @@ describe('Radar update run', () => {
       error: null,
     });
 
-    await waitFor(() => getRadarUpdateRunStatus(db as never, 7, 'en').phase === 'completed');
+    await waitFor(() => getStatus().phase === 'completed');
 
-    expect(getRadarUpdateRunStatus(db as never, 7, 'en')).toMatchObject({
+    expect(getStatus()).toMatchObject({
       phase: 'completed',
       current: 1,
       total: 1,
@@ -266,33 +285,22 @@ describe('Radar update run', () => {
   });
 
   it('stops a long-running price review without pretending the remaining work completed', async () => {
-    const firstMarketplaceCheck = createDeferred<{
-      estimatedValue: number | null;
-      marketplaceStatus: string;
-      error: string | null;
-    }>();
-    const discogs = {
-      getAllWantlist: vi.fn().mockResolvedValue([
-        { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
-        { id: 222, basic_information: { id: 222, title: 'Wanted B', year: 2002, artists: [{ name: 'Artist B' }] } },
-      ]),
-      getMarketplaceStats: vi.fn(),
-    };
+    const firstMarketplaceCheck = createDeferred<MarketplaceCheck>();
+    const discogs = createDiscogsClient([
+      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
+      { id: 222, basic_information: { id: 222, title: 'Wanted B', year: 2002, artists: [{ name: 'Artist B' }] } },
+    ]);
 
     syncRadarWantlist.mockImplementation(() => {
       rows = [
-        { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
-        { id: 2, release_id: 222, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
+        createPendingRadarRow(1, 111),
+        createPendingRadarRow(2, 222),
       ];
 
-      return {
+      return createWantlistResult({
         totalFetched: 2,
         added: 2,
-        updated: 0,
-        reactivated: 0,
-        markedMissing: 0,
-        ignored: 0,
-      };
+      });
     });
 
     fetchMarketplaceValue
@@ -303,14 +311,9 @@ describe('Radar update run', () => {
         error: null,
       });
 
-    expect(startRadarUpdateRun({
-      db: db as never,
-      userId: 7,
-      locale: 'en',
-      discogs,
-    })).toBe(true);
+    expect(startUpdateRun(discogs)).toBe(true);
 
-    await waitFor(() => getRadarUpdateRunStatus(db as never, 7, 'en').phase === 'reviewing_prices');
+    await waitFor(() => getStatus().phase === 'reviewing_prices');
 
     stopRadarUpdateRun(db as never, 7, 'en');
     firstMarketplaceCheck.resolve({
@@ -319,9 +322,12 @@ describe('Radar update run', () => {
       error: null,
     });
 
-    await waitFor(() => getRadarUpdateRunStatus(db as never, 7, 'en').phase === 'stopped');
+    await waitFor(() => {
+      const status = getStatus();
+      return status.phase === 'stopped' && status.current === 1 && status.pending === 1;
+    });
 
-    expect(getRadarUpdateRunStatus(db as never, 7, 'en')).toMatchObject({
+    expect(getStatus()).toMatchObject({
       phase: 'stopped',
       current: 1,
       total: 2,
