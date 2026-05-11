@@ -193,7 +193,7 @@ describe('radar route', () => {
       total: 0,
       pending: 2,
       progressPercent: 0,
-      message: 'Radar is ready to update.',
+      message: 'Radar is ready to update your Wantlist and review prices.',
       startedAt: null,
       finishedAt: null,
       wantlist: {
