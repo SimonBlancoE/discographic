@@ -8,6 +8,7 @@ import VinylBadge from './components/VinylBadge';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Collection = lazy(() => import('./pages/Collection'));
 const Radar = lazy(() => import('./pages/Radar'));
+const RadarReleaseDetail = lazy(() => import('./pages/RadarReleaseDetail'));
 const CollectionWall = lazy(() => import('./pages/CollectionWall'));
 const ReleaseDetail = lazy(() => import('./pages/ReleaseDetail'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -67,6 +68,7 @@ function AppLayoutFrame() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/collection" element={<Collection />} />
               <Route path="/radar" element={<Radar />} />
+              <Route path="/radar/:id" element={<RadarReleaseDetail />} />
               <Route path="/wall" element={<CollectionWall />} />
               <Route path="/release/:id" element={<ReleaseDetail />} />
               <Route path="/settings" element={<Settings />} />
