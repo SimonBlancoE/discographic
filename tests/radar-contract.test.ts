@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   RADAR_ENRICH_STATUS,
+  RADAR_UPDATE_RUN_PHASE,
   MARKETPLACE_STATUS,
   RADAR_MINIMUM_CONDITION,
   normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   normalizeRadarSyncResponse,
+  normalizeRadarUpdateRunStatus,
   RADAR_PRIORITY,
   RADAR_SOURCE_ORIGIN,
   RADAR_SOURCE_STATUS,
@@ -334,6 +336,68 @@ describe('radar contract', () => {
       finishedAt: '2026-05-10T10:01:00.000Z',
       isRunning: false,
       isTerminal: true,
+    });
+  });
+
+  it('normalizes Radar update-run status into a stable workflow contract', () => {
+    expect(normalizeRadarUpdateRunStatus()).toEqual({
+      phase: RADAR_UPDATE_RUN_PHASE.IDLE,
+      current: 0,
+      total: 0,
+      pending: 0,
+      progressPercent: 0,
+      message: '',
+      startedAt: null,
+      finishedAt: null,
+      wantlist: {
+        totalFetched: 0,
+        added: 0,
+        updated: 0,
+        reactivated: 0,
+        markedMissing: 0,
+        ignored: 0,
+      },
+      isRunning: false,
+      isTerminal: false,
+      canStop: false,
+    });
+
+    expect(normalizeRadarUpdateRunStatus({
+      phase: 'reviewing_prices',
+      current: '3',
+      total: '12',
+      pending: '5',
+      message: 'Reviewing Radar prices 3/12...',
+      startedAt: '2026-05-10T10:00:00.000Z',
+      finishedAt: null,
+      wantlist: {
+        totalFetched: '12',
+        added: '3',
+        updated: '8',
+        reactivated: '1',
+        markedMissing: '2',
+        ignored: '0',
+      },
+    })).toEqual({
+      phase: RADAR_UPDATE_RUN_PHASE.REVIEWING_PRICES,
+      current: 3,
+      total: 12,
+      pending: 5,
+      progressPercent: 25,
+      message: 'Reviewing Radar prices 3/12...',
+      startedAt: '2026-05-10T10:00:00.000Z',
+      finishedAt: null,
+      wantlist: {
+        totalFetched: 12,
+        added: 3,
+        updated: 8,
+        reactivated: 1,
+        markedMissing: 2,
+        ignored: 0,
+      },
+      isRunning: true,
+      isTerminal: false,
+      canStop: true,
     });
   });
 });

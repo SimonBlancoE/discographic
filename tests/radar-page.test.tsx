@@ -15,26 +15,26 @@ const authState = vi.hoisted(() => ({
 }));
 
 const getRadar = vi.hoisted(() => vi.fn());
-const syncRadar = vi.hoisted(() => vi.fn());
 const previewRadarWantlist = vi.hoisted(() => vi.fn());
 const applyRadarWantlistPreview = vi.hoisted(() => vi.fn());
 const downloadRadarWantlistTemplate = vi.hoisted(() => vi.fn());
 const updateRadarRelease = vi.hoisted(() => vi.fn());
 const getRadarStatus = vi.hoisted(() => vi.fn());
-const enrichRadar = vi.hoisted(() => vi.fn());
-const stopRadarEnrich = vi.hoisted(() => vi.fn());
+const startRadarUpdateRun = vi.hoisted(() => vi.fn());
+const stopRadarUpdateRun = vi.hoisted(() => vi.fn());
 
 const messages = {
   'radar.eyebrow': 'Radar',
   'radar.blockedTitle': 'Connect your Discogs account',
   'radar.blockedBody': 'Radar needs a configured Discogs account before it can show your buying workspace.',
   'radar.openSettings': 'Open Settings',
-  'radar.syncAction': 'Sync Wantlist',
-  'radar.syncing': 'Syncing Wantlist...',
+  'radar.updateAction': 'Update Radar',
+  'radar.updating': 'Updating Radar...',
+  'radar.updateError': 'Radar could not start updating: boom',
+  'radar.updateStatusError': 'Radar update status could not be loaded. Try again in a moment.',
   'radar.syncResultTitle': 'Wantlist synced',
   'radar.syncResultSummary': 'Checked 1 wanted release from Discogs.',
   'radar.syncBreakdown': '1 new · 0 updated · 0 back again · 0 missing now',
-  'radar.syncError': 'Radar could not sync from Discogs: boom',
   'radar.loading': 'Loading your Radar workspace...',
   'radar.loadFailed': 'Radar could not be loaded. Try again in a moment.',
   'radar.summary.total': 'Wanted',
@@ -57,20 +57,20 @@ const messages = {
   'radar.filter.failed': 'Update errors',
   'radar.filterEmptyTitle': 'No releases match this filter',
   'radar.filterEmptyBody': 'Try another Radar filter to inspect a different slice of your wanted releases.',
-  'radar.enrichTitle': 'Radar Marketplace',
-  'radar.enrichBody': 'Enrich wanted releases with release-level minimum price data and preserve pending, failed, and no-price states so retryable rows stay truthful.',
-  'radar.enrichState.idle': 'Ready',
-  'radar.enrichState.running': 'Running',
-  'radar.enrichState.completed': 'Completed',
-  'radar.enrichState.failed': 'Failed',
-  'radar.enrichState.stopped': 'Stopped',
-  'radar.enrichStart': 'Enrich Radar',
-  'radar.enrichStop': 'Stop',
-  'radar.enrichStatus': 'Status',
-  'radar.enrichCurrent': 'Current',
-  'radar.enrichTotal': 'Total',
-  'radar.enrichPending': 'Pending',
-  'radar.enrichStatusError': 'Radar enrichment status could not be loaded. Try again in a moment.',
+  'radar.updateTitle': 'Radar update run',
+  'radar.updateBody': 'Refresh Wantlist data first, then review pending or retryable Radar prices as one clear workflow.',
+  'radar.updatePhase.idle': 'Ready',
+  'radar.updatePhase.syncing': 'Updating Wantlist',
+  'radar.updatePhase.reviewing_prices': 'Reviewing prices',
+  'radar.updatePhase.completed': 'Completed',
+  'radar.updatePhase.completed_with_issues': 'Completed with issues',
+  'radar.updatePhase.failed': 'Failed',
+  'radar.updatePhase.stopped': 'Stopped',
+  'radar.updateStop': 'Stop',
+  'radar.updateStatus': 'Status',
+  'radar.updateCurrent': 'Current',
+  'radar.updateTotal': 'Total',
+  'radar.updatePending': 'Pending',
   'radar.emptyTitle': 'Your Radar is ready',
   'radar.emptyBody': 'Your list is empty for now. When Wantlist releases arrive, Radar will keep their local decisions and market state here.',
   'radar.accountUnavailable': 'Discogs account status could not be loaded. Reload the page or review Settings before opening Radar.',
@@ -208,14 +208,13 @@ vi.mock('../src/lib/I18nContext', () => ({
 vi.mock('../src/lib/api', () => ({
   api: {
     getRadar,
-    syncRadar,
     previewRadarWantlist,
     applyRadarWantlistPreview,
     downloadRadarWantlistTemplate,
     updateRadarRelease,
     getRadarStatus,
-    enrichRadar,
-    stopRadarEnrich,
+    startRadarUpdateRun,
+    stopRadarUpdateRun,
   },
 }));
 
@@ -258,14 +257,13 @@ describe('Radar page', () => {
     authState.accountUnavailable = false;
     authState.capabilities.canUseRadar = false;
     getRadar.mockReset();
-    syncRadar.mockReset();
     previewRadarWantlist.mockReset();
     applyRadarWantlistPreview.mockReset();
     downloadRadarWantlistTemplate.mockReset();
     updateRadarRelease.mockReset();
     getRadarStatus.mockReset();
-    enrichRadar.mockReset();
-    stopRadarEnrich.mockReset();
+    startRadarUpdateRun.mockReset();
+    stopRadarUpdateRun.mockReset();
     getRadar.mockResolvedValue({
       items: [],
       summary: {
@@ -281,73 +279,36 @@ describe('Radar page', () => {
       },
     });
     getRadarStatus.mockResolvedValue({
-      status: 'idle',
+      phase: 'idle',
       current: 0,
       total: 0,
       pending: 2,
       progressPercent: 0,
-      message: 'Radar is ready to enrich your Wantlist.',
+      message: 'Radar is ready to update.',
       startedAt: null,
       finishedAt: null,
+      wantlist: {
+        totalFetched: 0,
+        added: 0,
+        updated: 0,
+        reactivated: 0,
+        markedMissing: 0,
+        ignored: 0,
+      },
       isRunning: false,
       isTerminal: false,
+      canStop: false,
     });
-    syncRadar.mockResolvedValue({
-      radar: {
-        items: [
-          {
-            id: 1,
-            user_id: 1,
-            release_id: 901,
-            title: 'Fresh Want',
-            artist: 'New Artist',
-            year: 2024,
-            cover_url: null,
-            date_added: '2026-05-10T00:00:00Z',
-            local: {
-              priority: 'normal',
-              target_price: null,
-              target_price_eur: null,
-              minimum_condition: null,
-              note: '',
-              hidden: false,
-              resolved: false,
-            },
-            source: {
-              origin: 'discogs',
-              status: 'active',
-              last_seen_at: '2026-05-10T12:00:00Z',
-            },
-            marketplace: {
-              status: 'pending',
-              estimated_price: null,
-              last_checked_at: null,
-            },
-            timestamps: {
-              created_at: '2026-05-10T12:00:00Z',
-              updated_at: '2026-05-10T12:00:00Z',
-            },
-            opportunity: {
-              reasons: [],
-              default_visible: true,
-              is_in_collection: false,
-            },
-            display_currency: 'EUR',
-          },
-        ],
-        summary: {
-          total: 1,
-          active: 1,
-          hidden: 0,
-          resolved: 0,
-          missingFromSource: 0,
-          priced: 0,
-          pending: 1,
-          failed: 0,
-          unavailable: 0,
-        },
-      },
-      result: {
+    startRadarUpdateRun.mockResolvedValue({
+      phase: 'completed',
+      current: 1,
+      total: 1,
+      pending: 0,
+      progressPercent: 100,
+      message: 'Radar update completed.',
+      startedAt: '2026-05-10T12:00:00Z',
+      finishedAt: '2026-05-10T12:01:00Z',
+      wantlist: {
         totalFetched: 1,
         added: 1,
         updated: 0,
@@ -355,6 +316,9 @@ describe('Radar page', () => {
         markedMissing: 0,
         ignored: 0,
       },
+      isRunning: false,
+      isTerminal: true,
+      canStop: false,
     });
     previewRadarWantlist.mockResolvedValue({
       previewId: 'preview-1',
@@ -469,8 +433,27 @@ describe('Radar page', () => {
         unavailable: 0,
       },
     });
-    enrichRadar.mockResolvedValue({ ok: true });
-    stopRadarEnrich.mockResolvedValue({ ok: true });
+    stopRadarUpdateRun.mockResolvedValue({
+      phase: 'stopped',
+      current: 1,
+      total: 4,
+      pending: 3,
+      progressPercent: 25,
+      message: 'Radar stopped after 1 releases. 3 remain pending or failed.',
+      startedAt: '2026-05-10T10:00:00.000Z',
+      finishedAt: '2026-05-10T10:01:00.000Z',
+      wantlist: {
+        totalFetched: 4,
+        added: 2,
+        updated: 1,
+        reactivated: 0,
+        markedMissing: 1,
+        ignored: 0,
+      },
+      isRunning: false,
+      isTerminal: true,
+      canStop: false,
+    });
   });
 
   afterEach(async () => {
@@ -505,33 +488,100 @@ describe('Radar page', () => {
     expect(text).toContain(messages['radar.eyebrow']);
     expect(text).toContain(messages['radar.summary.total']);
     expect(text).toContain(messages['radar.summary.pending']);
-    expect(text).toContain(messages['radar.enrichTitle']);
-    expect(text).toContain(messages['radar.enrichStart']);
-    expect(text).toContain(messages['radar.enrichPending']);
+    expect(text).toContain(messages['radar.updateTitle']);
+    expect(text).toContain(messages['radar.updateAction']);
+    expect(text).toContain(messages['radar.updatePending']);
     expect(text).toContain(messages['radar.import.title']);
     expect(text).toContain(messages['radar.emptyTitle']);
     expect(text).toContain(messages['radar.emptyBody']);
   });
 
-  it('syncs the wantlist and shows the sync result with the refreshed Radar list', async () => {
+  it('runs a unified Radar update and shows the refreshed Wantlist result with the latest Radar list', async () => {
     authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValueOnce({
+      items: [],
+      summary: {
+        total: 0,
+        active: 0,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 0,
+        pending: 0,
+        failed: 0,
+        unavailable: 0,
+      },
+    }).mockResolvedValueOnce({
+      items: [
+        {
+          id: 1,
+          user_id: 1,
+          release_id: 901,
+          title: 'Fresh Want',
+          artist: 'New Artist',
+          year: 2024,
+          cover_url: null,
+          date_added: '2026-05-10T00:00:00Z',
+          local: {
+            priority: 'normal',
+            target_price: null,
+            target_price_eur: null,
+            minimum_condition: null,
+            note: '',
+            hidden: false,
+            resolved: false,
+          },
+          source: {
+            origin: 'discogs',
+            status: 'active',
+            last_seen_at: '2026-05-10T12:00:00Z',
+          },
+          marketplace: {
+            status: 'pending',
+            estimated_price: null,
+            last_checked_at: null,
+          },
+          timestamps: {
+            created_at: '2026-05-10T12:00:00Z',
+            updated_at: '2026-05-10T12:00:00Z',
+          },
+          opportunity: {
+            reasons: [],
+            default_visible: true,
+            is_in_collection: false,
+          },
+          display_currency: 'EUR',
+        },
+      ],
+      summary: {
+        total: 1,
+        active: 1,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 0,
+        pending: 1,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
 
     const rendered = await renderRadar();
-    const syncButton = Array.from(rendered.querySelectorAll('button')).find(
-      (button) => button.textContent === messages['radar.syncAction'],
+    const updateButton = Array.from(rendered.querySelectorAll('button')).find(
+      (button) => button.textContent === messages['radar.updateAction'],
     );
 
-    expect(syncButton).toBeTruthy();
+    expect(updateButton).toBeTruthy();
 
     await act(async () => {
-      syncButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      updateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
     const text = rendered.textContent ?? '';
 
-    expect(syncRadar).toHaveBeenCalledTimes(1);
+    expect(startRadarUpdateRun).toHaveBeenCalledTimes(1);
     expect(text).toContain(messages['radar.syncResultTitle']);
     expect(text).toContain(messages['radar.syncResultSummary']);
     expect(text).toContain(messages['radar.syncBreakdown']);
@@ -912,10 +962,10 @@ describe('Radar page', () => {
     expect(rendered.textContent ?? '').toContain('Computer World');
   });
 
-  it('shows stopped Radar enrichment state after a run has been halted', async () => {
+  it('shows stopped Radar update state after a run has been halted', async () => {
     authState.capabilities.canUseRadar = true;
     getRadarStatus.mockResolvedValue({
-      status: 'stopped',
+      phase: 'stopped',
       current: 1,
       total: 4,
       pending: 3,
@@ -923,14 +973,23 @@ describe('Radar page', () => {
       message: 'Radar stopped after 1 releases. 3 remain pending or failed.',
       startedAt: '2026-05-10T10:00:00.000Z',
       finishedAt: '2026-05-10T10:01:00.000Z',
+      wantlist: {
+        totalFetched: 4,
+        added: 2,
+        updated: 1,
+        reactivated: 0,
+        markedMissing: 1,
+        ignored: 0,
+      },
       isRunning: false,
       isTerminal: true,
+      canStop: false,
     });
 
     const text = (await renderRadar()).textContent ?? '';
 
-    expect(text).toContain(messages['radar.enrichState.stopped']);
-    expect(text).toContain(messages['radar.enrichStart']);
+    expect(text).toContain(messages['radar.updatePhase.stopped']);
+    expect(text).toContain(messages['radar.updateAction']);
     expect(text).toContain('1');
     expect(text).toContain('4');
     expect(text).toContain('3');

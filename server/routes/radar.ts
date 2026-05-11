@@ -22,11 +22,10 @@ import {
   normalizeCurrency,
 } from '../services/exchangeRates.js';
 import {
-  getRadarEnrichmentStatus,
-  startRadarEnrichment,
-  stopRadarEnrichment,
-} from '../services/radarEnrichmentWorkflow.js';
-import { syncRadarWantlist } from '../services/radarWantlist.js';
+  getRadarUpdateRunStatus,
+  startRadarUpdateRun,
+  stopRadarUpdateRun,
+} from '../services/radarUpdateRun.js';
 import {
   RadarWantlistPreviewExpiredError,
   applyStoredRadarWantlistPreview,
@@ -286,26 +285,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.post('/sync', async (req, res, next) => {
-  try {
-    const userId = req.session.userId;
-    if (userId == null) {
-      return res.status(401).json({ error: req.t('backend.auth.required') });
-    }
-
-    const discogs = getDiscogsClientForUser(req);
-    const wantlistRows = await discogs.getAllWantlist();
-    const result = syncRadarWantlist(db, userId, wantlistRows);
-
-    return res.json({
-      radar: await serializeRadar(userId),
-      result,
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
-
 router.get('/wantlist/template', (req, res) => {
   const format = resolveTemplateFormat(req.query.format);
   const data = buildWantlistTemplateData(req.t);
@@ -367,40 +346,40 @@ router.post('/wantlist/apply', async (req, res) => {
   }
 });
 
-router.post('/enrich', async (req, res) => {
+router.post('/update', async (req, res) => {
   const userId = req.session.userId as number;
 
   try {
     const discogs = getDiscogsClientForUser(req);
-    const started = startRadarEnrichment({
+    const started = startRadarUpdateRun({
       db,
       userId,
       locale: req.locale,
       discogs,
       onBackgroundError: (error) => {
-        console.log('[radar-enrich] background error:', getErrorMessage(error));
+        console.log('[radar-update] background error:', getErrorMessage(error));
       },
     });
 
     if (!started) {
-      return res.status(409).json({ error: req.t('backend.radar.activeEnrich') });
+      return res.status(409).json({ error: req.t('backend.radar.activeUpdate') });
     }
 
-    res.json({ ok: true });
+    res.json(getRadarUpdateRunStatus(db, userId, req.locale));
   } catch (error) {
     return res.status(400).json({ error: getErrorMessage(error) });
   }
 });
 
-router.post('/enrich/stop', (req, res) => {
+router.post('/update/stop', (req, res) => {
   const userId = req.session.userId as number;
-  stopRadarEnrichment(db, userId, req.locale);
-  res.json({ ok: true });
+  stopRadarUpdateRun(db, userId, req.locale);
+  res.json(getRadarUpdateRunStatus(db, userId, req.locale));
 });
 
 router.get('/status', (req, res) => {
   const userId = req.session.userId as number;
-  res.json(getRadarEnrichmentStatus(db, userId, req.locale));
+  res.json(getRadarUpdateRunStatus(db, userId, req.locale));
 });
 
 export default router;

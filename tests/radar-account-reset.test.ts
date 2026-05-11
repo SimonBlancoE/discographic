@@ -48,9 +48,9 @@ vi.mock('../server/middleware/auth.js', () => ({
 const { default: radarRouter } = await import('../server/routes/radar.js');
 const { default: accountRouter } = await import('../server/routes/account.js');
 const {
-  markRadarEnrichmentRunning,
+  markRadarUpdateRunRunning,
   resetRadarRuntimeState,
-  setRadarEnrichmentState,
+  setRadarUpdateRunState,
 } = await import('../server/services/radarRuntimeState.js');
 
 describe('Radar account reset workflow', () => {
@@ -169,22 +169,31 @@ describe('Radar account reset workflow', () => {
   });
 
   it('resets stale Radar enrichment status when the Discogs account changes', async () => {
-    markRadarEnrichmentRunning(1);
-    setRadarEnrichmentState(1, {
-      status: 'running',
+    markRadarUpdateRunRunning(1);
+    setRadarUpdateRunState(1, {
+      phase: 'reviewing_prices',
       current: 1,
       total: 3,
       pending: 2,
-      message: 'Enriching Radar 1/3...',
+      message: 'Reviewing Radar prices 1/3...',
       startedAt: '2026-05-10T00:00:00Z',
       finishedAt: null,
+      wantlist: {
+        totalFetched: 3,
+        added: 1,
+        updated: 2,
+        reactivated: 0,
+        markedMissing: 0,
+        ignored: 0,
+      },
     });
 
     const beforeResponse = await fetch(`${baseUrl}/api/radar/status`);
     expect(beforeResponse.status).toBe(200);
     await expect(beforeResponse.json()).resolves.toMatchObject({
-      status: 'running',
+      phase: 'reviewing_prices',
       isRunning: true,
+      canStop: true,
       current: 1,
       total: 3,
     });
@@ -211,7 +220,7 @@ describe('Radar account reset workflow', () => {
     const afterResponse = await fetch(`${baseUrl}/api/radar/status`);
     expect(afterResponse.status).toBe(200);
     await expect(afterResponse.json()).resolves.toMatchObject({
-      status: 'idle',
+      phase: 'idle',
       isRunning: false,
       current: 0,
       total: 0,

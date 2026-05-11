@@ -17,6 +17,9 @@ const getDiscogsClientForUser = vi.hoisted(() => vi.fn());
 const getExchangeSnapshot = vi.hoisted(() => vi.fn());
 const createRadarWantlistImportPreview = vi.hoisted(() => vi.fn());
 const applyStoredRadarWantlistPreview = vi.hoisted(() => vi.fn());
+const getRadarUpdateRunStatus = vi.hoisted(() => vi.fn());
+const startRadarUpdateRun = vi.hoisted(() => vi.fn());
+const stopRadarUpdateRun = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({}));
 
 vi.mock('../server/db.js', () => ({
@@ -38,6 +41,12 @@ vi.mock('../server/services/radarWantlistImport.js', () => ({
   RadarWantlistPreviewExpiredError: class RadarWantlistPreviewExpiredError extends Error {},
   createRadarWantlistImportPreview,
   applyStoredRadarWantlistPreview,
+}));
+
+vi.mock('../server/services/radarUpdateRun.js', () => ({
+  getRadarUpdateRunStatus,
+  startRadarUpdateRun,
+  stopRadarUpdateRun,
 }));
 
 vi.mock('../server/middleware/auth.js', () => ({
@@ -117,8 +126,15 @@ describe('radar route', () => {
     getExchangeSnapshot.mockReset();
     createRadarWantlistImportPreview.mockReset();
     applyStoredRadarWantlistPreview.mockReset();
+    getRadarUpdateRunStatus.mockReset();
+    startRadarUpdateRun.mockReset();
+    stopRadarUpdateRun.mockReset();
 
     getSettingForUser.mockReturnValue('USD');
+    getDiscogsClientForUser.mockReturnValue({
+      getAllWantlist: vi.fn(),
+      getMarketplaceStats: vi.fn(),
+    });
     getExchangeSnapshot.mockResolvedValue({
       fetchedAt: 0,
       date: '2026-05-10',
@@ -171,6 +187,28 @@ describe('radar route', () => {
       added: 0,
       updated: 1,
     });
+    getRadarUpdateRunStatus.mockReturnValue({
+      phase: 'idle',
+      current: 0,
+      total: 0,
+      pending: 2,
+      progressPercent: 0,
+      message: 'Radar is ready to update.',
+      startedAt: null,
+      finishedAt: null,
+      wantlist: {
+        totalFetched: 0,
+        added: 0,
+        updated: 0,
+        reactivated: 0,
+        markedMissing: 0,
+        ignored: 0,
+      },
+      isRunning: false,
+      isTerminal: false,
+      canStop: false,
+    });
+    startRadarUpdateRun.mockReturnValue(true);
 
     const app = express();
     app.use(express.json());
@@ -323,6 +361,49 @@ describe('radar route', () => {
           },
         ],
       },
+    });
+  });
+
+  it('starts a Radar update run and returns the normalized workflow status', async () => {
+    getRadarUpdateRunStatus.mockReturnValue({
+      phase: 'syncing',
+      current: 0,
+      total: 0,
+      pending: 0,
+      progressPercent: 0,
+      message: 'Updating Wantlist...',
+      startedAt: '2026-05-11T11:00:00.000Z',
+      finishedAt: null,
+      wantlist: {
+        totalFetched: 0,
+        added: 0,
+        updated: 0,
+        reactivated: 0,
+        markedMissing: 0,
+        ignored: 0,
+      },
+      isRunning: true,
+      isTerminal: false,
+      canStop: false,
+    });
+
+    const response = await fetch(`${baseUrl}/api/radar/update`, {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(startRadarUpdateRun).toHaveBeenCalledWith(expect.objectContaining({
+      db: mockDb,
+      userId: 1,
+      locale: undefined,
+      discogs: expect.anything(),
+      onBackgroundError: expect.any(Function),
+    }));
+
+    await expect(response.json()).resolves.toMatchObject({
+      phase: 'syncing',
+      isRunning: true,
+      canStop: false,
     });
   });
 });
