@@ -24,18 +24,6 @@ import { useI18n } from '../lib/I18nContext';
 import { api } from '../lib/api';
 import type { Translate } from '../lib/types';
 
-const RADAR_SUMMARY_CARDS = [
-  { labelKey: 'radar.summary.total', valueKey: 'total' },
-  { labelKey: 'radar.summary.active', valueKey: 'active' },
-  { labelKey: 'radar.summary.hidden', valueKey: 'hidden' },
-  { labelKey: 'radar.summary.resolved', valueKey: 'resolved' },
-  { labelKey: 'radar.summary.missingFromSource', valueKey: 'missingFromSource' },
-  { labelKey: 'radar.summary.priced', valueKey: 'priced' },
-  { labelKey: 'radar.summary.pending', valueKey: 'pending' },
-  { labelKey: 'radar.summary.failed', valueKey: 'failed' },
-  { labelKey: 'radar.summary.unavailable', valueKey: 'unavailable' },
-] as const;
-
 const UPDATE_STATUS_CARDS = [
   { labelKey: 'radar.updateCurrent', valueKey: 'current' },
   { labelKey: 'radar.updateTotal', valueKey: 'total' },
@@ -66,17 +54,56 @@ const RADAR_OPPORTUNITY_REASON_ORDER: RadarOpportunityReason[] = [
   RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
 ];
 
-const RADAR_FILTERS = [
-  { id: 'all', labelKey: 'radar.filter.all' },
+type RadarFilterId =
+  | 'all'
+  | 'opportunities'
+  | 'below_target'
+  | 'high_priority'
+  | 'in_collection'
+  | 'attention'
+  | 'hidden_resolved'
+  | 'pending'
+  | 'failed';
+
+type RadarPrimaryMetricId = Extract<
+  RadarFilterId,
+  'opportunities' | 'below_target' | 'high_priority' | 'in_collection' | 'attention'
+>;
+
+const RADAR_PRIMARY_METRICS = [
   { id: 'opportunities', labelKey: 'radar.filter.opportunities' },
   { id: 'below_target', labelKey: 'radar.filter.belowTarget' },
   { id: 'high_priority', labelKey: 'radar.filter.highPriority' },
   { id: 'in_collection', labelKey: 'radar.filter.inCollection' },
+  { id: 'attention', labelKey: 'radar.filter.attention' },
+] as const satisfies readonly {
+  id: RadarPrimaryMetricId;
+  labelKey: string;
+}[];
+
+const RADAR_SECONDARY_SUMMARY_CHIPS = [
+  { labelKey: 'radar.summary.total', valueKey: 'total' },
+  { labelKey: 'radar.summary.hidden', valueKey: 'hidden' },
+  { labelKey: 'radar.summary.resolved', valueKey: 'resolved' },
+  { labelKey: 'radar.summary.missingFromSource', valueKey: 'missingFromSource' },
+  { labelKey: 'radar.summary.priced', valueKey: 'priced' },
+  { labelKey: 'radar.summary.pending', valueKey: 'pending' },
+  { labelKey: 'radar.summary.failed', valueKey: 'failed' },
+  { labelKey: 'radar.summary.unavailable', valueKey: 'unavailable' },
+] as const satisfies readonly {
+  labelKey: string;
+  valueKey: keyof RadarResponse['summary'];
+}[];
+
+const RADAR_AUXILIARY_FILTERS = [
+  { id: 'all', labelKey: 'radar.filter.all' },
   { id: 'hidden_resolved', labelKey: 'radar.filter.hiddenResolved' },
   { id: 'pending', labelKey: 'radar.filter.pending' },
   { id: 'failed', labelKey: 'radar.filter.failed' },
-] as const;
-type RadarFilterId = (typeof RADAR_FILTERS)[number]['id'];
+] as const satisfies readonly {
+  id: RadarFilterId;
+  labelKey: string;
+}[];
 
 type RadarStateLabelKey =
   | 'radar.state.pending'
@@ -168,6 +195,12 @@ function getCollectionMatchLabelKey(copyCount: number): RadarCollectionMatchLabe
     : 'radar.collectionMatch.multiple';
 }
 
+function hasRadarAttentionIssue(item: RadarRelease): boolean {
+  return item.marketplace.status === MARKETPLACE_STATUS.PENDING
+    || item.marketplace.status === MARKETPLACE_STATUS.FAILED
+    || item.marketplace.status === MARKETPLACE_STATUS.UNAVAILABLE;
+}
+
 function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolean {
   switch (filterId) {
     case 'all':
@@ -181,6 +214,8 @@ function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolea
     case 'in_collection':
       return item.opportunity.is_in_collection
         || item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION);
+    case 'attention':
+      return hasRadarAttentionIssue(item);
     case 'hidden_resolved':
       return item.local.hidden || item.local.resolved;
     case 'pending':
@@ -192,6 +227,26 @@ function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolea
 
 function getFilteredRadarItems(items: RadarRelease[], filterId: RadarFilterId): RadarRelease[] {
   return items.filter((item) => matchesRadarFilter(item, filterId));
+}
+
+function getRadarPrimaryMetricCounts(items: RadarRelease[]): Record<RadarPrimaryMetricId, number> {
+  const counts: Record<RadarPrimaryMetricId, number> = {
+    opportunities: 0,
+    below_target: 0,
+    high_priority: 0,
+    in_collection: 0,
+    attention: 0,
+  };
+
+  for (const item of items) {
+    for (const { id } of RADAR_PRIMARY_METRICS) {
+      if (matchesRadarFilter(item, id)) {
+        counts[id] += 1;
+      }
+    }
+  }
+
+  return counts;
 }
 
 function getRadarStateLabelKeys(item: RadarRelease): RadarStateLabelKey[] {
@@ -223,6 +278,64 @@ type RadarFilterBarProps = {
   onFilterChange: (filterId: RadarFilterId) => void;
 };
 
+type RadarOperationalHeaderProps = {
+  items: RadarRelease[];
+  summary: RadarResponse['summary'];
+  selectedFilter: RadarFilterId;
+  t: Translate;
+  onFilterChange: (filterId: RadarFilterId) => void;
+};
+
+function RadarOperationalHeader({
+  items,
+  summary,
+  selectedFilter,
+  t,
+  onFilterChange,
+}: RadarOperationalHeaderProps) {
+  const metricCounts = getRadarPrimaryMetricCounts(items);
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-6">
+      <div className="grid gap-3 xl:grid-cols-5">
+        {RADAR_PRIMARY_METRICS.map(({ id, labelKey }) => {
+          const selected = id === selectedFilter;
+          const buttonClassName = selected
+            ? 'border-brand-100 bg-brand-400/15 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]'
+            : 'border-white/10 bg-slate-950/50 hover:border-white/25 hover:bg-slate-900/70';
+
+          return (
+            <button
+              key={id}
+              type="button"
+              data-radar-filter={id}
+              data-radar-metric={id}
+              aria-pressed={selected}
+              onClick={() => onFilterChange(id)}
+              className={`min-h-28 rounded-3xl border p-4 text-left transition ${buttonClassName}`}
+            >
+              <p className="text-xs uppercase leading-5 tracking-[0.22em] text-slate-400">{t(labelKey)}</p>
+              <p className="mt-4 font-display text-4xl text-white">{metricCounts[id]}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+        {RADAR_SECONDARY_SUMMARY_CHIPS.map(({ labelKey, valueKey }) => (
+          <div
+            key={labelKey}
+            className="inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-slate-950/50 px-3 py-2 text-sm"
+          >
+            <span className="text-slate-400">{t(labelKey)}</span>
+            <span className="font-semibold text-white">{summary[valueKey]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RadarFilterBar({
   selectedFilter,
   t,
@@ -233,7 +346,7 @@ function RadarFilterBar({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.filtersTitle')}</p>
         <div className="flex flex-wrap gap-2">
-          {RADAR_FILTERS.map(({ id, labelKey }) => {
+          {RADAR_AUXILIARY_FILTERS.map(({ id, labelKey }) => {
             const selected = id === selectedFilter;
             const buttonClassName = selected
               ? 'border-brand-100 bg-brand-400/15 text-white'
@@ -710,14 +823,13 @@ function Radar() {
         </div>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-9">
-        {RADAR_SUMMARY_CARDS.map(({ labelKey, valueKey }) => (
-          <article key={labelKey} className="rounded-3xl border border-white/10 bg-slate-950/40 p-4 text-center">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t(labelKey)}</p>
-            <p className="mt-3 font-display text-3xl text-white">{radar.summary[valueKey]}</p>
-          </article>
-        ))}
-      </div>
+      <RadarOperationalHeader
+        items={radar.items}
+        summary={radar.summary}
+        selectedFilter={selectedFilter}
+        t={t}
+        onFilterChange={setSelectedFilter}
+      />
 
       <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
