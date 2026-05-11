@@ -1,5 +1,5 @@
-import { type ReactNode, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { type ReactNode, useContext, useEffect, useState } from 'react';
+import { Link, UNSAFE_NavigationContext, useBeforeUnload, useParams } from 'react-router-dom';
 import {
   type RadarCollectionMatch,
   type RadarMinimumCondition,
@@ -11,6 +11,7 @@ import { useI18n } from '../lib/I18nContext';
 import {
   RADAR_MINIMUM_CONDITION_OPTIONS,
   RADAR_PRIORITY_OPTIONS,
+  areRadarReleaseDraftsEqual,
   createRadarReleaseDraft,
   createRadarReleasePayload,
   formatRadarMarketplaceValue,
@@ -47,6 +48,14 @@ type RadarDetailFrameProps = {
   t: Translate;
 };
 
+type NavigationTransition = {
+  retry: () => void;
+};
+
+type BlockableNavigator = {
+  block?: (blocker: (transition: NavigationTransition) => void) => () => void;
+};
+
 function RadarDetailFrame({ children, t }: RadarDetailFrameProps) {
   return (
     <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
@@ -61,6 +70,7 @@ function RadarDetailFrame({ children, t }: RadarDetailFrameProps) {
 function RadarReleaseDetail() {
   const { id = '' } = useParams();
   const { t } = useI18n();
+  const navigationContext = useContext(UNSAFE_NavigationContext);
   const [release, setRelease] = useState<RadarRelease | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -68,6 +78,40 @@ function RadarReleaseDetail() {
   const [draft, setDraft] = useState<RadarReleaseDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  const savedDraft = release ? createRadarReleaseDraft(release) : null;
+  const hasUnsavedChanges = Boolean(draft && savedDraft && !areRadarReleaseDraftsEqual(draft, savedDraft));
+
+  useBeforeUnload((event) => {
+    if (!hasUnsavedChanges) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      return;
+    }
+
+    const navigator = navigationContext.navigator as BlockableNavigator;
+
+    if (typeof navigator.block !== 'function') {
+      return;
+    }
+
+    const unblock = navigator.block((transition) => {
+      if (!window.confirm(t('radar.unsavedChangesConfirm'))) {
+        return;
+      }
+
+      unblock();
+      transition.retry();
+    });
+
+    return unblock;
+  }, [hasUnsavedChanges, navigationContext.navigator, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +169,7 @@ function RadarReleaseDetail() {
   }, [id]);
 
   async function handleSave() {
-    if (release?.id == null || !draft) {
+    if (release?.id == null || !draft || !hasUnsavedChanges) {
       return;
     }
 
@@ -147,6 +191,7 @@ function RadarReleaseDetail() {
 
   function updateDraft(patch: Partial<RadarReleaseDraft>) {
     setDraft((current) => current ? { ...current, ...patch } : current);
+    setSaveFailed(false);
   }
 
   if (loading) {
@@ -184,6 +229,18 @@ function RadarReleaseDetail() {
   const collectionMatch = release.opportunity.collection_match;
   const opportunityReasons = getOrderedRadarOpportunityReasons(release);
   const stateLabelKeys = getRadarStateLabelKeys(release);
+  const saveStatusLabelKey = saving
+    ? 'radar.saving'
+    : saveFailed
+      ? 'radar.saveStatus.failed'
+      : hasUnsavedChanges
+        ? 'radar.saveStatus.unsaved'
+        : 'radar.saveStatus.saved';
+  const saveStatusClassName = saveFailed
+    ? 'text-rose-200'
+    : hasUnsavedChanges
+      ? 'text-amber-100'
+      : 'text-emerald-100';
 
   return (
     <RadarDetailFrame t={t}>
@@ -336,12 +393,17 @@ function RadarReleaseDetail() {
             type="button"
             data-radar-save={String(releaseKey)}
             onClick={() => void handleSave()}
-            disabled={saving}
+            disabled={saving || !hasUnsavedChanges}
             className="primary-button inline-flex items-center justify-center disabled:opacity-60"
           >
             {saving ? t('radar.saving') : t('radar.save')}
           </button>
-          {saveFailed ? <p className="text-sm text-rose-200">{t('radar.saveFailed')}</p> : null}
+          <div className="space-y-1 text-sm md:text-right">
+            <p data-radar-save-status={String(releaseKey)} className={saveStatusClassName}>
+              {t(saveStatusLabelKey)}
+            </p>
+            {saveFailed ? <p className="text-rose-200">{t('radar.saveFailed')}</p> : null}
+          </div>
         </div>
       </div>
     </RadarDetailFrame>

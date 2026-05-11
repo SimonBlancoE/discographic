@@ -184,6 +184,10 @@ const RADAR_KEYS = [
   'radar.resolved',
   'radar.save',
   'radar.saving',
+  'radar.saveStatus.saved',
+  'radar.saveStatus.unsaved',
+  'radar.saveStatus.failed',
+  'radar.unsavedChangesConfirm',
   'radar.saveFailed'
 ];
 

@@ -87,6 +87,15 @@ export function createRadarReleasePayload(draft: RadarReleaseDraft): RadarLocalD
   };
 }
 
+export function areRadarReleaseDraftsEqual(left: RadarReleaseDraft, right: RadarReleaseDraft): boolean {
+  return left.priority === right.priority
+    && left.targetPrice === right.targetPrice
+    && left.minimumCondition === right.minimumCondition
+    && left.note === right.note
+    && left.hidden === right.hidden
+    && left.resolved === right.resolved;
+}
+
 export function getOrderedRadarOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
   return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
 }
