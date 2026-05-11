@@ -5,16 +5,16 @@ import {
   RADAR_OPPORTUNITY_REASON,
   RADAR_PRIORITY,
   RADAR_SOURCE_STATUS,
-  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
+  normalizeRadarUpdateRunStatus,
   type RadarOpportunityReason,
-  type RadarEnrichmentStatus,
   type RadarLocalDecisionPayload,
   type RadarMinimumCondition,
   type RadarPriority,
   type RadarRelease,
   type RadarResponse,
   type RadarSyncResult,
+  type RadarUpdateRunStatus,
 } from '../../shared/contracts/radar.js';
 import { MARKETPLACE_STATUS, type MarketplaceStatus } from '../../shared/contracts/marketplace.js';
 import RadarWantlistImportPanel from '../components/RadarWantlistImportPanel';
@@ -36,10 +36,10 @@ const RADAR_SUMMARY_CARDS = [
   { labelKey: 'radar.summary.unavailable', valueKey: 'unavailable' },
 ] as const;
 
-const ENRICH_STATUS_CARDS = [
-  { labelKey: 'radar.enrichCurrent', valueKey: 'current' },
-  { labelKey: 'radar.enrichTotal', valueKey: 'total' },
-  { labelKey: 'radar.enrichPending', valueKey: 'pending' },
+const UPDATE_STATUS_CARDS = [
+  { labelKey: 'radar.updateCurrent', valueKey: 'current' },
+  { labelKey: 'radar.updateTotal', valueKey: 'total' },
+  { labelKey: 'radar.updatePending', valueKey: 'pending' },
 ] as const;
 
 const RADAR_PRIORITY_OPTIONS: RadarPriority[] = [
@@ -92,7 +92,7 @@ const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, Rada
   [MARKETPLACE_STATUS.FAILED]: 'radar.state.failed',
 };
 
-const ENRICH_POLL_MS = 2000;
+const UPDATE_POLL_MS = 2000;
 
 type RadarReleaseDraft = {
   priority: RadarPriority;
@@ -109,8 +109,8 @@ function createEmptyRadarResponse(): RadarResponse {
   return normalizeRadarResponse({});
 }
 
-function createEmptyRadarEnrichmentStatus(): RadarEnrichmentStatus {
-  return normalizeRadarEnrichmentStatus({});
+function createEmptyRadarUpdateRunStatus(): RadarUpdateRunStatus {
+  return normalizeRadarUpdateRunStatus({});
 }
 
 function renderSyncResult(syncResult: RadarSyncResult, t: Translate) {
@@ -500,27 +500,23 @@ function Radar() {
   const { accountUnavailable, capabilities } = useAuth();
   const { t } = useI18n();
   const [radar, setRadar] = useState(createEmptyRadarResponse);
-  const [enrichment, setEnrichment] = useState(createEmptyRadarEnrichmentStatus);
+  const [updateRun, setUpdateRun] = useState(createEmptyRadarUpdateRunStatus);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [enrichStatusError, setEnrichStatusError] = useState('');
+  const [updateStatusError, setUpdateStatusError] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState('');
-  const [syncResult, setSyncResult] = useState<RadarSyncResult | null>(null);
+  const [updateError, setUpdateError] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<RadarFilterId>('all');
   const filteredItems = getFilteredRadarItems(radar.items, selectedFilter);
 
   useEffect(() => {
     if (accountUnavailable || !capabilities.canUseRadar) {
       setRadar(createEmptyRadarResponse());
-      setEnrichment(createEmptyRadarEnrichmentStatus());
+      setUpdateRun(createEmptyRadarUpdateRunStatus());
       setLoading(false);
       setLoadFailed(false);
-      setEnrichStatusError('');
-      setSyncing(false);
-      setSyncError('');
-      setSyncResult(null);
+      setUpdateStatusError('');
+      setUpdateError('');
       return;
     }
 
@@ -528,7 +524,7 @@ function Radar() {
 
     setLoading(true);
     setLoadFailed(false);
-    setEnrichStatusError('');
+    setUpdateStatusError('');
 
     Promise.allSettled([api.getRadar(), api.getRadarStatus()])
       .then(([radarResult, statusResult]) => {
@@ -544,10 +540,10 @@ function Radar() {
         }
 
         if (statusResult.status === 'fulfilled') {
-          setEnrichment(statusResult.value);
+          setUpdateRun(statusResult.value);
         } else {
-          setEnrichment(createEmptyRadarEnrichmentStatus());
-          setEnrichStatusError(t('radar.enrichStatusError'));
+          setUpdateRun(createEmptyRadarUpdateRunStatus());
+          setUpdateStatusError(t('radar.updateStatusError'));
         }
       })
       .finally(() => {
@@ -562,7 +558,7 @@ function Radar() {
   }, [accountUnavailable, capabilities.canUseRadar]);
 
   useEffect(() => {
-    if (accountUnavailable || !capabilities.canUseRadar || !enrichment.isRunning) {
+    if (accountUnavailable || !capabilities.canUseRadar || !updateRun.isRunning) {
       return;
     }
 
@@ -577,11 +573,11 @@ function Radar() {
           return;
         }
 
-        setEnrichStatusError('');
-        setEnrichment(nextStatus);
+        setUpdateStatusError('');
+        setUpdateRun(nextStatus);
 
         if (nextStatus.isRunning) {
-          timer = window.setTimeout(pollStatus, ENRICH_POLL_MS);
+          timer = window.setTimeout(pollStatus, UPDATE_POLL_MS);
           return;
         }
 
@@ -591,12 +587,12 @@ function Radar() {
         }
       } catch {
         if (!cancelled) {
-          setEnrichStatusError(t('radar.enrichStatusError'));
+          setUpdateStatusError(t('radar.updateStatusError'));
         }
       }
     }
 
-    timer = window.setTimeout(pollStatus, ENRICH_POLL_MS);
+    timer = window.setTimeout(pollStatus, UPDATE_POLL_MS);
 
     return () => {
       cancelled = true;
@@ -604,43 +600,45 @@ function Radar() {
         window.clearTimeout(timer);
       }
     };
-  }, [accountUnavailable, capabilities.canUseRadar, enrichment.isRunning]);
+  }, [accountUnavailable, capabilities.canUseRadar, updateRun.isRunning, t]);
 
   async function saveRadarRelease(id: number, payload: RadarLocalDecisionPayload) {
     const nextRadar = await api.updateRadarRelease(id, payload);
     setRadar(nextRadar);
   }
 
-  async function handleEnrich() {
+  async function handleStartUpdate() {
     setActionBusy(true);
+    setUpdateError('');
 
     try {
-      await api.enrichRadar();
-      setEnrichStatusError('');
-      setEnrichment(await api.getRadarStatus());
-    } catch {
-      setEnrichStatusError(t('radar.enrichStatusError'));
+      const nextStatus = await api.startRadarUpdateRun();
+      setUpdateRun(nextStatus);
+      setUpdateStatusError('');
+      if (!nextStatus.isRunning) {
+        setRadar(await api.getRadar());
+      }
+    } catch (error) {
+      setUpdateError(t('radar.updateError', { error: getErrorMessage(error, t('client.networkError')) }));
     } finally {
       setActionBusy(false);
     }
   }
 
-  async function handleStopEnrich() {
+  async function handleStopUpdate() {
     setActionBusy(true);
 
     try {
-      await api.stopRadarEnrich();
-      setEnrichStatusError('');
-
       const [nextStatus, nextRadar] = await Promise.all([
-        api.getRadarStatus(),
+        api.stopRadarUpdateRun(),
         api.getRadar(),
       ]);
 
-      setEnrichment(nextStatus);
+      setUpdateStatusError('');
+      setUpdateRun(nextStatus);
       setRadar(nextRadar);
     } catch {
-      setEnrichStatusError(t('radar.enrichStatusError'));
+      setUpdateStatusError(t('radar.updateStatusError'));
     } finally {
       setActionBusy(false);
     }
@@ -667,41 +665,25 @@ function Radar() {
     );
   }
 
-  async function handleSync() {
-    setSyncing(true);
-    setSyncError('');
-
-    try {
-      const response = await api.syncRadar();
-      setRadar(response.radar);
-      setSyncResult(response.result);
-      setLoadFailed(false);
-    } catch (error) {
-      setSyncError(t('radar.syncError', { error: getErrorMessage(error, t('client.networkError')) }));
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   return (
     <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
         <button
           type="button"
-          onClick={handleSync}
-          disabled={loading || syncing}
+          onClick={handleStartUpdate}
+          disabled={loading || actionBusy || updateRun.isRunning}
           className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {syncing ? t('radar.syncing') : t('radar.syncAction')}
+          {updateRun.isRunning ? t('radar.updating') : t('radar.updateAction')}
         </button>
       </div>
 
-      {syncResult ? renderSyncResult(syncResult, t) : null}
+      {updateRun.wantlist.totalFetched > 0 ? renderSyncResult(updateRun.wantlist, t) : null}
 
-      {syncError ? (
+      {updateError ? (
         <div className="rounded-3xl border border-rose-300/20 bg-rose-950/20 p-5 text-rose-100">
-          {syncError}
+          {updateError}
         </div>
       ) : null}
 
@@ -718,59 +700,50 @@ function Radar() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.enrichTitle')}</p>
-              <h2 className="mt-2 font-display text-3xl text-white">{t(`radar.enrichState.${enrichment.status}`)}</h2>
+              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.updateTitle')}</p>
+              <h2 className="mt-2 font-display text-3xl text-white">{t(`radar.updatePhase.${updateRun.phase}`)}</h2>
             </div>
-            <p className="max-w-2xl text-sm text-slate-300">{t('radar.enrichBody')}</p>
-            <p className="text-sm text-slate-300">{enrichment.message}</p>
+            <p className="max-w-2xl text-sm text-slate-300">{t('radar.updateBody')}</p>
+            <p className="text-sm text-slate-300">{updateRun.message}</p>
           </div>
 
           <div className="flex items-center gap-3">
-            {enrichment.isRunning ? (
+            {updateRun.canStop ? (
               <button
                 type="button"
-                onClick={handleStopEnrich}
+                onClick={handleStopUpdate}
                 disabled={actionBusy}
                 className="secondary-button text-sm disabled:opacity-50"
               >
-                {t('radar.enrichStop')}
+                {t('radar.updateStop')}
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleEnrich}
-                disabled={actionBusy || enrichment.pending === 0}
-                className="secondary-button text-sm disabled:opacity-50"
-              >
-                {t('radar.enrichStart')}
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
 
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-900/80">
           <div
             className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-500"
-            style={{ width: `${enrichment.progressPercent}%` }}
+            style={{ width: `${updateRun.progressPercent}%` }}
           />
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-4">
           <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.enrichStatus')}</p>
-            <p className="mt-3 font-display text-2xl text-white">{t(`radar.enrichState.${enrichment.status}`)}</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.updateStatus')}</p>
+            <p className="mt-3 font-display text-2xl text-white">{t(`radar.updatePhase.${updateRun.phase}`)}</p>
           </article>
-          {ENRICH_STATUS_CARDS.map(({ labelKey, valueKey }) => (
+          {UPDATE_STATUS_CARDS.map(({ labelKey, valueKey }) => (
             <article key={labelKey} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t(labelKey)}</p>
-              <p className="mt-3 font-display text-2xl text-white">{enrichment[valueKey]}</p>
+              <p className="mt-3 font-display text-2xl text-white">{updateRun[valueKey]}</p>
             </article>
           ))}
         </div>
 
-        {enrichStatusError ? (
+        {updateStatusError ? (
           <div className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-950/20 px-4 py-3 text-sm text-rose-100">
-            {enrichStatusError}
+            {updateStatusError}
           </div>
         ) : null}
       </div>

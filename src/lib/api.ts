@@ -17,15 +17,13 @@ import {
   type WallRelease,
 } from '../../shared/contracts/release.js';
 import {
-  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
-  normalizeRadarSyncResponse,
+  normalizeRadarUpdateRunStatus,
   normalizeRadarWantlistApplyResponse,
   normalizeRadarWantlistPreviewResponse,
-  type RadarEnrichmentStatus,
   type RadarLocalDecisionPayload,
   type RadarResponse,
-  type RadarSyncResponse,
+  type RadarUpdateRunStatus,
 } from '../../shared/contracts/radar.js';
 import {
   normalizeImportSyncState,
@@ -177,12 +175,13 @@ export const api = {
   }),
   getStats: async (): Promise<DashboardStats> => normalizeDashboardStats(await request('/stats')),
   getRadar: async (): Promise<RadarResponse> => normalizeRadarResponse(await request('/radar')),
-  syncRadar: async (): Promise<RadarSyncResponse> => (
-    normalizeRadarSyncResponse(await request('/radar/sync', { method: 'POST' }))
+  getRadarStatus: async (): Promise<RadarUpdateRunStatus> => normalizeRadarUpdateRunStatus(await request('/radar/status')),
+  startRadarUpdateRun: async (): Promise<RadarUpdateRunStatus> => (
+    normalizeRadarUpdateRunStatus(await request('/radar/update', { method: 'POST' }))
   ),
-  getRadarStatus: async (): Promise<RadarEnrichmentStatus> => normalizeRadarEnrichmentStatus(await request('/radar/status')),
-  enrichRadar: (): Promise<MessageResponse> => request('/radar/enrich', { method: 'POST' }),
-  stopRadarEnrich: (): Promise<MessageResponse> => request('/radar/enrich/stop', { method: 'POST' }),
+  stopRadarUpdateRun: async (): Promise<RadarUpdateRunStatus> => (
+    normalizeRadarUpdateRunStatus(await request('/radar/update/stop', { method: 'POST' }))
+  ),
   updateRadarRelease: async (id: string | number, payload: RadarLocalDecisionPayload): Promise<RadarResponse> =>
     normalizeRadarResponse(await request(`/radar/${id}`, {
       method: 'PUT',

@@ -55,6 +55,18 @@ export const RADAR_ENRICH_STATUS = Object.freeze({
 export type RadarEnrichmentWorkflowStatus =
   (typeof RADAR_ENRICH_STATUS)[keyof typeof RADAR_ENRICH_STATUS];
 
+export const RADAR_UPDATE_RUN_PHASE = Object.freeze({
+  IDLE: 'idle',
+  SYNCING: 'syncing',
+  REVIEWING_PRICES: 'reviewing_prices',
+  COMPLETED: 'completed',
+  COMPLETED_WITH_ISSUES: 'completed_with_issues',
+  FAILED: 'failed',
+  STOPPED: 'stopped',
+} as const);
+export type RadarUpdateRunPhase =
+  (typeof RADAR_UPDATE_RUN_PHASE)[keyof typeof RADAR_UPDATE_RUN_PHASE];
+
 export type RadarRelease = {
   id: number | null;
   user_id: number | null;
@@ -225,6 +237,21 @@ export type RadarEnrichmentStatus = {
   isTerminal: boolean;
 };
 
+export type RadarUpdateRunStatus = {
+  phase: RadarUpdateRunPhase;
+  current: number;
+  total: number;
+  pending: number;
+  progressPercent: number;
+  message: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  wantlist: RadarSyncResult;
+  isRunning: boolean;
+  isTerminal: boolean;
+  canStop: boolean;
+};
+
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
 const RADAR_WANTLIST_COLUMN_KEYS = new Set<RadarWantlistColumnKey>([
@@ -242,11 +269,18 @@ const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOUR
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
 const RADAR_OPPORTUNITY_REASONS = new Set<RadarOpportunityReason>(Object.values(RADAR_OPPORTUNITY_REASON));
 const RADAR_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>(Object.values(RADAR_ENRICH_STATUS));
+const RADAR_UPDATE_RUN_PHASES = new Set<RadarUpdateRunPhase>(Object.values(RADAR_UPDATE_RUN_PHASE));
 const MARKETPLACE_STATUSES = new Set<MarketplaceStatus>(Object.values(MARKETPLACE_STATUS));
 const RADAR_TERMINAL_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>([
   RADAR_ENRICH_STATUS.COMPLETED,
   RADAR_ENRICH_STATUS.FAILED,
   RADAR_ENRICH_STATUS.STOPPED,
+]);
+const RADAR_TERMINAL_UPDATE_RUN_PHASES = new Set<RadarUpdateRunPhase>([
+  RADAR_UPDATE_RUN_PHASE.COMPLETED,
+  RADAR_UPDATE_RUN_PHASE.COMPLETED_WITH_ISSUES,
+  RADAR_UPDATE_RUN_PHASE.FAILED,
+  RADAR_UPDATE_RUN_PHASE.STOPPED,
 ]);
 
 function asArray(value: unknown): unknown[] {
@@ -324,6 +358,10 @@ function asRadarOpportunityReason(value: unknown): RadarOpportunityReason | null
 
 function asRadarEnrichmentWorkflowStatus(value: unknown): RadarEnrichmentWorkflowStatus {
   return valueFromSet(value, RADAR_ENRICH_STATUSES, RADAR_ENRICH_STATUS.IDLE);
+}
+
+function asRadarUpdateRunPhase(value: unknown): RadarUpdateRunPhase {
+  return valueFromSet(value, RADAR_UPDATE_RUN_PHASES, RADAR_UPDATE_RUN_PHASE.IDLE);
 }
 
 function asMarketplaceStatus(value: unknown): MarketplaceStatus {
@@ -460,6 +498,28 @@ export function normalizeRadarEnrichmentStatus(payload: unknown = {}): RadarEnri
     finishedAt: asNullableText(source.finishedAt),
     isRunning: status === RADAR_ENRICH_STATUS.RUNNING,
     isTerminal: RADAR_TERMINAL_ENRICH_STATUSES.has(status),
+  };
+}
+
+export function normalizeRadarUpdateRunStatus(payload: unknown = {}): RadarUpdateRunStatus {
+  const source = asRecord(payload) ?? {};
+  const phase = asRadarUpdateRunPhase(source.phase);
+  const current = asCount(source.current);
+  const total = asCount(source.total);
+
+  return {
+    phase,
+    current,
+    total,
+    pending: asCount(source.pending),
+    progressPercent: progressPercent(current, total),
+    message: asText(source.message),
+    startedAt: asNullableText(source.startedAt),
+    finishedAt: asNullableText(source.finishedAt),
+    wantlist: normalizeRadarSyncResult(source.wantlist),
+    isRunning: phase === RADAR_UPDATE_RUN_PHASE.SYNCING || phase === RADAR_UPDATE_RUN_PHASE.REVIEWING_PRICES,
+    isTerminal: RADAR_TERMINAL_UPDATE_RUN_PHASES.has(phase),
+    canStop: phase === RADAR_UPDATE_RUN_PHASE.REVIEWING_PRICES,
   };
 }
 

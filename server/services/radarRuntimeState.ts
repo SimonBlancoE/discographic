@@ -1,11 +1,16 @@
 import type {
   RadarEnrichmentStatus,
+  RadarUpdateRunStatus,
   RadarWantlistPreviewResponse,
 } from '../../shared/contracts/radar.js';
 
 export type RadarRuntimeEnrichmentState = Omit<
   RadarEnrichmentStatus,
   'isRunning' | 'isTerminal' | 'progressPercent'
+>;
+export type RadarRuntimeUpdateRunState = Omit<
+  RadarUpdateRunStatus,
+  'isRunning' | 'isTerminal' | 'progressPercent' | 'canStop'
 >;
 
 export type StoredRadarWantlistPreview<Preview = RadarWantlistPreviewResponse> = {
@@ -17,6 +22,8 @@ export type StoredRadarWantlistPreview<Preview = RadarWantlistPreviewResponse> =
 
 const runningRadarEnrichments = new Set<number>();
 const radarEnrichmentStates = new Map<number, RadarRuntimeEnrichmentState>();
+const runningRadarUpdateRuns = new Set<number>();
+const radarUpdateRunStates = new Map<number, RadarRuntimeUpdateRunState>();
 const radarWantlistPreviewCache = new Map<string, StoredRadarWantlistPreview<RadarWantlistPreviewResponse>>();
 
 export function isRadarEnrichmentRunning(userId: number): boolean {
@@ -48,6 +55,35 @@ export function setRadarEnrichmentState(
   return state;
 }
 
+export function isRadarUpdateRunRunning(userId: number): boolean {
+  return runningRadarUpdateRuns.has(userId);
+}
+
+export function markRadarUpdateRunRunning(userId: number): boolean {
+  if (runningRadarUpdateRuns.has(userId)) {
+    return false;
+  }
+
+  runningRadarUpdateRuns.add(userId);
+  return true;
+}
+
+export function clearRadarUpdateRunRunning(userId: number): void {
+  runningRadarUpdateRuns.delete(userId);
+}
+
+export function getRadarUpdateRunState(userId: number): RadarRuntimeUpdateRunState | null {
+  return radarUpdateRunStates.get(userId) ?? null;
+}
+
+export function setRadarUpdateRunState(
+  userId: number,
+  state: RadarRuntimeUpdateRunState,
+): RadarRuntimeUpdateRunState {
+  radarUpdateRunStates.set(userId, state);
+  return state;
+}
+
 export function storeRadarWantlistPreview(
   previewId: string,
   preview: StoredRadarWantlistPreview<RadarWantlistPreviewResponse>,
@@ -75,7 +111,9 @@ export function cleanupExpiredRadarWantlistPreviews(now = Date.now()): void {
 
 export function resetRadarRuntimeState(userId: number): void {
   clearRadarEnrichmentRunning(userId);
+  clearRadarUpdateRunRunning(userId);
   radarEnrichmentStates.delete(userId);
+  radarUpdateRunStates.delete(userId);
 
   for (const [previewId, cached] of radarWantlistPreviewCache) {
     if (cached.userId === userId) {
