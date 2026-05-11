@@ -32,6 +32,10 @@ _Avoid_: response mapper, serializer helper
 The user flow that turns an uploaded CSV/XLSX into a preview, lets the user verify proposed release edits, applies confirmed edits locally, and then syncs those edits back to Discogs while keeping progress visible.
 _Avoid_: file upload route, import parser
 
+**Radar update run**:
+A user-triggered refresh of Radar that brings the Wantlist current and resolves the related marketplace state needed for the wanted releases to be actionable.
+_Avoid_: sync button, enrichment panel, price refresh
+
 **Account state**:
 The user's authenticated app state plus Discogs account configuration and preferences needed to decide which workflows are available.
 _Avoid_: auth status, account response, frontend fallback
@@ -44,6 +48,7 @@ _Avoid_: migration helper, startup SQL
 
 - A **Discogs sync run** updates one user's **Local collection**.
 - A **Discogs sync run** owns **Marketplace enrichment**, but full collection sync does not automatically start marketplace enrichment.
+- User-facing copy should describe **Marketplace enrichment** as reviewing or updating prices; "enrichment" is implementation language, not primary interface wording.
 - A **Discogs sync run** may perform **Thumbnail warmup** after the collection page download completes.
 - A **Discogs sync run** uses **Sync adapters** supplied at module creation time rather than importing production singletons directly.
 - The **Discogs sync run** module returns result objects for expected start/stop conflicts and dependency failures; unexpected background failures are reflected in status.
@@ -60,6 +65,15 @@ _Avoid_: migration helper, startup SQL
 - An **Import workflow** receives persistence, parsing, ID, clock, and translation dependencies at module creation time; Discogs access is supplied when the user confirms a preview.
 - An **Import workflow** interface follows the user-visible journey: upload creates a preview, confirmation applies edits, status reports Discogs progress/result, and clearing dismisses stale results.
 - An **Import workflow** returns result objects for expected user-facing failures such as invalid files, missing columns, expired previews, and no-change previews.
+- A **Radar update run** is the primary Radar action; it combines Wantlist refresh and Radar-specific **Marketplace enrichment** instead of exposing them as competing primary controls.
+- A **Radar update run** preserves local Radar decisions while updating external Wantlist and marketplace facts.
+- Radar file import is a fallback workflow, not a competing primary path; after applying imported rows, the interface should guide the user back toward updating Radar rather than launching a full Discogs refresh unexpectedly.
+- Radar's main list is for scanning wanted releases and choosing what deserves attention; the Radar release detail is where local buying decisions are edited and saved with explicit feedback.
+- A Radar release detail is a navigable page for one wanted release, not a transient modal.
+- Radar's main list should stay dense: long notes, minimum condition, hidden, and resolved controls belong in the Radar release detail, not inline in every row.
+- Radar local decisions are saved explicitly; the interface must distinguish unsaved changes, saving, saved, and failed states.
+- Radar summary metrics should be operational filters that answer what the user can act on next; total counts and technical states are secondary context.
+- When a wanted release already exists in the **Local collection**, Radar should expose a navigable collection match, including a link to a local release detail and the number of matching collection copies.
 - **Account state** is a shared contract used by backend responses and frontend state, not a frontend-only normalization layer.
 - **Account state** has one target combined shape; first adoption may bridge existing auth and account endpoints before a combined endpoint is added.
 - **Account state** distinguishes unknown facts from false facts; an unavailable account uses unknown/null Discogs configuration rather than pretending Discogs is unconfigured.
@@ -79,4 +93,5 @@ _Avoid_: migration helper, startup SQL
 ## Flagged Ambiguities
 
 - "sync" can mean only downloading collection pages or the full user-facing refresh. Resolved: use **Discogs sync run** for the full user-facing refresh.
+- "sync" in Radar can mean only refreshing the Wantlist or the full user-facing Radar update. Resolved: use **Radar update run** for the full Radar action.
 - **Import workflow** does not include a durable pending outbound edit queue yet. Future review should revisit whether failed Discogs sync items should be stored for retry instead of only reported in the import result.

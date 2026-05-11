@@ -343,6 +343,50 @@ describe('Radar update run', () => {
     ]);
   });
 
+  it('keeps a stopped update stopped when the user cancels during Wantlist sync', async () => {
+    const wantlistSync = createDeferred<unknown[]>();
+    const discogs = createDiscogsClient();
+    discogs.getAllWantlist = vi.fn().mockReturnValue(wantlistSync.promise);
+
+    syncRadarWantlist.mockImplementation(() => {
+      rows = [
+        createPendingRadarRow(1, 111),
+      ];
+
+      return createWantlistResult({
+        totalFetched: 1,
+        added: 1,
+      });
+    });
+
+    expect(startUpdateRun(discogs)).toBe(true);
+
+    await waitFor(() => getStatus().phase === 'syncing');
+    stopRadarUpdateRun(db as never, 7, 'en');
+    expect(getStatus()).toMatchObject({
+      phase: 'stopped',
+      isRunning: false,
+      canStop: false,
+    });
+
+    wantlistSync.resolve([
+      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
+    ]);
+
+    await waitFor(() => getStatus().pending === 1);
+
+    expect(getStatus()).toMatchObject({
+      phase: 'stopped',
+      current: 0,
+      total: 1,
+      pending: 1,
+      progressPercent: 0,
+      isRunning: false,
+      canStop: false,
+    });
+    expect(fetchMarketplaceValue).not.toHaveBeenCalled();
+  });
+
   it('shows a user-facing failure message instead of leaking raw Discogs errors', async () => {
     const discogs = createDiscogsClient();
     discogs.getAllWantlist = vi.fn().mockRejectedValue(
