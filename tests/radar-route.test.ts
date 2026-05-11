@@ -99,6 +99,15 @@ function createRadarSnapshot(targetPriceEur = 10.42) {
           created_at: '2026-05-10T00:00:00Z',
           updated_at: '2026-05-10T01:00:00Z',
         },
+        opportunity: {
+          reasons: ['already_in_collection'],
+          default_visible: true,
+          is_in_collection: true,
+          collection_match: {
+            primary_release_id: 55,
+            copy_count: 2,
+          },
+        },
       },
     ],
     summary: createSummary(),
@@ -258,6 +267,12 @@ describe('radar route', () => {
             hidden: true,
             resolved: false,
           },
+          opportunity: {
+            collection_match: {
+              primary_release_id: 55,
+              copy_count: 2,
+            },
+          },
           marketplace: {
             estimated_price: 24,
           },
@@ -265,6 +280,92 @@ describe('radar route', () => {
         },
       ],
       summary: createSummary(),
+    });
+  });
+
+  it('returns navigable collection matches as stable Radar contract data for no match, one copy, and multiple copies', async () => {
+    getRadarForUser.mockReturnValue({
+      items: [
+        {
+          ...createRadarSnapshot().items[0],
+          id: 1,
+          release_id: 401,
+          opportunity: {
+            reasons: [],
+            default_visible: true,
+            is_in_collection: false,
+            collection_match: null,
+          },
+        },
+        {
+          ...createRadarSnapshot().items[0],
+          id: 2,
+          release_id: 402,
+          opportunity: {
+            reasons: ['already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+            collection_match: {
+              primary_release_id: 77,
+              copy_count: 1,
+            },
+          },
+        },
+        {
+          ...createRadarSnapshot().items[0],
+          id: 3,
+          release_id: 403,
+          opportunity: {
+            reasons: ['already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+            collection_match: {
+              primary_release_id: 88,
+              copy_count: 3,
+            },
+          },
+        },
+      ],
+      summary: {
+        ...createSummary(),
+        total: 3,
+        active: 3,
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/radar`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      items: [
+        {
+          id: 1,
+          opportunity: {
+            is_in_collection: false,
+            collection_match: null,
+          },
+        },
+        {
+          id: 2,
+          opportunity: {
+            is_in_collection: true,
+            collection_match: {
+              primary_release_id: 77,
+              copy_count: 1,
+            },
+          },
+        },
+        {
+          id: 3,
+          opportunity: {
+            is_in_collection: true,
+            collection_match: {
+              primary_release_id: 88,
+              copy_count: 3,
+            },
+          },
+        },
+      ],
     });
   });
 

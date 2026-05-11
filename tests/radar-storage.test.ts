@@ -38,7 +38,8 @@ describe('radar storage', () => {
         release_id INTEGER NOT NULL,
         instance_id INTEGER NOT NULL DEFAULT 0,
         title TEXT NOT NULL DEFAULT '',
-        artist TEXT NOT NULL DEFAULT ''
+        artist TEXT NOT NULL DEFAULT '',
+        date_added TEXT DEFAULT NULL
       );
 
       CREATE TABLE radar_releases (
@@ -195,6 +196,7 @@ describe('radar storage', () => {
             reasons: ['high_priority_available'],
             default_visible: true,
             is_in_collection: false,
+            collection_match: null,
           },
           display_currency: null,
         },
@@ -532,6 +534,10 @@ describe('radar storage', () => {
         reasons: string[];
         default_visible: boolean;
         is_in_collection: boolean;
+        collection_match: {
+          primary_release_id: number | null;
+          copy_count: number;
+        } | null;
       };
     }>;
 
@@ -542,6 +548,10 @@ describe('radar storage', () => {
       reasons: ['already_in_collection'],
       default_visible: true,
       is_in_collection: true,
+      collection_match: {
+        primary_release_id: 1,
+        copy_count: 1,
+      },
     });
 
     expect(items.find((item) => item.release_id === 410)?.opportunity.default_visible).toBe(false);
@@ -555,6 +565,70 @@ describe('radar storage', () => {
     expect(visibleReleaseIds.slice(0, 4)).toEqual([401, 402, 403, 404]);
     expect(visibleReleaseIds.slice(4, 7)).toEqual(expect.arrayContaining([405, 406, 407]));
     expect(visibleReleaseIds.slice(7)).toEqual([408, 409]);
+  });
+
+  it('exposes user-scoped collection match targets and copy counts for no match, one copy, and multiple copies', () => {
+    migrateRadarStorage(db);
+
+    db.prepare(`
+      INSERT INTO releases (user_id, release_id, instance_id, title, artist, date_added)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(1, 602, 1, 'Single Copy', 'Artist B', '2026-05-02T00:00:00Z');
+
+    db.prepare(`
+      INSERT INTO releases (user_id, release_id, instance_id, title, artist, date_added)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(1, 603, 2, 'Older Copy', 'Artist C', '2026-05-01T00:00:00Z');
+
+    db.prepare(`
+      INSERT INTO releases (user_id, release_id, instance_id, title, artist, date_added)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(1, 603, 3, 'Newer Copy', 'Artist C', '2026-05-03T00:00:00Z');
+
+    db.prepare(`
+      INSERT INTO releases (user_id, release_id, instance_id, title, artist, date_added)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(2, 603, 4, 'Other User Copy', 'Artist C', '2026-05-04T00:00:00Z');
+
+    const insertRadar = db.prepare(`
+      INSERT INTO radar_releases (
+        user_id,
+        release_id,
+        title,
+        artist,
+        source_discogs,
+        source_status,
+        marketplace_status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insertRadar.run(1, 601, 'No Match', 'Artist A', 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PENDING);
+    insertRadar.run(1, 602, 'Single Match', 'Artist B', 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PENDING);
+    insertRadar.run(1, 603, 'Multiple Match', 'Artist C', 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PENDING);
+
+    const items = getRadarSnapshot(db, 1).items;
+
+    expect(items.find((item) => item.release_id === 601)?.opportunity).toMatchObject({
+      is_in_collection: false,
+      collection_match: null,
+    });
+
+    expect(items.find((item) => item.release_id === 602)?.opportunity).toMatchObject({
+      is_in_collection: true,
+      collection_match: {
+        primary_release_id: 1,
+        copy_count: 1,
+      },
+    });
+
+    expect(items.find((item) => item.release_id === 603)?.opportunity).toMatchObject({
+      is_in_collection: true,
+      collection_match: {
+        primary_release_id: 3,
+        copy_count: 2,
+      },
+    });
   });
 
   it('tracks when a release becomes available again after an unavailable Marketplace state', () => {
