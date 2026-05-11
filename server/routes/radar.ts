@@ -153,6 +153,11 @@ function parseRadarNote(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function parseRadarId(value: unknown): number | null {
+  const radarId = Number(value);
+  return Number.isInteger(radarId) && radarId >= 1 ? radarId : null;
+}
+
 function getDisplayCurrency(userId: number): string {
   return normalizeCurrency(getSettingForUser(userId, 'currency') ?? DEFAULT_CURRENCY);
 }
@@ -198,6 +203,15 @@ async function serializeRadar(userId: number, displayCurrency = getDisplayCurren
     items: radar.items.map((item) => serializeRadarRelease(item, displayCurrency, rates)),
     summary: radar.summary,
   });
+}
+
+async function serializeRadarReleaseById(
+  userId: number,
+  radarId: number,
+  displayCurrency = getDisplayCurrency(userId),
+): Promise<RadarRelease | null> {
+  const radar = await serializeRadar(userId, displayCurrency);
+  return radar.items.find((item) => item.id === radarId) ?? null;
 }
 
 async function parseTargetPriceEur(userId: number, value: unknown): Promise<number | null> {
@@ -268,8 +282,8 @@ router.put('/:id', async (req, res) => {
       return res.status(401).json({ error: req.t('backend.auth.required') });
     }
 
-    const radarId = Number(req.params.id);
-    if (!Number.isInteger(radarId) || radarId < 1) {
+    const radarId = parseRadarId(req.params.id);
+    if (radarId == null) {
       return res.status(400).json({ error: 'Radar release id is invalid' });
     }
 
@@ -380,6 +394,29 @@ router.post('/update/stop', (req, res) => {
 router.get('/status', (req, res) => {
   const userId = req.session.userId as number;
   res.json(getRadarUpdateRunStatus(db, userId, req.locale));
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    if (userId == null) {
+      return res.status(401).json({ error: req.t('backend.auth.required') });
+    }
+
+    const radarId = parseRadarId(req.params.id);
+    if (radarId == null) {
+      return res.status(400).json({ error: 'Radar release id is invalid' });
+    }
+
+    const release = await serializeRadarReleaseById(userId, radarId);
+    if (!release) {
+      return res.status(404).json({ error: 'Radar release not found' });
+    }
+
+    return res.json(release);
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : req.t('backend.server.internal') });
+  }
 });
 
 export default router;
