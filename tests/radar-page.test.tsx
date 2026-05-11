@@ -284,7 +284,7 @@ describe('Radar page', () => {
       total: 0,
       pending: 2,
       progressPercent: 0,
-      message: 'Radar is ready to update.',
+      message: 'Radar is ready to update your Wantlist and review prices.',
       startedAt: null,
       finishedAt: null,
       wantlist: {
@@ -439,7 +439,7 @@ describe('Radar page', () => {
       total: 4,
       pending: 3,
       progressPercent: 25,
-      message: 'Radar stopped after 1 releases. 3 remain pending or failed.',
+      message: 'Radar stopped after reviewing 1 releases. 3 remain pending or failed.',
       startedAt: '2026-05-10T10:00:00.000Z',
       finishedAt: '2026-05-10T10:01:00.000Z',
       wantlist: {
@@ -970,7 +970,7 @@ describe('Radar page', () => {
       total: 4,
       pending: 3,
       progressPercent: 25,
-      message: 'Radar stopped after 1 releases. 3 remain pending or failed.',
+      message: 'Radar stopped after reviewing 1 releases. 3 remain pending or failed.',
       startedAt: '2026-05-10T10:00:00.000Z',
       finishedAt: '2026-05-10T10:01:00.000Z',
       wantlist: {

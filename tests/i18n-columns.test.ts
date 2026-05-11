@@ -130,6 +130,20 @@ const RADAR_KEYS = [
   'radar.filter.failed',
   'radar.filterEmptyTitle',
   'radar.filterEmptyBody',
+  'radar.enrichTitle',
+  'radar.enrichBody',
+  'radar.enrichState.idle',
+  'radar.enrichState.running',
+  'radar.enrichState.completed',
+  'radar.enrichState.failed',
+  'radar.enrichState.stopped',
+  'radar.enrichStart',
+  'radar.enrichStop',
+  'radar.enrichStatus',
+  'radar.enrichCurrent',
+  'radar.enrichTotal',
+  'radar.enrichPending',
+  'radar.enrichStatusError',
   'radar.emptyTitle',
   'radar.emptyBody',
   'radar.openDiscogs',
@@ -257,6 +271,136 @@ const DASHBOARD_RADAR_KEYS = [
   'dashboard.radar.alreadyOwned'
 ];
 
+const PRICE_REVIEW_COPY = [
+  {
+    key: 'radar.enrichTitle',
+    es: 'Revisión de precios de Radar',
+    en: 'Radar price review'
+  },
+  {
+    key: 'radar.enrichBody',
+    es: 'Revisa los precios mínimos por release de tu Wantlist y conserva los estados pendientes, fallidos y sin precio para que los reintentos sigan siendo fieles.',
+    en: 'Review release-level minimum prices for your Wantlist and preserve pending, failed, and no-price states so retries stay truthful.'
+  },
+  {
+    key: 'radar.enrichStart',
+    es: 'Revisar precios',
+    en: 'Review prices'
+  },
+  {
+    key: 'radar.enrichStatusError',
+    es: 'No se pudo cargar el estado de revisión de precios de Radar. Vuelve a intentarlo en un momento.',
+    en: 'Radar price review status could not be loaded. Try again in a moment.'
+  },
+  {
+    key: 'dashboard.noValues',
+    es: 'Aún no hay valores individuales en caché. Aparecerán cuando se revisen los precios de los discos con datos de Discogs.',
+    en: 'There are no individual cached values yet. They will appear once record prices are reviewed with Discogs data.'
+  },
+  {
+    key: 'sync.enrichCompleted',
+    es: 'Revisión de precios completada.',
+    en: 'Price review completed.'
+  },
+  {
+    key: 'sync.enrichStartError',
+    es: 'No se pudo iniciar la revisión de precios: {error}',
+    en: 'Unable to start price review: {error}'
+  },
+  {
+    key: 'sync.stopError',
+    es: 'No se pudo detener la revisión de precios: {error}',
+    en: 'Unable to stop price review: {error}'
+  },
+  {
+    key: 'sync.enrichValues',
+    es: 'Actualizar precios',
+    en: 'Update prices'
+  },
+  {
+    key: 'sync.pendingEnrich',
+    es: '{count} discos pendientes de revisar precios',
+    en: '{count} records pending price review'
+  },
+  {
+    key: 'backend.sync.activeEnrich',
+    es: 'Ya hay una revisión de precios en curso',
+    en: 'A price review is already running'
+  },
+  {
+    key: 'backend.sync.pending',
+    es: '{count} discos pendientes de revisar (precio, país, lista de temas).',
+    en: '{count} records pending review (price, country, tracklist).'
+  },
+  {
+    key: 'backend.sync.enrichProgress',
+    es: 'Revisando {current}/{total}...',
+    en: 'Reviewing {current}/{total}...'
+  },
+  {
+    key: 'backend.sync.enrichRemaining',
+    es: '{processed} discos revisados. Quedan {pending} pendientes.',
+    en: '{processed} records reviewed. {pending} still pending.'
+  },
+  {
+    key: 'backend.sync.enrichDone',
+    es: '{processed} discos revisados. Completado.',
+    en: '{processed} records reviewed. Completed.'
+  },
+  {
+    key: 'backend.radar.activeEnrich',
+    es: 'Ya hay una revisión de precios de Radar en curso',
+    en: 'A Radar price review is already running'
+  },
+  {
+    key: 'backend.radar.ready',
+    es: 'Radar listo para revisar precios de la Wantlist.',
+    en: 'Radar is ready to review Wantlist prices.'
+  },
+  {
+    key: 'backend.radar.updateReady',
+    es: 'Radar listo para actualizar la Wantlist y revisar precios.',
+    en: 'Radar is ready to update your Wantlist and review prices.'
+  },
+  {
+    key: 'backend.radar.enrichProgress',
+    es: 'Revisando precios de Radar {current}/{total}...',
+    en: 'Reviewing Radar prices {current}/{total}...'
+  },
+  {
+    key: 'backend.radar.enrichRemaining',
+    es: '{processed} releases deseados revisados. {pending} siguen pendientes o fallidos.',
+    en: '{processed} wanted releases reviewed. {pending} remain pending or failed.'
+  },
+  {
+    key: 'backend.radar.enrichDone',
+    es: '{processed} releases deseados revisados. Completado.',
+    en: '{processed} wanted releases reviewed. Completed.'
+  },
+  {
+    key: 'backend.radar.enrichStopped',
+    es: 'Radar detenido tras revisar {processed} releases. {pending} siguen pendientes o fallidos.',
+    en: 'Radar stopped after reviewing {processed} releases. {pending} remain pending or failed.'
+  },
+  {
+    key: 'backend.radar.updateCompleted',
+    es: '{processed} releases deseados revisados. Completado.',
+    en: '{processed} wanted releases reviewed. Completed.'
+  },
+  {
+    key: 'backend.radar.updateCompletedWithIssues',
+    es: '{processed} releases deseados revisados. {pending} siguen pendientes o fallidos.',
+    en: '{processed} wanted releases reviewed. {pending} remain pending or failed.'
+  },
+  {
+    key: 'backend.radar.updateStopped',
+    es: 'Radar detenido tras revisar {processed} releases. {pending} siguen pendientes o fallidos.',
+    en: 'Radar stopped after reviewing {processed} releases. {pending} remain pending or failed.'
+  }
+] as const;
+
+const PRICE_REVIEW_JARGON_PATTERN = /enriquec|enrichment|enriching|enrich\b/i;
+
 describe('i18n keys for table columns', () => {
   it('all column i18n keys exist in Spanish locale', () => {
     for (const col of COLUMNS) {
@@ -375,6 +519,15 @@ describe('i18n keys for import/media/client fallbacks', () => {
     for (const label of NATURAL_RADAR_LABELS) {
       expect(messages.es[label.key]).toBe(label.es);
       expect(messages.en[label.key]).toBe(label.en);
+    }
+  });
+
+  it('uses price-review language across Radar, sync, and collection copy', () => {
+    for (const { key, es, en } of PRICE_REVIEW_COPY) {
+      expect(messages.es[key]).toBe(es);
+      expect(messages.en[key]).toBe(en);
+      expect(messages.es[key]).not.toMatch(PRICE_REVIEW_JARGON_PATTERN);
+      expect(messages.en[key]).not.toMatch(PRICE_REVIEW_JARGON_PATTERN);
     }
   });
 
