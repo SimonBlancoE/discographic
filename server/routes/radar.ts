@@ -1,24 +1,18 @@
-import crypto from 'crypto';
 import express, { type Response } from 'express';
 import multer from 'multer';
 import { stringify } from 'csv-stringify/sync';
 import * as XLSX from 'xlsx';
 import {
-  MARKETPLACE_STATUS,
-  RADAR_ENRICH_STATUS,
   RADAR_MINIMUM_CONDITION,
   RADAR_PRIORITY,
-  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   type RadarLocalDecisionUpdate,
   type RadarMinimumCondition,
   type RadarPriority,
   type RadarRelease,
   type RadarResponse,
-  type RadarWantlistPreviewResponse,
   type RadarWantlistTemplateFormat,
 } from '../../shared/contracts/radar.js';
-import { translate } from '../../shared/i18n.js';
 import db, { getRadarForUser, getSettingForUser, updateRadarReleaseForUser } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import {
@@ -27,45 +21,24 @@ import {
   getExchangeSnapshot,
   normalizeCurrency,
 } from '../services/exchangeRates.js';
-import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 import {
-  getPendingRadarEnrichmentCount,
-  getPendingRadarEnrichmentRows,
-} from '../services/radarEnrichmentQueue.js';
-import {
-  cleanupExpiredRadarWantlistPreviews,
-  clearRadarEnrichmentRunning,
-  deleteStoredRadarWantlistPreview,
-  getRadarEnrichmentState as getStoredRadarEnrichmentState,
-  getStoredRadarWantlistPreview,
-  isRadarEnrichmentRunning,
-  markRadarEnrichmentRunning,
-  setRadarEnrichmentState as storeRadarEnrichmentState,
-  storeRadarWantlistPreview,
-} from '../services/radarRuntimeState.js';
-import type {
-  RadarRuntimeEnrichmentState,
-  StoredRadarWantlistPreview,
-} from '../services/radarRuntimeState.js';
-import { getRadarAvailabilityTransition } from '../services/radarStorage.js';
+  getRadarEnrichmentStatus,
+  startRadarEnrichment,
+  stopRadarEnrichment,
+} from '../services/radarEnrichmentWorkflow.js';
 import { syncRadarWantlist } from '../services/radarWantlist.js';
-import { applyRadarWantlistImport, buildRadarWantlistPreview, parseRadarWantlistWorkbook } from '../services/radarWantlistImport.js';
+import {
+  RadarWantlistPreviewExpiredError,
+  applyStoredRadarWantlistPreview,
+  createRadarWantlistImportPreview,
+} from '../services/radarWantlistImport.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const WANTLIST_TEMPLATE_BASENAME = 'discographic-radar-wantlist-template';
-const ENRICH_BATCH_SIZE = 30;
-const WANTLIST_PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 type Translate = (key: string) => string;
 type ExchangeRates = Parameters<typeof convertAmountWithRates>[3];
-type RadarEnrichInput = {
-  userId: number;
-  locale: string | undefined;
-  discogs: Parameters<typeof fetchMarketplaceValue>[0];
-};
-
-type RadarMarketplaceValue = Awaited<ReturnType<typeof fetchMarketplaceValue>>;
 
 type WantlistTemplateRow = {
   release_id: number;
@@ -78,8 +51,6 @@ type WantlistTemplateRow = {
   minimum_condition: string;
   priority: string;
 };
-
-type RadarWantlistApplyRows = Parameters<typeof applyRadarWantlistImport>[2];
 
 const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
@@ -118,10 +89,6 @@ function sendXlsxTemplate(res: Response, data: WantlistTemplateRow[], sheetName:
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${WANTLIST_TEMPLATE_BASENAME}.xlsx"`);
   res.send(buffer);
-}
-
-function cleanWantlistPreviewCache(): void {
-  cleanupExpiredRadarWantlistPreviews();
 }
 
 function resolveTemplateFormat(format: unknown): RadarWantlistTemplateFormat {
@@ -205,50 +172,6 @@ function convertNullableAmount(
   return amount == null ? null : convertAmountWithRates(amount, fromCurrency, toCurrency, rates);
 }
 
-function cacheWantlistPreview(userId: number, preview: RadarWantlistPreviewResponse): string {
-  cleanWantlistPreviewCache();
-
-  const previewId = crypto.randomBytes(16).toString('hex');
-  storeRadarWantlistPreview(previewId, {
-    userId,
-    displayCurrency: getDisplayCurrency(userId),
-    preview,
-    expiresAt: Date.now() + WANTLIST_PREVIEW_TTL_MS,
-  });
-
-  return previewId;
-}
-
-function getCachedWantlistPreview(previewId: string, userId: number): StoredRadarWantlistPreview | null {
-  const cached = getStoredRadarWantlistPreview(previewId);
-
-  if (!cached || cached.userId !== userId) {
-    return null;
-  }
-
-  if (cached.expiresAt < Date.now()) {
-    deleteStoredRadarWantlistPreview(previewId);
-    return null;
-  }
-
-  return cached;
-}
-
-function toRadarWantlistApplyRows(
-  cached: StoredRadarWantlistPreview,
-  rates: ExchangeRates,
-): RadarWantlistApplyRows {
-  return cached.preview.rows.map((row) => ({
-    ...row,
-    target_price_eur: convertNullableAmount(
-      row.target_price,
-      cached.displayCurrency,
-      DEFAULT_CURRENCY,
-      rates,
-    ),
-  }));
-}
-
 function serializeRadarRelease(
   item: RadarRelease,
   displayCurrency: string,
@@ -318,197 +241,12 @@ async function parseRadarUpdatePayload(userId: number, payload: unknown): Promis
   };
 }
 
-function radarT(locale: string | undefined, key: string, vars?: Record<string, string | number>): string {
-  return translate(locale || 'es', key, vars);
-}
-
-function createIdleState(locale?: string): RadarRuntimeEnrichmentState {
-  return {
-    status: RADAR_ENRICH_STATUS.IDLE,
-    current: 0,
-    total: 0,
-    pending: 0,
-    message: radarT(locale, 'backend.radar.ready'),
-    startedAt: null,
-    finishedAt: null,
-  };
-}
-
-function getEnrichState(userId: number, locale?: string): RadarRuntimeEnrichmentState {
-  const current = getStoredRadarEnrichmentState(userId);
-
-  if (current) {
-    return current;
-  }
-
-  const initial = createIdleState(locale);
-  storeRadarEnrichmentState(userId, initial);
-  return initial;
-}
-
-function setEnrichState(
-  userId: number,
-  locale: string | undefined,
-  patch: Partial<RadarRuntimeEnrichmentState>,
-): void {
-  storeRadarEnrichmentState(userId, {
-    ...getEnrichState(userId, locale),
-    ...patch,
-  });
-}
-
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
 
   return String(error);
-}
-
-function getProgressMessage(locale: string | undefined, current: number, total: number): string {
-  return radarT(locale, 'backend.radar.enrichProgress', { current, total });
-}
-
-function getEstimatedPrice(marketplace: RadarMarketplaceValue): number | null {
-  if (marketplace.marketplaceStatus !== MARKETPLACE_STATUS.PRICED) {
-    return null;
-  }
-
-  return marketplace.estimatedValue;
-}
-
-function getCompletionMessage({
-  locale,
-  wasStopped,
-  processed,
-  pending,
-}: {
-  locale: string | undefined;
-  wasStopped: boolean;
-  processed: number;
-  pending: number;
-}): string {
-  if (wasStopped) {
-    return radarT(locale, 'backend.radar.enrichStopped', { processed, pending });
-  }
-
-  if (pending) {
-    return radarT(locale, 'backend.radar.enrichRemaining', { processed, pending });
-  }
-
-  return radarT(locale, 'backend.radar.enrichDone', { processed });
-}
-
-async function runRadarEnrich({ userId, locale, discogs }: RadarEnrichInput): Promise<void> {
-  if (!markRadarEnrichmentRunning(userId)) {
-    return;
-  }
-
-  try {
-    const pendingRows = getPendingRadarEnrichmentRows(db, userId);
-    const totalPending = pendingRows.length;
-
-    if (!totalPending) {
-      setEnrichState(userId, locale, {
-        status: RADAR_ENRICH_STATUS.IDLE,
-        current: 0,
-        total: 0,
-        pending: 0,
-        message: radarT(locale, 'backend.radar.completeSet'),
-        startedAt: null,
-        finishedAt: new Date().toISOString(),
-      });
-      return;
-    }
-
-    let processed = 0;
-
-    setEnrichState(userId, locale, {
-      status: RADAR_ENRICH_STATUS.RUNNING,
-      current: 0,
-      total: totalPending,
-      pending: totalPending,
-      message: getProgressMessage(locale, 0, totalPending),
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-    });
-
-    for (let offset = 0; offset < pendingRows.length && isRadarEnrichmentRunning(userId); offset += ENRICH_BATCH_SIZE) {
-      const rows = pendingRows.slice(offset, offset + ENRICH_BATCH_SIZE);
-
-      for (const row of rows) {
-        if (!isRadarEnrichmentRunning(userId)) {
-          break;
-        }
-
-        const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
-        const estimatedPrice = getEstimatedPrice(marketplace);
-        const availabilityTransition = getRadarAvailabilityTransition(
-          row.marketplace_status,
-          marketplace.marketplaceStatus,
-        );
-
-        db.prepare(`
-          UPDATE radar_releases
-          SET estimated_price = ?,
-              marketplace_status = ?,
-              marketplace_last_checked_at = CURRENT_TIMESTAMP,
-              marketplace_last_unavailable_at = CASE
-                WHEN ? = 1 THEN CURRENT_TIMESTAMP
-                ELSE marketplace_last_unavailable_at
-              END,
-              marketplace_available_again_at = CASE
-                WHEN ? = 1 THEN CURRENT_TIMESTAMP
-                WHEN ? = 1 THEN NULL
-                ELSE marketplace_available_again_at
-              END,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND user_id = ?
-        `).run(
-          estimatedPrice,
-          marketplace.marketplaceStatus,
-          availabilityTransition.markUnavailableNow ? 1 : 0,
-          availabilityTransition.markAvailableAgainNow ? 1 : 0,
-          availabilityTransition.clearAvailableAgain ? 1 : 0,
-          row.id,
-          userId,
-        );
-
-        processed += 1;
-        setEnrichState(userId, locale, {
-          status: RADAR_ENRICH_STATUS.RUNNING,
-          current: processed,
-          total: totalPending,
-          message: getProgressMessage(locale, processed, totalPending),
-        });
-      }
-    }
-
-    const finalPending = getPendingRadarEnrichmentCount(db, userId);
-    const wasStopped = !isRadarEnrichmentRunning(userId) && finalPending > 0;
-
-    setEnrichState(userId, locale, {
-      status: wasStopped ? RADAR_ENRICH_STATUS.STOPPED : RADAR_ENRICH_STATUS.COMPLETED,
-      current: processed,
-      total: totalPending,
-      pending: finalPending,
-      message: getCompletionMessage({
-        locale,
-        wasStopped,
-        processed,
-        pending: finalPending,
-      }),
-      finishedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    setEnrichState(userId, locale, {
-      status: RADAR_ENRICH_STATUS.FAILED,
-      message: getErrorMessage(error),
-      finishedAt: new Date().toISOString(),
-    });
-  } finally {
-    clearRadarEnrichmentRunning(userId);
-  }
 }
 
 router.get('/', async (req, res) => {
@@ -586,20 +324,14 @@ router.post('/wantlist/preview', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: req.t('backend.radarImport.fileRequired') });
     }
 
-    const rows = parseRadarWantlistWorkbook(req.file.buffer, req.file.originalname, req.t);
-    const preview = buildRadarWantlistPreview(rows, req.t);
-
-    if (preview.summary.validRows === 0) {
-      return res.json(preview);
-    }
-
     const userId = req.session.userId as number;
-    const previewId = cacheWantlistPreview(userId, preview);
-
-    return res.json({
-      ...preview,
-      previewId,
-    });
+    return res.json(createRadarWantlistImportPreview({
+      userId,
+      buffer: req.file.buffer,
+      filename: req.file.originalname,
+      displayCurrency: getDisplayCurrency(userId),
+      t: req.t,
+    }));
   } catch (error) {
     const message = error instanceof Error ? error.message : req.t('backend.server.internal');
     return res.status(400).json({ error: message });
@@ -618,28 +350,18 @@ router.post('/wantlist/apply', async (req, res) => {
       return res.status(400).json({ error: req.t('backend.radarImport.previewIdRequired') });
     }
 
-    const cached = getCachedWantlistPreview(previewId, userId);
-    if (!cached) {
-      return res.status(410).json({ error: req.t('backend.radarImport.previewExpired') });
-    }
-
-    deleteStoredRadarWantlistPreview(previewId);
-
-    const rates = await getDisplayRates(cached.displayCurrency);
-    const applied = applyRadarWantlistImport(db, userId, toRadarWantlistApplyRows(cached, rates));
+    const applied = await applyStoredRadarWantlistPreview({ db, userId, previewId });
 
     return res.json({
       ok: true,
       radar: await serializeRadar(userId),
-      result: {
-        totalRows: cached.preview.summary.totalRows,
-        imported: applied.imported,
-        skipped: cached.preview.summary.invalidRows,
-        added: applied.added,
-        updated: applied.updated,
-      },
+      result: applied,
     });
   } catch (error) {
+    if (error instanceof RadarWantlistPreviewExpiredError) {
+      return res.status(410).json({ error: req.t('backend.radarImport.previewExpired') });
+    }
+
     const message = error instanceof Error ? error.message : req.t('backend.server.internal');
     return res.status(500).json({ error: message });
   }
@@ -648,17 +370,23 @@ router.post('/wantlist/apply', async (req, res) => {
 router.post('/enrich', async (req, res) => {
   const userId = req.session.userId as number;
 
-  if (isRadarEnrichmentRunning(userId)) {
-    return res.status(409).json({ error: req.t('backend.radar.activeEnrich') });
-  }
-
   try {
     const discogs = getDiscogsClientForUser(req);
-    res.json({ ok: true });
-
-    runRadarEnrich({ userId, locale: req.locale, discogs }).catch((error) => {
-      console.log('[radar-enrich] background error:', getErrorMessage(error));
+    const started = startRadarEnrichment({
+      db,
+      userId,
+      locale: req.locale,
+      discogs,
+      onBackgroundError: (error) => {
+        console.log('[radar-enrich] background error:', getErrorMessage(error));
+      },
     });
+
+    if (!started) {
+      return res.status(409).json({ error: req.t('backend.radar.activeEnrich') });
+    }
+
+    res.json({ ok: true });
   } catch (error) {
     return res.status(400).json({ error: getErrorMessage(error) });
   }
@@ -666,33 +394,13 @@ router.post('/enrich', async (req, res) => {
 
 router.post('/enrich/stop', (req, res) => {
   const userId = req.session.userId as number;
-  const pending = getPendingRadarEnrichmentCount(db, userId);
-  const currentState = getEnrichState(userId, req.locale);
-
-  clearRadarEnrichmentRunning(userId);
-  setEnrichState(userId, req.locale, {
-    status: RADAR_ENRICH_STATUS.STOPPED,
-    pending,
-    message: radarT(req.locale, 'backend.radar.enrichStopped', {
-      processed: currentState.current,
-      pending,
-    }),
-    finishedAt: new Date().toISOString(),
-  });
-
+  stopRadarEnrichment(db, userId, req.locale);
   res.json({ ok: true });
 });
 
 router.get('/status', (req, res) => {
   const userId = req.session.userId as number;
-  const state = getEnrichState(userId, req.locale);
-  const pending = getPendingRadarEnrichmentCount(db, userId);
-
-  res.json(normalizeRadarEnrichmentStatus({
-    ...state,
-    pending,
-    message: state.message || radarT(req.locale, 'backend.radar.ready'),
-  }));
+  res.json(getRadarEnrichmentStatus(db, userId, req.locale));
 });
 
 export default router;

@@ -1234,13 +1234,14 @@ export function getCurrentLocale(): Locale {
     return DEFAULT_LOCALE;
   }
 
-  const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  const storage = window.localStorage;
+  const stored = typeof storage?.getItem === 'function' ? storage.getItem(LOCALE_STORAGE_KEY) : null;
   if (stored) return resolveLocale(stored);
   return resolveLocale(window.navigator.language);
 }
 
 export function persistLocale(locale: unknown): void {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof window.localStorage?.setItem === 'function') {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, resolveLocale(locale));
   }
 }
