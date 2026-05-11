@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   RADAR_OPPORTUNITY_REASON,
@@ -30,6 +30,8 @@ const UPDATE_STATUS_CARDS = [
   { labelKey: 'radar.updateTotal', valueKey: 'total' },
   { labelKey: 'radar.updatePending', valueKey: 'pending' },
 ] as const;
+
+const RADAR_WANTLIST_IMPORT_SECTION_ID = 'radar-wantlist-fallback';
 
 type RadarFilterId =
   | 'all'
@@ -92,6 +94,7 @@ const RADAR_RELEASE_FIELD_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.2em] 
 const RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS = 'mt-1 font-semibold text-white';
 const RADAR_RELEASE_FIELD_VALUE_CLASS = 'mt-1 text-slate-200';
 const UPDATE_POLL_MS = 2000;
+
 function createEmptyRadarResponse(): RadarResponse {
   return normalizeRadarResponse({});
 }
@@ -488,6 +491,8 @@ function renderRadarContent({
 function Radar() {
   const { accountUnavailable, capabilities } = useAuth();
   const { t } = useI18n();
+  const importSectionRef = useRef<HTMLElement | null>(null);
+  const importHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const [radar, setRadar] = useState(createEmptyRadarResponse);
   const [updateRun, setUpdateRun] = useState(createEmptyRadarUpdateRunStatus);
   const [loading, setLoading] = useState(true);
@@ -629,6 +634,21 @@ function Radar() {
     }
   }
 
+  function showWantlistImportPanel() {
+    const scrollTarget = typeof importHeadingRef.current?.scrollIntoView === 'function'
+      ? importHeadingRef.current
+      : importSectionRef.current;
+
+    if (typeof scrollTarget?.scrollIntoView === 'function') {
+      scrollTarget.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
+
+    importHeadingRef.current?.focus();
+  }
+
   if (accountUnavailable) {
     return <div className="glass-panel p-8 text-center text-amber-100">{t('radar.accountUnavailable')}</div>;
   }
@@ -654,14 +674,24 @@ function Radar() {
     <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
-        <button
-          type="button"
-          onClick={handleStartUpdate}
-          disabled={loading || actionBusy || updateRun.isRunning}
-          className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {updateRun.isRunning ? t('radar.updating') : t('radar.updateAction')}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={showWantlistImportPanel}
+            aria-controls={RADAR_WANTLIST_IMPORT_SECTION_ID}
+            className="secondary-button"
+          >
+            {t('radar.importAction')}
+          </button>
+          <button
+            type="button"
+            onClick={handleStartUpdate}
+            disabled={loading || actionBusy || updateRun.isRunning}
+            className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {updateRun.isRunning ? t('radar.updating') : t('radar.updateAction')}
+          </button>
+        </div>
       </div>
 
       {hasWantlistSyncResult ? renderWantlistSyncResult(updateRun.wantlist, t) : null}
@@ -732,13 +762,6 @@ function Radar() {
         ) : null}
       </div>
 
-      <RadarWantlistImportPanel
-        onApplied={(nextRadar) => {
-          setRadar(nextRadar);
-          setLoadFailed(false);
-        }}
-      />
-
       <RadarFilterBar selectedFilter={selectedFilter} t={t} onFilterChange={setSelectedFilter} />
 
       {renderRadarContent({
@@ -748,6 +771,16 @@ function Radar() {
         loadFailed,
         t,
       })}
+
+      <RadarWantlistImportPanel
+        sectionId={RADAR_WANTLIST_IMPORT_SECTION_ID}
+        sectionRef={importSectionRef}
+        headingRef={importHeadingRef}
+        onApplied={(nextRadar) => {
+          setRadar(nextRadar);
+          setLoadFailed(false);
+        }}
+      />
     </section>
   );
 }
