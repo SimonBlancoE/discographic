@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Radar from '../src/pages/Radar';
+import { formatCurrency, formatDate } from '../src/lib/format.js';
 import type { RadarRelease } from '../shared/contracts/radar.js';
 
 const authState = vi.hoisted(() => ({
@@ -100,7 +101,10 @@ const messages = {
   'radar.priority.low': 'Low',
   'radar.priority.normal': 'Normal',
   'radar.priority.high': 'High',
+  'radar.currentPrice': 'Current price',
   'radar.targetPrice': 'Target price',
+  'radar.wantlistDate': 'Wantlist date',
+  'radar.lastPriceReview': 'Last price review',
   'radar.state.pending': 'Pending update',
   'radar.state.unavailable': 'No price available',
   'radar.state.failed': 'Update failed',
@@ -556,7 +560,7 @@ describe('Radar page', () => {
             updated_at: '2026-05-10T12:00:00Z',
           },
           opportunity: {
-            reasons: [],
+            reasons: ['high_priority_available'],
             default_visible: true,
             is_in_collection: false,
           },
@@ -1163,7 +1167,7 @@ describe('Radar page', () => {
     expect(getRadarStatus).not.toHaveBeenCalled();
   });
 
-  it('edits a local Radar decision and keeps the Discogs release action local-only', async () => {
+  it('renders dense Radar rows for scanning and removes the old inline editors', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
       items: [
@@ -1200,7 +1204,7 @@ describe('Radar page', () => {
             updated_at: '2026-05-10T01:00:00Z',
           },
           opportunity: {
-            reasons: [],
+            reasons: ['high_priority_available'],
             default_visible: true,
             is_in_collection: false,
           },
@@ -1275,51 +1279,24 @@ describe('Radar page', () => {
     });
 
     const rendered = await renderRadar();
-    const prioritySelect = rendered.querySelector('select[name="radar-priority-7"]') as HTMLSelectElement | null;
-    const targetInput = rendered.querySelector('input[name="radar-target-price-7"]') as HTMLInputElement | null;
-    const conditionSelect = rendered.querySelector('select[name="radar-minimum-condition-7"]') as HTMLSelectElement | null;
-    const noteInput = rendered.querySelector('textarea[name="radar-note-7"]') as HTMLTextAreaElement | null;
-    const hiddenInput = rendered.querySelector('input[name="radar-hidden-7"]') as HTMLInputElement | null;
-    const saveButton = rendered.querySelector('button[data-radar-save="7"]') as HTMLButtonElement | null;
     const discogsLink = rendered.querySelector('a[data-radar-discogs="7"]') as HTMLAnchorElement | null;
+    const text = rendered.textContent ?? '';
 
-    expect(prioritySelect).not.toBeNull();
-    expect(targetInput?.value).toBe('12.50');
-    expect(conditionSelect?.value).toBe('VG+');
-    expect(noteInput?.value).toBe('Start here');
+    expect(text).toContain('Editable Release');
+    expect(text).toContain('Artist C');
+    expect(text).toContain(formatCurrency(24, 'USD'));
+    expect(text).toContain(formatCurrency(12.5, 'USD'));
+    expect(text).toContain(messages['radar.priority.normal']);
+    expect(text).toContain(formatDate('2026-05-10T00:00:00Z'));
+    expect(text).toContain(messages['radar.opportunity.high_priority_available']);
     expect(discogsLink?.getAttribute('href')).toBe('https://www.discogs.com/release/303');
-
-    await act(async () => {
-      if (!prioritySelect || !targetInput || !conditionSelect || !noteInput || !hiddenInput || !saveButton) {
-        throw new Error('Missing Radar editor controls');
-      }
-
-      prioritySelect.value = 'high';
-      prioritySelect.dispatchEvent(new Event('change', { bubbles: true }));
-      targetInput.value = '14.50';
-      targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-      conditionSelect.value = 'NM';
-      conditionSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      noteInput.value = 'Watch copy';
-      noteInput.dispatchEvent(new Event('input', { bubbles: true }));
-      hiddenInput.click();
-      saveButton.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(updateRadarRelease).toHaveBeenCalledWith(7, {
-      local: {
-        priority: 'high',
-        target_price: 14.5,
-        minimum_condition: 'NM',
-        note: 'Watch copy',
-        hidden: true,
-        resolved: false,
-      },
-    });
-
-    expect(rendered.textContent ?? '').toContain(messages['radar.minimumCondition.info']);
-    expect((rendered.querySelector('input[name="radar-target-price-7"]') as HTMLInputElement | null)?.value).toBe('14.50');
+    expect(rendered.querySelector('select[name="radar-priority-7"]')).toBeNull();
+    expect(rendered.querySelector('input[name="radar-target-price-7"]')).toBeNull();
+    expect(rendered.querySelector('select[name="radar-minimum-condition-7"]')).toBeNull();
+    expect(rendered.querySelector('textarea[name="radar-note-7"]')).toBeNull();
+    expect(rendered.querySelector('input[name="radar-hidden-7"]')).toBeNull();
+    expect(rendered.querySelector('input[name="radar-resolved-7"]')).toBeNull();
+    expect(rendered.querySelector('button[data-radar-save="7"]')).toBeNull();
+    expect(updateRadarRelease).not.toHaveBeenCalled();
   });
 });
