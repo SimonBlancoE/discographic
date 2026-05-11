@@ -121,6 +121,8 @@ const messages = {
   'radar.opportunity.high_priority_available': 'High priority with copy available',
   'radar.opportunity.available_again': 'Available again',
   'radar.opportunity.already_in_collection': 'Already in your collection',
+  'radar.collectionMatch.single': 'View {count} copy in your collection',
+  'radar.collectionMatch.multiple': 'View {count} copies in your collection',
   'radar.note': 'Note',
   'radar.hidden': 'Hidden',
   'radar.resolved': 'Resolved',
@@ -189,6 +191,7 @@ function createRadarRelease(overrides: RadarReleaseFixture): RadarRelease {
       reasons: [],
       default_visible: false,
       is_in_collection: false,
+      collection_match: null,
       ...overrides.opportunity,
     },
     display_currency: overrides.display_currency ?? 'EUR',
@@ -201,7 +204,13 @@ vi.mock('../src/lib/AuthContext', () => ({
 
 vi.mock('../src/lib/I18nContext', () => ({
   useI18n: () => ({
-    t: (key: string) => messages[key as keyof typeof messages] ?? key,
+    t: (key: string, values?: Record<string, string | number>) => {
+      const template = messages[key as keyof typeof messages] ?? key;
+      return Object.entries(values ?? {}).reduce(
+        (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+        template,
+      );
+    },
   }),
 }));
 
@@ -737,6 +746,73 @@ describe('Radar page', () => {
     expect(text).not.toContain('Resolved Opportunity');
     expect(text).toContain(messages['radar.summary.hidden']);
     expect(text).toContain(messages['radar.summary.resolved']);
+  });
+
+  it('shows navigable collection match links for single and multiple local copies', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        createRadarRelease({
+          id: 21,
+          release_id: 621,
+          title: 'No Match',
+          artist: 'Artist A',
+        }),
+        createRadarRelease({
+          id: 22,
+          release_id: 622,
+          title: 'Single Match',
+          artist: 'Artist B',
+          opportunity: {
+            reasons: ['already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+            collection_match: {
+              primary_release_id: 91,
+              copy_count: 1,
+            },
+          },
+        }),
+        createRadarRelease({
+          id: 23,
+          release_id: 623,
+          title: 'Multiple Match',
+          artist: 'Artist C',
+          opportunity: {
+            reasons: ['already_in_collection'],
+            default_visible: true,
+            is_in_collection: true,
+            collection_match: {
+              primary_release_id: 92,
+              copy_count: 3,
+            },
+          },
+        }),
+      ],
+      summary: {
+        total: 3,
+        active: 3,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 0,
+        priced: 0,
+        pending: 3,
+        failed: 0,
+        unavailable: 0,
+      },
+    });
+
+    const rendered = await renderRadar();
+    const singleLink = rendered.querySelector('a[data-radar-collection="22"]') as HTMLAnchorElement | null;
+    const multipleLink = rendered.querySelector('a[data-radar-collection="23"]') as HTMLAnchorElement | null;
+    const missingLink = rendered.querySelector('a[data-radar-collection="21"]');
+    const text = rendered.textContent ?? '';
+
+    expect(missingLink).toBeNull();
+    expect(singleLink?.getAttribute('href')).toBe('/collection/91');
+    expect(multipleLink?.getAttribute('href')).toBe('/collection/92');
+    expect(text).toContain('View 1 copy in your collection');
+    expect(text).toContain('View 3 copies in your collection');
   });
 
   it('filters Radar rows from the normalized list contract and shows natural state labels', async () => {

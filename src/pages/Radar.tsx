@@ -86,6 +86,10 @@ type RadarStateLabelKey =
   | 'radar.state.resolved'
   | 'radar.state.missingFromSource';
 
+type RadarCollectionMatchLabelKey =
+  | 'radar.collectionMatch.single'
+  | 'radar.collectionMatch.multiple';
+
 const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, RadarStateLabelKey>> = {
   [MARKETPLACE_STATUS.PENDING]: 'radar.state.pending',
   [MARKETPLACE_STATUS.UNAVAILABLE]: 'radar.state.unavailable',
@@ -156,6 +160,12 @@ function createReleasePayload(draft: RadarReleaseDraft): RadarLocalDecisionPaylo
 
 function getOrderedOpportunityReasons(item: RadarRelease): RadarOpportunityReason[] {
   return RADAR_OPPORTUNITY_REASON_ORDER.filter((reason) => item.opportunity.reasons.includes(reason));
+}
+
+function getCollectionMatchLabelKey(copyCount: number): RadarCollectionMatchLabelKey {
+  return copyCount === 1
+    ? 'radar.collectionMatch.single'
+    : 'radar.collectionMatch.multiple';
 }
 
 function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolean {
@@ -271,6 +281,7 @@ function RadarReleaseCard({
   const releaseKey = item.id ?? item.release_id ?? 0;
   const opportunityReasons = getOrderedOpportunityReasons(item);
   const stateLabelKeys = getRadarStateLabelKeys(item);
+  const collectionMatch = item.opportunity.collection_match;
   const hasLabels = stateLabelKeys.length > 0 || opportunityReasons.length > 0;
 
   async function handleSave() {
@@ -298,6 +309,17 @@ function RadarReleaseCard({
             {item.artist} - {item.title}
           </p>
           <p className="text-sm text-slate-300">#{item.release_id}</p>
+          {collectionMatch?.primary_release_id != null ? (
+            <Link
+              to={`/collection/${collectionMatch.primary_release_id}`}
+              data-radar-collection={String(releaseKey)}
+              className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
+            >
+              {t(getCollectionMatchLabelKey(collectionMatch.copy_count), {
+                count: collectionMatch.copy_count,
+              })}
+            </Link>
+          ) : null}
           {hasLabels ? (
             <div className="flex flex-wrap gap-2">
               {stateLabelKeys.map((labelKey) => (

@@ -162,6 +162,8 @@ const RADAR_KEYS = [
   'radar.opportunity.high_priority_available',
   'radar.opportunity.available_again',
   'radar.opportunity.already_in_collection',
+  'radar.collectionMatch.single',
+  'radar.collectionMatch.multiple',
   'radar.minimumCondition',
   'radar.minimumCondition.info',
   'radar.minimumCondition.none',

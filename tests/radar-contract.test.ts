@@ -75,6 +75,10 @@ describe('radar contract', () => {
             reasons: ['below_target', 'mystery'],
             default_visible: 1,
             is_in_collection: 0,
+            collection_match: {
+              primary_release_id: 'not-a-number',
+              copy_count: 'bad',
+            },
           },
           display_currency: 3,
         },
@@ -132,6 +136,7 @@ describe('radar contract', () => {
           reasons: ['below_target'],
           default_visible: true,
           is_in_collection: false,
+          collection_match: null,
         },
         display_currency: null,
       },
@@ -217,6 +222,10 @@ describe('radar contract', () => {
             reasons: ['available_again', 'already_in_collection'],
             default_visible: true,
             is_in_collection: true,
+            collection_match: {
+              primary_release_id: 44,
+              copy_count: 2,
+            },
           },
           display_currency: 'USD',
         },
@@ -229,6 +238,10 @@ describe('radar contract', () => {
       reasons: ['available_again', 'already_in_collection'],
       default_visible: true,
       is_in_collection: true,
+      collection_match: {
+        primary_release_id: 44,
+        copy_count: 2,
+      },
     });
     expect(normalized.items[0]?.display_currency).toBe('USD');
   });
