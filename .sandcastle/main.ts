@@ -17,9 +17,9 @@
 // issues are picked up after each round of merges.
 //
 // Usage:
-//   npx tsx .sandcastle/main.ts
+//   pnpm exec tsx .sandcastle/main.ts
 // Or add to package.json:
-//   "scripts": { "sandcastle": "npx tsx .sandcastle/main.ts" }
+//   "scripts": { "sandcastle": "tsx .sandcastle/main.ts" }
 
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
@@ -61,13 +61,25 @@ fi`;
 const MAX_ITERATIONS = 10;
 
 // Hooks run inside the sandbox before the agent starts each iteration.
-// npm install ensures the sandbox always has fresh dependencies.
+// pnpm install ensures the sandbox always has fresh dependencies.
 const hooks = {
-  sandbox: { onSandboxReady: [{ command: setupCodexAuthCommand }, { command: "npm install" }, { command: "set -e\nif [ -z \"$GITEA_SERVER_URL\" ] || [ -z \"$GITEA_ACCESS_TOKEN\" ]; then\n  echo \"GITEA_SERVER_URL and GITEA_ACCESS_TOKEN must be set for Gitea / Forgejo backlog access\" >&2\n  exit 1\nfi\ntea login add --name sandcastle --url \"$GITEA_SERVER_URL\" --token \"$GITEA_ACCESS_TOKEN\" --no-version-check 2>/dev/null || true\ntea login default sandcastle\ntea label create --name Sandcastle --color F9A825 --description \"Issues for Sandcastle to work on\" 2>/dev/null || true" }] },
+  sandbox: {
+    onSandboxReady: [
+      { command: setupCodexAuthCommand },
+      {
+        command:
+          "export CI=${CI:-true}; if command -v pnpm >/dev/null 2>&1; then pnpm install; else corepack pnpm@10.22.0 install; fi",
+      },
+      {
+        command:
+          'set -e\nif [ -z "$GITEA_SERVER_URL" ] || [ -z "$GITEA_ACCESS_TOKEN" ]; then\n  echo "GITEA_SERVER_URL and GITEA_ACCESS_TOKEN must be set for Gitea / Forgejo backlog access" >&2\n  exit 1\nfi\ntea login add --name sandcastle --url "$GITEA_SERVER_URL" --token "$GITEA_ACCESS_TOKEN" --no-version-check 2>/dev/null || true\ntea login default sandcastle\ntea label create --name Sandcastle --color F9A825 --description "Issues for Sandcastle to work on" 2>/dev/null || true',
+      },
+    ],
+  },
 };
 
 // Copy node_modules from the host into the worktree before each sandbox
-// starts. Avoids a full npm install from scratch; the hook above handles
+// starts. Avoids a full pnpm install from scratch; the hook above handles
 // platform-specific binaries and any packages added since the last copy.
 const copyToWorktree = ["node_modules"];
 

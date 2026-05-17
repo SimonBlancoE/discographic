@@ -1,0 +1,182 @@
+Task 8 Audit: Comments, AI Slop, Stubs, and Placeholder Code
+Date: 2026-04-22
+Repo: /home/octo/Projects/discographic-public
+
+Scope
+- Current visual worktree changes: `src/App.jsx`, `src/pages/Dashboard.jsx`, `src/components/HeroCarousel.jsx`, `src/components/VinylBadge.jsx`, `shared/i18n.js`, related tests.
+- Recent baseline areas that still affect code clarity and perceived finish quality: `src/lib/achievements.js`, `src/components/ImportButton.jsx`, `server/routes/import.js`, `server/routes/sync.js`, `server/services/coverMedia.js`, `server/routes/account.js`.
+
+Method
+- Searched for explicit markers like `TODO`, `FIXME`, `HACK`, `placeholder`, `stub`, `legacy`, `fallback`.
+- Reviewed current worktree diff against `HEAD`.
+- Read changed visual files plus representative route/service files with comment density.
+- Checked both code comments and user-facing copy for "in-motion" language, fabricated placeholders, or over-authored filler.
+
+Executive Summary
+- The codebase is relatively clean of explicit TODO/FIXME/HACK debris.
+- The main quality issues are not classic stubs. They are:
+  1. user-facing copy that exposes implementation history,
+  2. a large block of over-authored achievement text that reads more like generated flavor text than product copy,
+  3. decorative fallback data that makes a badge look data-driven when no real data exists,
+  4. low-value JSX/route comments that narrate obvious structure instead of explaining intent.
+- The current visual worktree is mostly clean on comment quality. The biggest issue in the new work is copy quality, not inline comments.
+
+Findings
+
+1. High: user-facing copy exposes implementation history instead of product meaning
+Files:
+- `shared/i18n.js:226`
+- `shared/i18n.js:685`
+- `src/pages/Dashboard.jsx:154-156`
+
+Problem:
+- `dashboard.coverageSubtitle` says:
+  - Spanish: "Hemos rehecho este bloque para que diga algo util..."
+  - English: "We rebuilt this section so it says something useful..."
+- That is release-note copy, not UI copy. It tells the user about the team changing the block instead of telling them what the block does.
+- This is exactly the kind of "migration in motion" language that should not ship.
+
+Recommendation:
+- Replace both strings with direct product copy that describes the metric itself.
+- Rule of thumb: user-facing text should describe the feature or the user's data, never the fact that engineers recently rewrote it.
+
+2. High: achievements contain a large block of over-authored flavor text that reads like generated copy, not product language
+Files:
+- `src/lib/achievements.js:10-11`
+- `src/lib/achievements.js:29-36`
+- `src/lib/achievements.js:40-59`
+- `src/lib/achievements.js:66-68`
+- `src/lib/achievements.js:86-92`
+- `src/lib/achievements.js:108-115`
+
+Problem:
+- The achievements file contains many lines that are metaphor-heavy, inflated, or theatrically phrased:
+  - `Discographic mitologico`
+  - `Monstruo de estanteria`
+  - `La coleccion empieza a comportarse como archivo y como mercado`
+  - `Mythic Discographic`
+  - `Shelf monster`
+  - `This is no longer just collecting; it is archive governance`
+- The tone is inconsistent with the rest of the app, which is otherwise fairly direct.
+- It also creates maintenance drag because the entire copy system is duplicated outside the main i18n layer.
+- This is the strongest "AI slop" signal in the repo: not because it is obviously machine-written, but because it is verbose, self-serious, and disconnected from observable product behavior.
+
+Recommendation:
+- Tighten achievement titles and descriptions around user-observable facts.
+- Prefer shorter, plainer tier labels and descriptions.
+- Move the copy into the normal i18n catalog if the feature remains.
+- Treat this as product-copy cleanup, not merely localization cleanup.
+
+3. Medium: `VinylBadge` uses fabricated genre data as a production fallback
+Files:
+- `src/components/VinylBadge.jsx:5`
+- `src/components/VinylBadge.jsx:26-33`
+- `src/components/VinylBadge.jsx:55`
+- `src/App.jsx:20-37`
+
+Problem:
+- When real genre stats are unavailable, the badge falls back to `['JAZZ', 'ELECTRONIC', 'ROCK', 'SOUL', 'AMBIENT']`.
+- That is placeholder content presented in the main app shell, not a neutral loading or decorative state.
+- Combined with the silent stats fetch fallback in `App.jsx`, the UI can imply "featured genre" data even when none was loaded.
+
+Recommendation:
+- If the badge is decorative, make the fallback explicitly decorative:
+  - hide the caption,
+  - use unlabeled swatches,
+  - or show a neutral brand treatment.
+- If the badge is data-driven, do not fabricate genres.
+
+4. Medium: `ImportButton` includes multiple JSX banner comments that add noise but no understanding
+Files:
+- `src/components/ImportButton.jsx:21`
+- `src/components/ImportButton.jsx:161`
+- `src/components/ImportButton.jsx:190`
+- `src/components/ImportButton.jsx:197`
+- `src/components/ImportButton.jsx:295`
+- `src/components/ImportButton.jsx:328`
+- `src/components/ImportButton.jsx:363`
+
+Problem:
+- Comments like `Idle: buttons + explanation`, `Loading`, `Preview`, `Applying`, `Result`, and `Inline errors` just mirror the conditional blocks immediately below them.
+- The phase legend comment at line 21 also duplicates the state values already visible in the render branches.
+- These comments make the file look segmented, but they do not explain behavior, invariants, or edge cases.
+
+Recommendation:
+- Remove these banner comments.
+- Keep comments only if they explain a non-obvious state transition or lifecycle constraint.
+
+5. Medium: `server/routes/import.js` still has scaffold-like separator comments and narrated step comments
+Files:
+- `server/routes/import.js:23`
+- `server/routes/import.js:27`
+- `server/routes/import.js:30-32`
+- `server/routes/import.js:201-203`
+- `server/routes/import.js:313-315`
+- `server/routes/import.js:401`
+- `server/routes/import.js:446`
+
+Problem:
+- The dashed separator blocks and labels like `Helpers`, `Background sync with Discogs`, and `Routes` do not hurt correctness, but they read like scaffolding left behind from active construction.
+- Comments such as `Apply to local DB immediately` and `Background sync with Discogs` narrate exactly what the next line already says.
+- The only useful comments in this file are the short state explanations at the data declarations, not the section dividers.
+
+Recommendation:
+- Keep:
+  - `In-memory preview cache...`
+  - `In-memory import sync state per user`
+- Remove:
+  - ASCII separator banners
+  - obvious step narration comments
+
+6. Low: comment quality is mixed in services and routes; some comments should stay, some should go
+Files:
+- Remove candidate: `server/services/coverMedia.js:74`
+- Keep candidate: `server/routes/sync.js:154-156`
+- Keep candidate: `server/routes/account.js:66-67`
+
+Problem:
+- `Cache miss, continue and build it.` is a narrating comment with no added value.
+- By contrast, the sync reconciliation warning is useful because it documents a future correctness constraint:
+  - pruning is only safe for a proven full sync.
+- The account preference whitelist comment is also useful because it describes extension policy, not just current code.
+
+Recommendation:
+- Remove comments that merely describe the next branch.
+- Keep comments that encode future constraints, policy, or surprising behavior.
+
+7. Low: the recent dashboard hero transition leaves stale copy behind
+Files:
+- `src/pages/Dashboard.jsx:66-67`
+- `shared/i18n.js:196-197`
+- `shared/i18n.js:655-656`
+
+Problem:
+- The dashboard now renders `HeroCarousel`, but `dashboard.heroTitle` and `dashboard.heroSubtitle` still remain in the locale bundle.
+- This is not a user-facing defect by itself, but it is a transition artifact: the old hero strings survived the redesign.
+- It is a small sign of "replacement in progress" rather than a clean singular code path.
+
+Recommendation:
+- Remove the unused hero title/subtitle keys if they are no longer referenced anywhere.
+- If they are intentionally retained for a future fallback layout, document that explicitly where the fallback is implemented, not only in the translation bundle.
+
+What Looks Good
+- No meaningful TODO/FIXME/HACK clutter showed up in the application code.
+- The new visual components, `HeroCarousel.jsx` and `VinylBadge.jsx`, are mostly free of comment noise.
+- The sync safety note in `server/routes/sync.js:154-156` is justified and should stay.
+- The account preference whitelist comment in `server/routes/account.js:66-67` is also justified.
+
+Priority Order
+1. Replace `dashboard.coverageSubtitle` in both locales.
+2. Rewrite and simplify achievement copy.
+3. Remove fabricated fallback genre labels from `VinylBadge`.
+4. Strip JSX banner comments from `ImportButton`.
+5. Remove ASCII section separators and narrated step comments from `server/routes/import.js`.
+6. Clean small remaining low-value comments and dead transition copy.
+
+Bottom Line
+- The repo does not have much classic stub debt.
+- The real pre-PR cleanup target for this task is tone and clarity:
+  - remove process/meta copy from the UI,
+  - trim theatrical achievement text,
+  - stop presenting placeholder badge data as real content,
+  - and cut comments that only restate structure.

@@ -1,0 +1,259 @@
+Task 6 of 8: try/catch, defensive programming, and fallback audit
+Date: 2026-04-22
+Repo: discographic-public
+
+Scope
+- Worktree-first review of the latest visual changes, then broader repo audit.
+- Focused on `try/catch`, `.catch(...)`, retry loops, state fabrication, silent degradation, and fallback behavior.
+- No code changes made as part of this task.
+
+Method
+- Reviewed the current worktree diff and the changed files first.
+- Indexed `try`, `catch`, `.catch(...)`, retry loops, storage fallbacks, and background-task suppression paths.
+- Classified findings into:
+  - problematic patterns that hide or distort failures
+  - justified boundary handling and resilience
+
+Executive assessment
+- The newest visual files are not the main risk area. The latest worktree introduces one small silent fallback in the header badge fetch, but the larger code-quality issues remain in older auth, collection, sync, enrichment, and background media paths.
+- The highest-risk pattern in the repo is not empty catches by count. It is conversion of upstream failures into valid-looking domain data, especially `estimated_value = 0` when Discogs marketplace stats fail.
+- The second major issue is state fabrication on client bootstrap: some auth paths collapse transport/account failures into "logged out" or "account unavailable" state without surfacing the root failure.
+
+Latest worktree changes first
+
+1. Low: decorative badge genre fetch now fails silently
+- File: `src/App.jsx:20-38`
+- The new header badge loads top genres via `api.getStats()` and swallows all failures by resetting `badgeGenres` to `[]`.
+- Why this is a problem:
+  - no diagnostic is kept
+  - a real stats failure becomes indistinguishable from "no top genres available"
+  - this is acceptable for a purely decorative element, but it is still hidden failure
+- Recommendation:
+  - either keep this explicitly documented as best-effort decorative behavior, or attach a minimal debug signal instead of a full silent drop
+
+2. No major try/catch regressions found in the other new visual files
+- Files reviewed: `src/components/HeroCarousel.jsx`, `src/components/VinylBadge.jsx`, `src/pages/Dashboard.jsx`
+- `HeroCarousel` and `VinylBadge` do not add new suppression behavior.
+- `Dashboard` uses a normal request boundary catch in `src/pages/Dashboard.jsx:202-217`; that catch is justified because it reports the failure via toast and does not invent replacement stats.
+
+Problematic patterns
+
+1. High: remote marketplace failures are converted into fake zero-value prices
+- Files:
+  - `server/routes/collection.js:76-98`
+  - `server/routes/sync.js:404-420`
+- Pattern:
+  - `discogs.getMarketplaceStats(...).catch(() => null)`
+  - followed by `const priceEur = stats?.lowest_price?.value ?? 0`
+- Why this is harmful:
+  - network or API failure becomes a real-looking domain value
+  - `0` means "this record is worth zero", not "price unknown"
+  - in enrichment this is worse because `ENRICH_CONDITION` is `estimated_value IS NULL` in `server/services/enrichmentQueue.js:1-15`, so storing `0` can incorrectly mark a release as enriched and remove it from the retry queue
+  - this is silent data corruption, not harmless fallback
+- Recommendation:
+  - never coerce remote pricing failure to `0`
+  - preserve `NULL`/unknown and track fetch failure separately if needed
+  - only store `0` if Discogs explicitly returns zero as a meaningful value
+
+2. High: auth bootstrap still fabricates stable client state on fetch failure
+- File: `src/lib/AuthContext.jsx:30-49`
+- Pattern:
+  - `refresh()` catches any `api.getAuthStatus()` failure and resets to `user = null`, `discogsConfigured = false`, `accountUnavailable = false`, `currency = DEFAULT_CURRENCY`
+- Why this is harmful:
+  - a transport outage or server error is turned into a fake logged-out/default account state
+  - the UI can redirect the user into login/setup flows even when the session may still be valid
+  - this suppresses useful failure context and makes outages look like auth changes
+- Related suppression:
+  - `src/lib/AuthContext.jsx:38`
+  - `src/lib/AuthContext.jsx:72`
+  - both swallow `refreshAccountState()` errors with `.catch(() => null)`
+- Recommendation:
+  - separate "auth unknown because bootstrap failed" from "logged out"
+  - expose a first-class bootstrap/account error state instead of flattening failures into defaults
+  - keep `accountUnavailable` if that is the intended degraded mode, but do not hide the error cause
+
+3. Medium-High: collection preferences silently fail to load, parse, and persist
+- File: `src/pages/Collection.jsx:65-75`, `src/pages/Collection.jsx:129-132`
+- Pattern:
+  - invalid JSON in stored preferences is swallowed with `catch {}`
+  - preference fetch failure is swallowed with `.catch(() => {})`
+  - preference save failure is swallowed with `.catch(() => {})`
+- Why this is harmful:
+  - corrupt or unreachable preference storage becomes invisible
+  - users can lose column settings or fail to persist them with no feedback
+  - debugging broken preferences becomes harder because there is no signal at all
+- Recommendation:
+  - keep a safe fallback to default columns, but surface a recoverable error
+  - differentiate parse failure from network failure
+  - at minimum log and clear invalid stored preference data; ideally toast on failed saves
+
+4. Medium: import status polling can remain in a silent indefinite loop on `idle`
+- File: `src/components/ImportButton.jsx:44-68`
+- Pattern:
+  - if `/import/status` returns `idle`, polling simply queues itself again forever
+- Why this is harmful:
+  - the UI can sit in a syncing/polling phase with no terminal state if the backend never transitions properly
+  - network retry failures are capped, but state-level "nothing is happening" is not
+- Recommendation:
+  - `idle` should be terminal once an apply has already started, or the poller should have a deadline / stale-state timeout
+  - surface "status stalled" distinctly from transport error
+
+5. Medium: tapete generation silently drops covers and still returns success
+- File: `server/services/coverMedia.js:155-160`
+- Pattern:
+  - per-cover `ensureCachedCover(...)` failures are swallowed and converted to `null` tiles
+- Why this is harmful:
+  - the export can succeed while silently omitting records
+  - users get a degraded artifact without any clue that covers were missing due to processing failure rather than filter logic
+- Recommendation:
+  - track skipped tile count and surface it in the response or logs
+  - keep best-effort generation if desired, but do not make incomplete output indistinguishable from complete output
+
+6. Medium: thumbnail warmup suppresses per-item failures and still reports completion
+- File: `server/routes/sync.js:340-367`
+- Pattern:
+  - failures during wall/poster cache warming are swallowed with `catch {}` and the loop continues
+- Why this is harmful:
+  - warmup status ends as `completed` even if multiple covers failed
+  - downstream UX can still see missing cached covers, but the job state claims success
+- Recommendation:
+  - count failures and include them in the thumbnail state
+  - if the job is intentionally best-effort, mark it as `completed_with_errors` or equivalent
+
+7. Medium: sync background subtask failures are recorded only in logs or hidden substate
+- File: `server/routes/sync.js:157-162`, `server/routes/sync.js:211-229`
+- Pattern:
+  - cache cleanup failure logs only
+  - inventory sync failure logs and stores `inventory.status = failed`
+  - thumbnail warmup failure stores substate but is not clearly surfaced in the client
+- Why this is harmful:
+  - the system distinguishes these failures internally, but the client does not clearly expose them
+  - failure information exists but is effectively hidden from the user
+- Recommendation:
+  - either treat these tasks as explicitly best-effort and remove success-like messaging, or expose their failed state in the sync UI
+
+8. Medium: release enrichment silently degrades when Discogs account access is unavailable
+- File: `server/routes/collection.js:57-76`
+- Pattern:
+  - if `getDiscogsClientForUser(req)` throws, `enrichReleaseIfNeeded()` falls back to returning cached local release data
+- Why this is mixed:
+  - this preserves basic page functionality, which is good
+  - but it also hides the reason the release never enriches
+  - coupled with the pricing issue above, this path makes it hard to tell "not enriched yet" from "enrichment failed"
+- Recommendation:
+  - keep the degraded read path if desired
+  - but surface "live enrichment unavailable" separately from ordinary cached reads
+
+9. Low-Medium: JSON/note parsing helpers suppress data corruption into usable-looking values
+- Files:
+  - `server/db.js:260-269`
+  - `server/services/notes.js:47-56`
+- Pattern:
+  - invalid JSON becomes `fallback`
+  - invalid stored notes become the raw value instead of throwing
+- Why this is mixed:
+  - this avoids hard crashes on bad stored data
+  - but it also makes malformed storage hard to detect and clean up
+- Recommendation:
+  - keep defensive parsing if the database may contain legacy/bad rows
+  - add instrumentation or cleanup logging so corruption is not completely silent
+
+Justified exceptions
+
+1. Request/route boundaries that convert exceptions into HTTP responses
+- Examples:
+  - `server/routes/import.js:338-381`
+  - `server/routes/media.js:16-30`, `33-57`, `60-90`
+  - `server/index.js:72-79`
+- These are appropriate because they are explicit boundary handlers and return meaningful errors instead of inventing success state.
+
+2. Import sync aggregation that preserves partial failures instead of hiding them
+- File: `server/routes/import.js:225-310`
+- The per-record catches for rating and notes sync are justified.
+- Why:
+  - they capture item-level failure, keep processing the batch, and preserve failures in structured sync state
+  - this is exactly the kind of try/catch that serves a real operational purpose
+
+3. Exchange-rate fetch fallback to cached ECB snapshot
+- File: `server/services/exchangeRates.js:56-90`
+- This is a justified resilience path.
+- Why:
+  - fallback data is explicitly stale-but-valid cached data, not fabricated domain data
+  - the code rethrows if there is no cached snapshot
+- Caveat:
+  - this should stay documented as stale-cache fallback, not current guaranteed truth
+
+4. ENOENT handling for cache deletion
+- File: `server/services/coverMedia.js:104-114`
+- Swallowing `ENOENT` during cached cover cleanup is justified because missing cache files are not a real error condition.
+- The implementation correctly rethrows non-`ENOENT` failures.
+
+5. Cleanup in export image helpers
+- File: `src/lib/exportImage.js:45-79`
+- The `try/finally` blocks are justified because they ensure detached DOM cleanup even if export fails.
+- This is not defensive error hiding; it is correct resource cleanup.
+
+6. UI request handlers that surface the error to the user and roll back state
+- Examples:
+  - `src/pages/ReleaseDetail.jsx:32-60`, `62-84`
+  - `src/pages/Settings.jsx:22-49`, `221-233`, `286-302`, `349-357`
+  - `src/components/AchievementsPanel.jsx:78-90`
+  - `src/components/RandomReleaseCard.jsx:21-37`
+- These are normal interaction boundaries. They report failures and do not fabricate replacement success.
+
+Patterns that deserve cleanup but are not severe
+
+1. Generic error replacement in API helpers is acceptable but lossy
+- File: `src/lib/api.js:25-37`, `85-99`
+- The `response.json().catch(() => ({ error: ... }))` fallback is reasonable for non-JSON error bodies.
+- It does lose original payload details, but it is not the main quality risk in this repo.
+
+2. `buildProxyUrl()` fallback to original source is acceptable but opaque
+- File: `src/lib/exportImage.js:3-12`
+- Returning `src` on URL parse failure avoids a hard crash, but it also makes broken URL handling implicit.
+- Low severity.
+
+Cleanup recommendations
+
+1. Stop converting remote failure into valid domain data
+- Most urgent target:
+  - `server/routes/collection.js:76-98`
+  - `server/routes/sync.js:404-420`
+- Preserve `NULL`/unknown, not `0`.
+
+2. Split "transport failed" from "auth state changed"
+- Main target:
+  - `src/lib/AuthContext.jsx:30-49`
+- Introduce an explicit bootstrap/account error state and stop flattening failures into defaults.
+
+3. Remove no-op catches around user preferences
+- Main target:
+  - `src/pages/Collection.jsx:65-75`, `129-132`
+- Safe fallback is fine; silent failure is not.
+
+4. Bound background pollers by stale-state timeout, not just network retry count
+- Main target:
+  - `src/components/ImportButton.jsx:44-68`
+
+5. Report partial-output conditions in media jobs
+- Main targets:
+  - `server/services/coverMedia.js:155-160`
+  - `server/routes/sync.js:340-367`
+
+6. Make hidden background sync failures visible in the client if they are user-relevant
+- Main target:
+  - `server/routes/sync.js:211-229`
+
+7. Keep justified boundary catches, but remove silent suppression where the program still has enough context to report a meaningful state
+- Especially:
+  - `src/App.jsx:20-38`
+  - `src/lib/AuthContext.jsx:38`, `72`
+  - `src/pages/Collection.jsx:65-75`, `129-132`
+
+Bottom line
+- The repo does not primarily suffer from "too many try/catch blocks." It suffers from a smaller number of strategically bad fallbacks:
+  - fake zero values for failed market lookups
+  - auth/bootstrap failure flattened into default state
+  - fully silent preference failures
+  - infinite or success-like background degradation
+- The correct cleanup is selective: keep boundary catches and cleanup `finally` blocks, remove silent state fabrication, and make degraded modes explicit.

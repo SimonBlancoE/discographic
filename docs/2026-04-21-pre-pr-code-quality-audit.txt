@@ -1,0 +1,437 @@
+Discographic Pre-PR Code Quality Audit
+Date: 2026-04-21
+Repo: /home/octo/Projects/discographic-public
+
+Scope
+- Current `main` tree, with emphasis on recent commits:
+  - `5c1cf40` `Virtualize wall grid rendering`
+  - `204a87c` `Fix export parity and import note sync flows`
+  - `29e309a` `Reconcile stale collection rows after full sync`
+  - `9a05806` `Localize import and media fallbacks`
+- Unrelated local changes were intentionally ignored:
+  - `package-lock.json`
+  - `.codex`
+
+Methodology
+- One dedicated subagent completed the DRY/consolidation review.
+- The remaining subagent runs were blocked by platform usage limits, so the rest of the review was completed locally in this session.
+- Tool-assisted checks:
+  - `madge --circular`: no circular dependencies found.
+  - `madge --orphans`: found orphan modules; see section 3.
+  - `knip`: attempted via `npx --yes knip`, but it did not complete in this environment, so unused-code findings were manually verified with `rg` and import-graph inspection instead.
+
+Executive Summary
+- The recent work is directionally solid. The strongest changes are:
+  - truthful import sync outcomes
+  - note normalization and legacy cleanup
+  - wall virtualization that preserves JPG/tapete export behavior
+- The highest-value cleanup before PR is not broad rewriting. It is targeted consolidation and contract tightening:
+  1. Share the filter model across collection/export/tapete/client.
+  2. Finish centralizing note-domain behavior.
+  3. Remove confirmed dead UI/helpers.
+  4. Tighten silent fallback/error handling in polling and account fetches.
+  5. Extract service logic out of route modules where layering is currently blurred.
+
+Recommended Order Before PR
+1. Remove confirmed unused files/symbols.
+2. Consolidate shared filter and note helpers.
+3. Tighten silent catches and polling error behavior.
+4. Extract cover-cache/poster helpers out of `server/routes/media.js`.
+5. Add explicit shared contracts for release/filter/status shapes.
+6. Decide whether the runtime DB migration baggage is intentionally supported or should be retired.
+
+1. Deduplicate / Consolidate / DRY
+Assessment
+- This area already improved with `server/services/notes.js`, `server/services/importSync.js`, and `src/lib/wallGrid.js`, but the current consolidation stops short in a few high-friction places.
+
+High-value findings
+- High: the collection filter model is still duplicated across server and client.
+  - Evidence:
+    - `server/routes/collection.js`
+    - `server/routes/export.js`
+    - `server/routes/media.js` (`/tapete`)
+    - `src/pages/Collection.jsx`
+    - `src/components/CoverWall.jsx`
+    - `src/lib/wallGrid.js`
+    - `src/components/FilterPanel.jsx`
+  - Risk:
+    - Filter drift already happened once with `style` export parity.
+  - Recommendation:
+    - Extract shared filter keys/defaults on the client.
+    - Extract one server-side SQL filter builder for collection/export/tapete.
+
+- High: note semantics are only partially centralized.
+  - Evidence:
+    - `server/services/notes.js`
+    - `server/routes/collection.js`
+    - `server/routes/import.js`
+    - `src/pages/Collection.jsx`
+    - `src/pages/ReleaseDetail.jsx`
+  - Repeated logic:
+    - deriving text from notes
+    - choosing the Discogs note field id
+    - replacing/removing note entries
+    - optimistic note patch shaping
+  - Recommendation:
+    - Expand `server/services/notes.js` with focused helpers such as `notesToText`, `resolveNoteFieldId`, and `replaceNoteText`.
+    - Add a tiny client helper for optimistic release note/rating patching.
+
+- Medium-high: release payload shaping is repeated.
+  - Evidence:
+    - `server/routes/collection.js` repeats `detail_cover_url`, `wall_cover_url`, `poster_cover_url` attachment in multiple endpoints.
+    - `/covers` manually parses JSON fields instead of reusing `hydrateRelease`.
+  - Recommendation:
+    - Add a narrow `attachCoverUrls(release)` or `toClientRelease(release)` helper in the collection route layer.
+
+- Medium: import and sync polling/state handling are only partly shared.
+  - Evidence:
+    - `server/services/importSync.js`
+    - `src/lib/importSync.js`
+    - `src/components/ImportButton.jsx`
+    - `src/components/SyncButton.jsx`
+    - `server/routes/sync.js`
+  - Recommendation:
+    - Mirror the import-state-factory pattern for sync.
+    - Extract a small shared polling hook or timer helper for import/sync components.
+
+- Medium-low: repeated JSON aggregation patterns exist in stats and filter-option builders.
+  - Evidence:
+    - `server/routes/stats.js`
+    - `server/routes/collection.js`
+  - Recommendation:
+    - Only consolidate if more analytics/filter facets are planned. This is secondary to the filter and note work.
+
+2. Shared Types / Shared Contracts
+Assessment
+- There are effectively no formal shared types in the repo. The codebase relies on implicit JavaScript object shapes, which makes drift more likely between server routes, client state, and tests.
+
+Highest-value shared contracts to introduce
+- `CollectionFilters`
+  - Evidence:
+    - `src/pages/Collection.jsx`
+    - `src/components/CoverWall.jsx`
+    - `src/lib/wallGrid.js`
+    - `server/routes/collection.js`
+    - `server/routes/export.js`
+    - `server/routes/media.js`
+  - Recommendation:
+    - Centralize the filter keys/default object and document the shape explicitly.
+
+- `ClientRelease`
+  - Evidence:
+    - `server/routes/collection.js`
+    - `src/pages/Collection.jsx`
+    - `src/pages/ReleaseDetail.jsx`
+    - `src/components/CollectionTable.jsx`
+    - `src/components/RandomReleaseCard.jsx`
+  - Contract currently includes:
+    - hydrated JSON arrays
+    - `notes_text`
+    - derived cover URLs
+    - display currency fields
+  - Recommendation:
+    - Define a JSDoc typedef or schema module for the API release shape.
+
+- `ImportSyncState` and `ImportSyncFailure`
+  - Evidence:
+    - `server/services/importSync.js`
+    - `src/lib/importSync.js`
+    - `src/components/ImportButton.jsx`
+    - `tests/import-sync-state.test.js`
+  - Recommendation:
+    - Document the full server-to-client status contract in one shared place.
+
+- `SyncState`
+  - Evidence:
+    - `server/routes/sync.js`
+    - `src/components/SyncButton.jsx`
+  - Problem:
+    - Sync still builds nested state ad hoc instead of from one shared contract.
+  - Recommendation:
+    - Introduce shared status constants or a builder module parallel to import sync.
+
+- `NoteEntry`
+  - Evidence:
+    - `server/services/notes.js`
+    - `server/routes/collection.js`
+    - `server/routes/import.js`
+  - Recommendation:
+    - Document allowed fields explicitly and avoid preserving arbitrary object fields by default unless that is truly required.
+
+- Chart datum shapes
+  - Evidence:
+    - `server/routes/stats.js`
+    - `src/components/charts/*`
+  - Recommendation:
+    - At least document the repeated `{ name, count }` and `{ month, count }` shapes to keep server and chart components aligned.
+
+3. Unused Code
+Method
+- Verified with `madge --orphans` and `rg` import/reference checks.
+
+Confirmed unused
+- `src/components/CompletionRing.jsx`
+  - `madge --orphans` reports it as orphaned.
+  - No imports found in `src/`.
+
+- `src/components/StatSparkline.jsx`
+  - `madge --orphans` reports it as orphaned.
+  - No imports found in `src/`.
+
+- `src/components/charts/CountryChart.jsx`
+  - `madge --orphans` reports it as orphaned.
+  - No imports found in `src/`.
+
+- `src/hooks/useAnimatedNumber.js`
+  - `madge --orphans` reports it as orphaned.
+  - No imports found in `src/`.
+
+- `server/routes/import.js: EDITABLE_COLUMNS`
+  - Declared but never read.
+  - `mapColumns()` uses inline checks instead.
+
+Not unused
+- `server/index.js`
+  - Reported as orphan by madge because it is an entrypoint, not because it is dead.
+- `src/main.jsx`
+  - Same reason; this is the client entrypoint.
+
+Suspected but not fully provable
+- `src/components/SearchBar.jsx`
+  - It is used, so it is not dead code.
+  - It may still be too thin to justify a component boundary.
+
+Removal recommendations
+- Safe to remove now:
+  - `src/components/CompletionRing.jsx`
+  - `src/components/StatSparkline.jsx`
+  - `src/components/charts/CountryChart.jsx`
+  - `src/hooks/useAnimatedNumber.js`
+  - `EDITABLE_COLUMNS` in `server/routes/import.js`
+
+4. Circular Dependencies / Import Graph
+Tool result
+- `madge --circular` found no circular dependencies.
+
+Assessment
+- There is no current cycle problem.
+- There are still layering issues that make future cycles more likely.
+
+Near-cycle / layering concerns
+- `server/routes/sync.js` imports helper functions from `server/routes/media.js`.
+  - Evidence:
+    - `server/routes/sync.js`
+    - `server/routes/media.js`
+  - Why it matters:
+    - `media.js` is both an HTTP route module and a cache/poster service module.
+    - That is not a cycle today, but it is an unstable boundary.
+  - Recommendation:
+    - Move cover-cache and poster helper logic into `server/services/coverCache.js` or similar.
+
+- `server/routes/media.js` mixes too many responsibilities.
+  - It owns:
+    - HTTP route registration
+    - remote-image proxying
+    - cover cache lookup/build
+    - cache deletion
+    - tapete composition
+  - Recommendation:
+    - Split HTTP handlers from reusable service functions.
+
+5. Weak Types / Weak Contracts
+Assessment
+- No direct `any` / `unknown` keywords were found.
+- The weak spots are JavaScript contract ambiguity, not TypeScript escape hatches.
+
+Highest-risk weak contracts
+- `parseJson()` and `parseStoredNotes()`
+  - Evidence:
+    - `server/db.js`
+    - `server/services/notes.js`
+  - Problem:
+    - They return fallback data or raw values without validating the actual shape.
+  - Recommendation:
+    - Narrow them by domain.
+    - Prefer `parseStoredNotes` returning only `[] | NoteEntry[]` after validation.
+
+- `src/lib/api.js`
+  - Problem:
+    - `request()` returns either parsed JSON or a raw `Response` depending on content type.
+  - Risk:
+    - Callers must remember method-by-method return behavior.
+  - Recommendation:
+    - Keep binary/download methods outside the generic JSON request helper.
+    - Document return contracts explicitly with JSDoc.
+
+- Stringly-typed status enums
+  - Evidence:
+    - `server/services/importSync.js`
+    - `server/routes/sync.js`
+    - `src/lib/importSync.js`
+    - `src/components/ImportButton.jsx`
+    - `src/components/SyncButton.jsx`
+  - Recommendation:
+    - Centralize status constants and state-shape builders.
+
+- Fabricated fallback objects in `AuthContext`
+  - Evidence:
+    - `src/lib/AuthContext.jsx`
+  - Problem:
+    - Failed account fetches become `{ tokenConfigured: false, currency: DEFAULT_CURRENCY }`.
+  - Risk:
+    - A backend or session problem becomes indistinguishable from a legitimate unconfigured account.
+  - Recommendation:
+    - Separate "account unavailable" from "account present but not configured".
+
+- Note entry preservation is loose
+  - Evidence:
+    - `server/services/notes.js`
+  - Problem:
+    - `normalizeNoteEntry()` spreads arbitrary object fields forward.
+  - Recommendation:
+    - Keep only known fields if the extra shape is not intentionally part of the contract.
+
+6. Try/Catch, Defensive Programming, and Fallbacks
+Assessment
+- The repo has both justified and unjustified defensive patterns.
+- The current problem is not "too many try/catch blocks" in general; it is silent failure paths in the UI and ambiguous fallback objects in the client.
+
+Problematic patterns
+- Silent account-state fallbacks
+  - Evidence:
+    - `src/lib/AuthContext.jsx`
+  - Issue:
+    - `api.getAccount().catch(() => ({ tokenConfigured: false, currency: DEFAULT_CURRENCY }))`
+    - This hides whether the failure is "no Discogs token" or "account request failed".
+
+- Silent polling retries with no terminal error state
+  - Evidence:
+    - `src/components/ImportButton.jsx`
+    - `src/components/SyncButton.jsx`
+  - Issue:
+    - network/status failures are retried or ignored without surfacing to the user.
+  - Examples:
+    - `ImportButton` poll catch just queues another poll.
+    - `SyncButton` has multiple empty or silent catches, including `handleStopEnrich()`.
+
+- Empty catches in preference handling
+  - Evidence:
+    - `src/pages/Collection.jsx`
+  - Issue:
+    - JSON parse failure for saved columns and API save failures are ignored without any signal.
+
+- Broad optional-data fallbacks that may hide degraded behavior
+  - Evidence:
+    - `server/routes/collection.js`
+    - `server/routes/media.js`
+  - Examples:
+    - `getDiscogsClientForUser(req)` failure silently disables release enrichment.
+    - tapete tile generation silently drops failed covers and continues with null tiles.
+
+Justified handling
+- `server/routes/import.js`
+  - Per-item Discogs update failures are intentionally captured and surfaced in `syncState`.
+- `server/services/exchangeRates.js`
+  - External rate service fallback to cached snapshot is a valid resiliency pattern.
+- `server/routes/media.js`
+  - `removeCachedCovers()` ignoring `ENOENT` is appropriate.
+- `server/services/notes.js` / `server/db.js`
+  - Parse fallback for persisted JSON is defensible, but it should remain tightly scoped.
+
+Recommendations
+- Replace silent UI retry loops with explicit retry budget or user-visible degraded state.
+- Stop fabricating success-like fallback objects for account fetches.
+- Keep per-item import aggregation as-is; that is one of the better error-handling paths in the repo.
+
+7. Deprecated / Legacy / Fallback Code
+Assessment
+- There is no glaring obsolete subsystem in the recent work, but there is legacy baggage and a few overlapping fallback paths that should be reviewed before PR.
+
+Findings
+- Boot-time DB migration baggage is still substantial.
+  - Evidence:
+    - `server/db.js`
+    - `releases_v2`, `sync_log_v2`, `settings_v2` migration paths
+  - Recommendation:
+    - Decide explicitly whether old-install upgrade support is still a product requirement.
+    - If yes, keep it and document it.
+    - If no, remove the oldest migration branches and simplify startup.
+
+- Currency normalization logic is duplicated.
+  - Evidence:
+    - `shared/currency.js`
+    - `server/services/exchangeRates.js` (`normalizeRateCurrency`)
+  - Recommendation:
+    - Either share one normalization helper or make the server-only variant clearly necessary.
+
+- Route-service boundary is legacy/convenience driven.
+  - Evidence:
+    - `server/routes/media.js`
+    - `server/routes/sync.js`
+  - Recommendation:
+    - Extract cover cache and poster composition into service modules and keep routes thin.
+
+- `EDITABLE_COLUMNS` in import route is leftover code.
+  - Evidence:
+    - `server/routes/import.js`
+
+- Repeated cover URL attachment is a stale overlap rather than intentional multiplicity.
+  - Evidence:
+    - `server/routes/collection.js`
+  - Recommendation:
+    - One helper is enough.
+
+8. AI Slop / Stubs / Unnecessary Comments / Trust-Damaging Noise
+Assessment
+- I do not see obvious fake scaffolding or hallucinated business logic in the recent changes.
+- The main quality issue here is comment noise and a few abandoned UI artifacts, not core implementation integrity.
+
+Confirmed low-value comment patterns
+- UI section banner comments in `src/components/ImportButton.jsx`
+  - Example pattern:
+    - `/* ── Preview ── */`
+  - These do not help a new maintainer understand behavior.
+
+- Divider-banner comments in route files
+  - Evidence:
+    - `server/routes/import.js`
+    - `server/routes/media.js`
+  - Example pattern:
+    - repeated `// ---------------------------------------------------------------------------`
+
+- Narration comments that restate obvious code
+  - Evidence:
+    - `server/routes/media.js`
+    - `server/routes/collection.js`
+    - `server/routes/sync.js`
+  - Examples:
+    - `// Build composite input array for sharp`
+    - `// Create base canvas and composite all tiles`
+    - `// continue`
+
+Comments worth keeping
+- The prune warning in `server/routes/sync.js`
+  - It captures a real future hazard around partial sync semantics.
+- The Discogs endpoint behavior comments in `server/discogs.js`
+  - They explain non-obvious API behavior and are useful.
+
+Suspicious or trust-reducing artifacts
+- Confirmed abandoned UI artifacts align with the unused-code findings:
+  - `CompletionRing`
+  - `StatSparkline`
+  - `CountryChart`
+  - `useAnimatedNumber`
+- A few hardcoded strings still break the otherwise localized or polished surface.
+  - Example:
+    - `placeholder="nombre"` in `src/pages/Settings.jsx`
+  - This is not "AI slop", but it does make the UI feel less disciplined.
+
+Overall Conclusion
+- The codebase is not in bad shape. The latest changes are broadly sensible and improve behavior.
+- The main PR risk is not correctness regression from the new features themselves; it is that the repo still carries duplicated filters/contracts, quiet fallback behavior, and a few abandoned modules that make the overall implementation feel looser than it needs to.
+- If I were trimming this before PR, I would do the following minimum set:
+  1. Remove orphaned modules and `EDITABLE_COLUMNS`.
+  2. Consolidate filter definitions/builders.
+  3. Finish centralizing note-domain behavior.
+  4. Tighten silent catches in `AuthContext`, `SyncButton`, and `ImportButton`.
+  5. Extract cover-cache helpers out of `server/routes/media.js`.

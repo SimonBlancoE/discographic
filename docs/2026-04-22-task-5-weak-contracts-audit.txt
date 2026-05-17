@@ -1,0 +1,540 @@
+Task 5 of 8: Weak Types and Weak Contracts Audit
+Date: 2026-04-22
+Repo: /home/octo/Projects/discographic-public
+Scope: current worktree first, then broader repo
+
+Summary
+
+This repo does not rely on explicit `any` or `unknown` because it is almost entirely plain JavaScript, but that does not mean the contracts are strong. The dominant weakness is implicit shape drift:
+
+- API responses are assumed, not declared.
+- Parsed JSON is normalized loosely and often polymorphically.
+- Long-lived state machines are represented as freeform strings.
+- Server row shapes, hydrated domain shapes, and client response shapes are mixed together.
+- External Discogs payloads are trusted structurally without a normalization boundary.
+
+The recent visual work inherits the same pattern. The new badge and hero are not type-unsafe in a TypeScript sense; they are contract-unsafe because they depend on inferred shapes coming from `/stats` and i18n key composition rather than a declared shared contract.
+
+There is also no existing contract system in the repo:
+
+- No TypeScript.
+- No `@ts-check`.
+- No JSDoc typedef layer.
+- No schema-validation library in `package.json`.
+- No shared `contracts/` module.
+
+That means the strongest practical path here is:
+
+1. Create a shared contract layer in `shared/contracts/`.
+2. Use JSDoc typedefs plus exported constants/enums in that layer.
+3. Add explicit server normalizers at unsafe boundaries instead of generic `parseJson`.
+4. Keep route handlers and React components consuming normalized shapes only.
+
+
+1. Latest Worktree Findings
+
+1.1 Badge genres are structurally implicit and over-permissive
+
+Files:
+- `src/App.jsx:18-43`
+- `src/components/VinylBadge.jsx:14-37`
+- `server/routes/stats.js:54-57`
+- `server/routes/stats.js:115-136`
+
+Current behavior:
+- `AppLayout` fetches `/stats`, assumes `payload.genres` is an array, slices it, and passes it directly into `VinylBadge`.
+- `VinylBadge` accepts either strings or objects with `.name`.
+- The badge normalizer is intentionally permissive: `string`, object with `name`, or anything coercible to string is tolerated.
+
+Why this is weak:
+- The client has no single declared contract for the `stats.genres` row shape.
+- The badge accepts a broader input type than the server actually intends to return.
+- The consumer and producer are coupled only by convention.
+- If `/stats` changes from `{ name, count }[]` to another shape, the badge may silently degrade rather than fail at the right boundary.
+
+What the stronger contract should be:
+- `CountRow = { name: string, count: number }`
+- `DashboardStats = { genres: CountRow[], ... }`
+- `BadgeGenre = CountRow`
+
+Where it should live:
+- `shared/contracts/stats.js`
+- Optionally `shared/contracts/ui.js` if the badge needs a narrower UI-only subtype later
+
+Why:
+- `CountRow` is used repeatedly across dashboard charts, top-genre summaries, and now the badge.
+- The badge should not accept arbitrary strings and loose objects if the server source of truth is already a count-row array.
+- The right hardening point is the stats response, not the badge component.
+
+
+1.2 The hero carousel uses string-composed translation keys instead of a declared feature contract
+
+Files:
+- `src/components/HeroCarousel.jsx:5-46`
+- `shared/i18n.js` visual keys added for `dashboard.feature.*`
+
+Current behavior:
+- `FEATURE_KEYS` is a string array.
+- Each feature slide is built by interpolating translation keys from those strings.
+
+Why this is weak:
+- The feature model is “list of strings that happen to line up with translation keys”.
+- There is no contract for a `HeroFeature`.
+- Missing or renamed keys fail at runtime as UI copy misses, not at a declared contract boundary.
+- The feature sequence, feature identity, and translation dependencies are split across code and locale files with no shared descriptor object.
+
+What the stronger contract should be:
+- `DashboardHeroFeature = { id: string, kickerKey: string, titleKey: string, subKey: string, whereKey: string }`
+
+Where it should live:
+- `shared/contracts/dashboard.js` if reused
+- Or `src/lib/dashboardFeatures.js` if intentionally page-local
+
+Why:
+- This is not just localization data; it is page structure.
+- A descriptor array makes the contract explicit and removes the “stringly key composition” pattern.
+
+
+1.3 Dashboard stats are consumed as a giant inferred object with no canonical shape
+
+Files:
+- `src/pages/Dashboard.jsx:195-280`
+- `src/pages/Dashboard.jsx:332-410`
+- `server/routes/stats.js:115-136`
+- `src/components/charts/GenreChart.jsx:7-18`
+- `src/components/charts/DecadeChart.jsx:4-16`
+- `src/lib/achievements.js:1-220`
+
+Current behavior:
+- The dashboard assumes `stats` has `totals`, `genres`, `styles`, `formats`, `labels`, `growth`, `topValue`, `artists`, `lastSync`, and `displayCurrency`.
+- Chart components expect arrays with `name` and `count`.
+- Achievements also depend on those same nested shapes.
+
+Why this is weak:
+- The same response powers multiple consumers, but there is no shared declaration for it.
+- The dashboard, chart layer, and achievements library all independently “know” the shape.
+- `decades` in `/stats` are `{ name, count }`, while filter decades elsewhere are numeric arrays; that distinction exists only implicitly.
+
+What the stronger contract should be:
+- `DashboardTotals`
+- `CountRow`
+- `ArtistCountRow = { artist: string, count: number }`
+- `TopValueRelease = { id: number, release_id: number, artist: string, title: string, year: number | null, cover_url: string | null, estimated_value: number }`
+- `LastSyncSummary = { started_at: string | null, finished_at: string | null, records_synced: number, status: string } | null`
+- `DashboardStats`
+
+Where it should live:
+- `shared/contracts/stats.js`
+
+Why:
+- `/stats` is now a cross-cutting payload, not a one-off route.
+- The worktree change in `App.jsx` already created a second consumer of the same payload.
+
+
+2. Cross-Cutting Weak Contracts
+
+2.1 The API client has a hidden union return type
+
+Files:
+- `src/lib/api.js:13-37`
+- `src/lib/api.js:40-104`
+
+Current behavior:
+- `request()` returns parsed JSON when the response is JSON, otherwise it returns the raw `Response`.
+- Callers rely on method-by-method knowledge of which API calls produce JSON vs blob/download vs window-open side effects.
+
+Why this is weak:
+- The contract is not encoded in the function names.
+- `request()` is effectively `Promise<object | Response>`.
+- That union is implicit, global, and easy to misuse.
+
+What the stronger contract should be:
+- `requestJson(path, options): Promise<T>`
+- `requestBlob(path, options): Promise<Blob>`
+- `requestRaw(path, options): Promise<Response>`
+- explicit download/open helpers separate from fetch helpers
+
+Where it should live:
+- `src/lib/api.js`
+- response typedefs in `shared/contracts/api.js` or the domain-specific shared contract files
+
+Why:
+- The client should know the expected transport type at the callsite, not infer it from content-type behavior.
+
+
+2.2 Auth/account state is modeled as several booleans instead of a declared session contract
+
+Files:
+- `src/lib/AuthContext.jsx:7-27`
+- `src/lib/AuthContext.jsx:30-97`
+- `server/routes/auth.js:8-18`
+- `server/routes/account.js:13-24`
+
+Current behavior:
+- Client auth state is spread across `loading`, `needsBootstrap`, `user`, `discogsConfigured`, `accountUnavailable`, and `currency`.
+- `loggedIn` is derived from `Boolean(user)`, not from the auth status payload.
+- `refreshAccountState()` and `refresh()` each partially manage account/session semantics.
+
+Why this is weak:
+- The actual domain state is more structured than the client model.
+- Booleans permit contradictory combinations more easily than an explicit finite model.
+- `discogsConfigured` and `accountUnavailable` are especially easy to misinterpret.
+
+What the stronger contract should be:
+- `AuthStatusResponse = { needsBootstrap: boolean, loggedIn: boolean, user: AuthUser | null }`
+- `AccountInfo = { discogsUsername: string, tokenConfigured: boolean, tokenPreview: string | null, currency: CurrencyCode }`
+- `AuthSession = { status: 'loading' | 'bootstrap' | 'anonymous' | 'authenticated', user: AuthUser | null, account: { status: 'ready' | 'unconfigured' | 'unavailable', currency: CurrencyCode, tokenConfigured: boolean } }`
+
+Where it should live:
+- `shared/contracts/auth.js`
+- `shared/contracts/account.js`
+
+Why:
+- This is a stable cross-route contract and the UI now branches on it in multiple pages.
+
+
+2.3 Import preview and import sync contracts are shared socially, not structurally
+
+Files:
+- `server/routes/import.js:75-104`
+- `server/routes/import.js:126-199`
+- `server/routes/import.js:205-217`
+- `server/routes/import.js:338-455`
+- `server/services/importSync.js:1-118`
+- `src/components/ImportButton.jsx:19-26`
+- `src/components/ImportButton.jsx:44-68`
+- `src/components/ImportButton.jsx:143-157`
+- `src/lib/importSync.js:1-40`
+
+Current behavior:
+- Import preview rows, change rows, unmatched rows, row errors, and sync failures all have ad hoc object shapes.
+- Status values are freeform strings: `idle`, `running`, `completed`, `partial`, `failed`, `local_only`.
+- The client has its own status metadata map, while the server has its own state builders.
+
+Why this is weak:
+- The import flow is now complex enough to deserve a real shared model.
+- Server and client agree today, but they can drift independently.
+- `phase` in the component is another string-based state machine layered on top of `syncState.status`.
+
+What the stronger contract should be:
+- `ImportColumnKind = 'id' | 'editable'`
+- `ImportEditableField = 'rating' | 'notes'`
+- `ImportChange`
+- `ImportPreviewError`
+- `ImportPreview`
+- `ImportSyncFailure`
+- `ImportSyncStatus = 'idle' | 'running' | 'completed' | 'partial' | 'failed' | 'local_only'`
+- `ImportSyncState`
+
+Where it should live:
+- `shared/contracts/import.js`
+
+Why:
+- This is a true shared protocol between route, server service, polling client, and UI rendering.
+- Status constants should come from one source, not two.
+
+
+2.4 Sync status is also stringly and under-specified
+
+Files:
+- `server/routes/sync.js:21-46`
+- `server/routes/sync.js:129-150`
+- `server/routes/sync.js:189-229`
+- `src/components/SyncButton.jsx:12-30`
+- `src/components/SyncButton.jsx:54-85`
+- `src/components/SyncButton.jsx:126-159`
+- `src/components/SyncButton.jsx:222-279`
+
+Current behavior:
+- The sync state contains `status`, `phase`, `enrichment`, `thumbnails`, and sometimes `inventory`.
+- Nested structures are optional and partially populated depending on the phase of work.
+- The UI accesses them with optional chaining and string comparisons.
+
+Why this is weak:
+- The payload is no longer trivial; it is a multi-stage job status document.
+- The current shape allows incomplete nested sub-objects without a canonical schema.
+- The client has to understand absence vs idle vs failed implicitly.
+
+What the stronger contract should be:
+- `SyncStatus = 'idle' | 'running' | 'completed' | 'failed'`
+- `SyncPhase = 'idle' | 'downloading' | 'ready' | ...`
+- `SubtaskState = { status: 'idle' | 'running' | 'completed' | 'failed', current: number, total: number, message: string }`
+- `SyncState = { locale, status, phase, current, total, message, startedAt, finishedAt, recordsSynced, enrichment: SubtaskState & { pending: number }, thumbnails: SubtaskState, inventory?: { status, message } }`
+
+Where it should live:
+- `shared/contracts/sync.js`
+
+Why:
+- The sync payload is now effectively a job protocol.
+- The client polling layer should not infer nested-state meaning from partial object existence.
+
+
+2.5 Release, hydrated release, and client release are still conflated
+
+Files:
+- `server/db.js:260-291`
+- `server/routes/collection.js:44-55`
+- `server/routes/collection.js:57-101`
+- `server/routes/collection.js:123-135`
+- `server/routes/collection.js:163-187`
+- `src/lib/releaseEdits.js:1-20`
+- `src/pages/ReleaseDetail.jsx:42-54`
+- `src/components/RandomReleaseCard.jsx:31-86`
+
+Current behavior:
+- DB rows store JSON columns as strings.
+- `hydrateRelease()` mutates those into arrays and adds `notes_text`.
+- `attachCoverUrls()` later adds cover variant URLs.
+- `convertReleasePrices()` later mutates monetary fields again.
+- Client code treats the final payload as one stable `release` shape, but it is assembled in stages and never declared.
+
+Why this is weak:
+- The repo currently has at least three release shapes:
+  - stored DB row
+  - hydrated server-domain object
+  - client response object
+- These are structurally different, but no module names them.
+- That makes patches and optimistic updates more fragile than they need to be.
+
+What the stronger contract should be:
+- `StoredReleaseRow`
+- `HydratedRelease`
+- `ClientRelease`
+- `CoverVariants = { detail_cover_url, wall_cover_url, poster_cover_url }`
+- `TrackEntry`
+- `ReleaseNoteEntry`
+
+Where it should live:
+- `shared/contracts/releases.js`
+- serialization helper in `server/services/releaseSerializer.js`
+
+Why:
+- The route layer should serialize one canonical `ClientRelease` shape.
+- UI code should only consume that client shape.
+
+
+2.6 Notes are normalized, but the contract is still too permissive
+
+Files:
+- `server/services/notes.js:3-31`
+- `server/services/notes.js:47-57`
+- `server/services/notes.js:67-89`
+- `server/routes/collection.js:218-241`
+- `src/lib/releaseEdits.js:1-20`
+
+Current behavior:
+- `normalizeNoteEntry()` accepts strings, objects, and arbitrary primitives.
+- It spreads arbitrary object fields back into the result.
+- `parseStoredNotes()` returns `[]` on no value, but returns the raw original value on invalid JSON.
+- `applyOptimisticReleasePatch()` creates `{ field_id: null, value }` note entries on the client.
+
+Why this is weak:
+- The contract is tolerant enough that malformed historical values can leak through as quasi-valid data.
+- `parseStoredNotes()` returning raw invalid data means downstream callers operate on a union that is not declared.
+- Spreading arbitrary fields keeps legacy noise alive instead of enforcing a stable note record.
+
+What the stronger contract should be:
+- `NoteEntry = { field_id: number | null, value: string }`
+- `parseStoredNotes()` should always return `NoteEntry[]`
+- `normalizeNoteEntry()` should return only the canonical fields, not `...entry`
+
+Where it should live:
+- `shared/contracts/notes.js`
+- parsing/normalization in `server/services/notes.js`
+
+Why:
+- Notes are now edited, imported, counted, and synced. They are domain data, not loose blobs.
+
+
+2.7 Generic `parseJson()` is convenient but too weak for domain data
+
+Files:
+- `server/db.js:260-291`
+- `server/services/releaseFilters.js:57-72`
+- `server/routes/stats.js:11-28`
+
+Current behavior:
+- `parseJson(value, fallback)` returns `fallback` on failure.
+- Callers then assume specific shapes like `string[]`, `{ name }[]`, `tracklist[]`, or `{}` for raw release payloads.
+
+Why this is weak:
+- It erases the distinction between “missing”, “invalid”, and “valid but wrong shape”.
+- The helper is generic, but its callsites are not.
+- A fallback array can hide malformed stored data and make wrong-shape bugs harder to detect.
+
+What the stronger contract should be:
+- `parseGenreList`
+- `parseStyleList`
+- `parseFormatList`
+- `parseLabelList`
+- `parseTracklist`
+- `parseRawRelease`
+
+Where it should live:
+- `server/services/releaseParsers.js` or `server/services/releaseJson.js`
+
+Why:
+- Domain-specific parsing is much stronger than a generic JSON helper when the shapes are known.
+
+
+2.8 Collection filters are partially centralized, but filter options are still implicit
+
+Files:
+- `shared/collectionFilters.js:1-44`
+- `server/services/releaseFilters.js:4-40`
+- `server/services/releaseFilters.js:43-76`
+- `src/components/FilterPanel.jsx:3-40`
+
+Current behavior:
+- Filter keys and defaults are centralized.
+- Filter options returned from the server are still an inferred shape: `{ genres, styles, decades, formats, labels }`.
+- The client expects each of those to be arrays and treats decades differently from the stats route.
+
+Why this is weak:
+- The filter object contract is only half done.
+- `CollectionFilters` exist conceptually, but `CollectionFilterOptions` does not.
+
+What the stronger contract should be:
+- `CollectionFilters`
+- `CollectionFilterKey`
+- `CollectionFilterOptions = { genres: string[], styles: string[], decades: number[], formats: string[], labels: string[] }`
+
+Where it should live:
+- `shared/contracts/collection.js`
+- or extend `shared/collectionFilters.js` with typedefs
+
+Why:
+- The filter layer is now shared across collection, export, and wall.
+
+
+2.9 Preferences are stored as generic values and parsed ad hoc
+
+Files:
+- `server/routes/account.js:58-93`
+- `src/pages/Collection.jsx:58-71`
+
+Current behavior:
+- Preferences use a generic `{ key, value }` contract.
+- `collection_visible_columns` is stored as a JSON string and parsed manually by the collection page.
+- Currency is normalized specially, but other keys are loosely serialized.
+
+Why this is weak:
+- The API shape says “arbitrary value”, but the actual semantics are key-specific.
+- Parsing is pushed to consumers.
+- There is no declared schema for each allowed preference key.
+
+What the stronger contract should be:
+- `PreferenceKey = 'collection_visible_columns' | 'currency'`
+- `PreferenceValueMap = { collection_visible_columns: string[], currency: CurrencyCode }`
+- per-key parse/serialize helpers
+
+Where it should live:
+- `shared/contracts/preferences.js`
+
+Why:
+- Preferences are persisted API state and should behave like typed settings, not a mini key-value blob store.
+
+
+2.10 External Discogs responses are trusted structurally without a normalization boundary
+
+Files:
+- `server/discogs.js:19-60`
+- `server/discogs.js:65-120`
+- `server/routes/sync.js:48-67`
+- `server/routes/sync.js:124-151`
+- `server/routes/sync.js:233-260`
+- `server/routes/collection.js:75-98`
+
+Current behavior:
+- `DiscogsClient.request()` returns raw parsed JSON or `null`.
+- `sync.js` assumes collection items have `basic_information`, `instance_id`, `rating`, `notes`, and inventory rows have `listing.price.currency`, `release.id`, etc.
+- `collection.js` assumes release details and marketplace stats have the expected nested fields.
+
+Why this is weak:
+- The raw remote payload shape is not under project control.
+- There is no validation or normalization boundary between Discogs JSON and internal app models.
+- If Discogs returns partial or surprising data, contract failures happen deeper in app logic.
+
+What the stronger contract should be:
+- `DiscogsCollectionPage`
+- `DiscogsCollectionItem`
+- `DiscogsReleaseDetail`
+- `DiscogsMarketplaceStats`
+- `DiscogsInventoryPage`
+- normalized internal mappers:
+  - `normalizeDiscogsCollectionPage(raw)`
+  - `normalizeDiscogsReleaseDetail(raw)`
+  - `normalizeDiscogsInventoryListing(raw)`
+  - `normalizeDiscogsMarketplaceStats(raw)`
+
+Where it should live:
+- `server/contracts/discogs.js`
+- or `server/services/discogsNormalize.js`
+
+Why:
+- External payload validation should happen exactly once, before app-domain logic consumes it.
+
+
+3. Recommended Contract Layout
+
+Recommended shared contract files:
+
+- `shared/contracts/auth.js`
+- `shared/contracts/account.js`
+- `shared/contracts/stats.js`
+- `shared/contracts/releases.js`
+- `shared/contracts/notes.js`
+- `shared/contracts/import.js`
+- `shared/contracts/sync.js`
+- `shared/contracts/collection.js`
+- `shared/contracts/preferences.js`
+
+Recommended server-only normalization files:
+
+- `server/contracts/discogs.js`
+- `server/services/releaseSerializer.js`
+- `server/services/releaseJson.js`
+
+Recommended approach in a JS-heavy repo:
+
+- Use JSDoc typedefs and exported constants first.
+- Add `@ts-check` gradually on shared contract and adapter modules.
+- Prefer explicit normalizers over generic fallbacks.
+- Keep route handlers returning canonical serialized response shapes.
+
+I would not recommend introducing broad TypeScript conversion as the first move here. The lower-risk, higher-signal improvement is to formalize the contracts that already exist and move unsafe parsing to dedicated normalization helpers.
+
+
+4. Priority Order
+
+Highest priority:
+1. `shared/contracts/stats.js`
+   Reason: current worktree already added a second `/stats` consumer.
+
+2. `shared/contracts/import.js` and `shared/contracts/sync.js`
+   Reason: both flows are multi-state protocols already spanning server and client.
+
+3. `shared/contracts/releases.js` and `shared/contracts/notes.js`
+   Reason: release and note shapes are central and currently assembled in stages.
+
+4. Replace generic `parseJson()` callsites with domain parsers
+   Reason: this is the broadest weak-boundary multiplier in the server layer.
+
+5. `shared/contracts/preferences.js`
+   Reason: lower risk, but still valuable cleanup.
+
+
+5. Bottom Line
+
+The repo’s weak typing problem is not “too many `any`s”; it is that nearly every important boundary is implicit:
+
+- route input
+- route output
+- DB hydration
+- external API normalization
+- background job status
+- client optimistic patching
+
+The current worktree did not introduce a brand-new weak-contract pattern; it exposed an existing one more clearly by adding new UI consumers of `/stats` and more stateful UI on top of already-stringly protocols.
+
+If this is being hardened before PR, the most defensible next step is to create a shared contract layer and move parsing/normalization to explicit domain adapters rather than continue relying on inferred object shapes across the app.

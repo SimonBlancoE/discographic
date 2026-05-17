@@ -1,0 +1,219 @@
+Discographic Pre-PR Code Quality Audit
+Date: 2026-04-22
+Repo: /home/octo/Projects/discographic-public
+
+Scope
+- Current worktree, with emphasis on uncommitted visual refresh changes:
+  - `shared/i18n.js`
+  - `src/App.jsx`
+  - `src/index.css`
+  - `src/pages/Dashboard.jsx`
+  - `src/components/HeroCarousel.jsx`
+  - `src/components/VinylBadge.jsx`
+  - `tests/i18n-columns.test.js`
+  - `tests/vinyl-badge.test.js`
+- Recent committed baseline:
+  - `e65a1eb` `Refactor shared collection and media helpers`
+- Unrelated local files intentionally excluded from implementation assessment:
+  - `package-lock.json`
+  - `.codex`
+  - `Discographic.zip`
+  - `docs/2026-04-21-pre-pr-code-quality-audit.txt`
+
+Methodology
+- Eight delegated review tracks were requested.
+- Subagent findings are integrated below where available.
+- Local validation in this session included:
+  - `git diff` inspection of the current worktree
+  - `madge --circular`
+  - `madge --orphans`
+  - `knip` attempt
+  - `npm test`
+  - `npm run build`
+
+Executive Summary
+- The current worktree is mergeable from a stability standpoint: `npm test` passes (`26` files / `202` tests) and `npm run build` passes.
+- There are no actual circular dependencies in the current `src` / `server` / `shared` graph. `madge --circular` came back clean.
+- The main pre-PR risk is not breakage in the new visual files themselves; it is that the app is leaning harder on implicit shared contracts and fallback-heavy behavior than the rest of the codebase.
+- The highest-priority cross-cutting issue is the `/stats` payload. It now drives the app shell badge, the dashboard, and achievements, but still has no canonical shared contract and is fetched twice.
+- The most serious backend/data-quality issue is still marketplace enrichment fallback semantics: failed value lookups are still being collapsed into `estimated_value = 0`, which mixes "real zero", "unknown", and "failed" and interferes with retry logic.
+- The main architectural debt still in hot paths is legacy migration/runtime compatibility logic in `server/db.js` and `server/routes/auth.js`.
+- The main polish debt before PR is stale or low-value language: a few implementation-history strings in i18n, over-authored achievement copy, decorative fallback badge content, and comment noise in `ImportButton.jsx` / `server/routes/import.js`.
+
+Recommended Order Before PR
+1. Centralize the `/stats` contract and remove duplicated ownership between the app shell and dashboard.
+2. Fix failure semantics around value enrichment and other silent fallbacks so errors do not become fake data or fake logged-out state.
+3. Isolate or retire legacy DB/auth migration code from normal runtime startup.
+4. Remove confirmed dead code and stale unused surface area.
+5. Trim stale copy, placeholder fallback visuals, and low-value comments.
+6. Defer chunk-splitting and broader design/content cleanup unless you want a wider PR.
+
+1. Deduplicate / Consolidate / DRY
+- Main finding: the biggest DRY problem is duplicated `/stats` fetching and ownership between `src/App.jsx` and `src/pages/Dashboard.jsx`.
+- The same stats payload is being reinterpreted in multiple places:
+  - `src/App.jsx`
+  - `src/pages/Dashboard.jsx`
+  - `src/lib/achievements.js`
+  - `src/components/VinylBadge.jsx`
+- Dashboard drilldown URLs are still built ad hoc in `src/pages/Dashboard.jsx` even though shared filter primitives already exist in `shared/collectionFilters.js`.
+- The hero carousel feature manifest is effectively duplicated across:
+  - `src/components/HeroCarousel.jsx`
+  - `shared/i18n.js`
+  - `tests/i18n-columns.test.js`
+- Achievements still use a separate localization system instead of the main i18n layer.
+- Recommendation:
+  - Create one canonical `DashboardStats` consumer boundary and one place that owns the fetch.
+  - Extract shared dashboard drilldown URL builders from the existing filter primitives.
+  - Move hero feature descriptors into one declared manifest and derive i18n/test coverage from it.
+  - Either migrate achievements into the main i18n layer or clearly treat them as a separate content system.
+- Detailed task report: `docs/2026-04-22-task-1-dry-audit.txt`
+
+2. Shared Types / Shared Contracts
+- Highest-priority missing shared contract: the dashboard stats payload returned by `server/routes/stats.js`.
+- That payload now drives:
+  - `src/App.jsx`
+  - `src/pages/Dashboard.jsx`
+  - `src/lib/achievements.js`
+- It is still an implicit mixed camelCase / snake_case object rather than one documented contract.
+- The new visual components also expose loose data contracts:
+  - `VinylBadge.jsx` accepts a broad string-or-object union
+  - chart components assume stable `{ name, count }` rows
+- Auth/account/session shapes are split across server routes and `AuthContext.jsx` / `Settings.jsx` instead of defined once.
+- The broadest repo-wide contract gap is still the release model, which is built in server routes/DB hydration and consumed differently across collection, detail, random, and wall views.
+- Import/sync state is duplicated across server and client as stringly status constants rather than one shared contract.
+- Recommendation:
+  - Add shared contracts for `DashboardStats`, release rows, auth/account/session state, and import/sync job state.
+  - Keep them in a small shared contract layer rather than re-deriving shapes in components.
+- Detailed task report: `docs/2026-04-22-task-2-shared-types-contracts-audit.txt`
+
+3. Unused Code
+- Latest-worktree confirmed-unused item:
+  - `locale` binding in `src/pages/Dashboard.jsx`
+- Whole-repo confirmed-unused items:
+  - `DEFAULT_COLLECTION_FILTERS` in `shared/collectionFilters.js`
+  - dead CSS selectors in `src/index.css`
+- Confirmed-unused exports, but not necessarily dead implementations:
+  - `IMPORT_TERMINAL_STATUSES` in `src/lib/importSync.js`
+  - `WALL_OVERSCAN_ROWS` in `src/lib/wallGrid.js`
+  - `COVER_VARIANTS` in `server/services/coverMedia.js`
+- Lower-confidence suspects:
+  - `playing` prop on `src/components/VinylBadge.jsx`
+  - `buildBadgeGenres` as a public export if it exists only for tests
+- Tool evidence:
+  - `madge --orphans` found only entrypoints: `server/index.js`, `src/main.jsx`
+  - `madge --circular` found no cycles
+  - `knip` did not complete cleanly in this environment, so the task relied on repo-wide symbol verification with `rg`
+- Recommendation:
+  - Remove the confirmed-unused items before PR.
+  - Tighten or privatize the suspicious export surface only after one more usage pass.
+- Detailed task report: `docs/2026-04-22-unused-code-audit-task-3.txt`
+
+4. Circular Dependencies / Import Graph
+- There are no actual circular dependencies in the current graph.
+- The issue is not present cycles; it is future cycle pressure from softened boundaries.
+- Main pressure points:
+  - `src/App.jsx` now fetches dashboard-domain `/stats` data for the header badge, duplicating `Dashboard.jsx`
+  - `server/services/releaseFilters.js` imports `parseJson` from `server/db.js`, which is the wrong dependency direction for a service
+  - `server/db.js` still executes note-domain cleanup during startup, keeping the DB layer above a pure persistence boundary
+  - `shared/i18n.js` is now a high-fanout dependency used by server middleware, client context, API helpers, toasts, and formatters
+  - import/sync state still lives partly inside route modules, which increases route-to-service leakage risk
+- Recommendation:
+  - Keep the graph clean by pushing domain helpers into services/shared contracts rather than letting route or DB bootstrap modules become utility hubs.
+- Detailed task report: `docs/2026-04-22-task-4-circular-layering-audit.txt`
+
+5. Weak Types / Weak Contracts
+- There are effectively no explicit `any` / `unknown` style types driving the repo today.
+- The weakness is implicit contracts, not explicit weak keywords.
+- Latest-worktree weak-contract issues:
+  - `src/App.jsx` assumes `payload.genres` shape from `/stats`
+  - `src/components/VinylBadge.jsx` accepts overly broad input instead of a declared genre-row shape
+  - `src/components/HeroCarousel.jsx` builds feature copy from string-composed keys rather than a declared feature descriptor contract
+- Broader weak-contract areas:
+  - mixed API return shapes in `src/lib/api.js`
+  - stringly import/sync state machines across server and client
+  - generic JSON parsing and polymorphic note parsing in `server/db.js` and `server/services/notes.js`
+  - conflated stored / hydrated / client release shapes in `server/routes/collection.js`
+- Recommendation:
+  - Treat this as contract hardening, not a search-and-replace for `any`.
+  - Start by centralizing `DashboardStats`, release rows, import/sync states, and narrow genre/chart data shapes.
+- Detailed task report: `docs/2026-04-22-task-5-weak-contracts-audit.txt`
+
+6. Try/Catch, Defensive Programming, and Fallbacks
+- High: marketplace failures are being converted into fake `estimated_value = 0`, which is data corruption rather than safe fallback. This also interferes with enrichment queue retry semantics.
+- High: auth bootstrap still fabricates stable client state on API failure. `AuthContext.refresh()` collapses failures into `user = null` with default account flags, and some post-login/account refresh failures are swallowed.
+- Medium-High: collection preference handling is fully silent on parse, load, and save failure, so persistence can fail invisibly.
+- Medium: import status polling can loop indefinitely on `idle` because stale backend state is not surfaced as stalled/failed.
+- Medium: media generation still hides partial failure:
+  - tapete generation silently drops failed covers
+  - thumbnail warmup swallows per-cover failures and still ends in a success-like state
+- Low: the new badge fetch silently falls back to empty/default visuals if `/stats` fails.
+- Justified exceptions identified in the audit:
+  - per-record import sync failure handling
+  - exchange-rate fallback to cached ECB data
+  - `try/finally` cleanup in image export
+- Recommendation:
+  - Replace fake success or fake data with explicit partial/failed/unknown states.
+  - Do not let "could not fetch" mutate into "zero", "logged out", or "nothing to show".
+- Detailed task report: `docs/2026-04-22-task-6-try-catch-audit.txt`
+
+7. Deprecated / Legacy / Fallback Code
+- High: legacy DB compatibility code is still in hot runtime paths.
+  - `server/db.js` still creates/migrates `_v2` tables on normal startup
+  - startup also performs note cleanup
+  - `server/routes/auth.js` still carries `migrateLegacyDataToUser`
+- High: marketplace enrichment still relies on stale sentinel semantics:
+  - pending work is inferred from `estimated_value IS NULL`
+  - failed lookups are collapsed to `0`
+- High: the collection-value path looks stale and internally redundant.
+  - `/api/value` still exists
+  - `api.getValue()` still exists
+  - sync still writes `collection_value` and `last_collection_sync_at`
+  - no current UI consumer was found in the audit
+- Medium: account-state fallback logic is duplicated across the app rather than centralized.
+- Medium: the latest visual work added a redundant dashboard-domain fetch in the app shell for the badge.
+- Recommendation:
+  - Define the oldest supported DB/runtime state and retire migration bridges that no longer need to run on normal startup.
+  - Either revive or remove the collection-value surface.
+  - Collapse account-state and dashboard-stats ownership into one contract path.
+- Detailed task report: `docs/2026-04-22-task-7-deprecated-legacy-fallback-audit.txt`
+
+8. AI Slop / Stubs / Unnecessary Comments
+- High: the dashboard coverage subtitle currently ships implementation-history language in i18n instead of product copy.
+- High: the strongest AI-slop signal is the achievement copy block in `src/lib/achievements.js`, which is much more theatrical than the rest of the app.
+- Medium: the new header badge still relies on fabricated fallback genres (`JAZZ`, `ELECTRONIC`, `ROCK`, `SOUL`, `AMBIENT`) when stats fail.
+- Medium: `src/components/ImportButton.jsx` still has noisy JSX section-banner comments that restate obvious branches instead of explaining behavior.
+- Medium: `server/routes/import.js` still has scaffold-like separator banners and narrated step comments that read like construction residue.
+- Low: stale `dashboard.heroTitle` / `dashboard.heroSubtitle` keys remain even though the dashboard now renders `HeroCarousel`.
+- Positive note:
+  - no meaningful `TODO` / `FIXME` / `HACK` clutter was found
+  - some comments should stay, especially the sync safety note in `server/routes/sync.js` and the preference whitelist note in `server/routes/account.js`
+- Recommendation:
+  - Replace migration-in-motion copy with product copy.
+  - Remove decorative placeholder badge content or make the decorative state intentionally neutral.
+  - Trim obvious banner comments and keep only comments that help a new engineer understand behavior.
+- Detailed task report: `docs/2026-04-22-task-8-comments-ai-slop-audit.txt`
+
+Local Tool Notes
+- `madge --extensions js,jsx --circular src server shared`
+  - result: no circular dependencies
+- `madge --extensions js,jsx --orphans src server shared`
+  - result: only expected entrypoints (`server/index.js`, `src/main.jsx`)
+- `knip`
+  - sandbox run failed with `EAI_AGAIN` against the npm registry
+  - the unused-code audit therefore relied on repo-wide `rg` verification and `madge`
+- `npm test`
+  - result: passed (`26` files, `202` tests)
+- `npm run build`
+  - result: passed
+  - warning: main JS chunk still exceeds `500 kB`
+  - warning: Vite/react-babel emitted deprecated `esbuild` option warnings
+
+Detailed delegated task reports
+- `docs/2026-04-22-task-1-dry-audit.txt`
+- `docs/2026-04-22-task-2-shared-types-contracts-audit.txt`
+- `docs/2026-04-22-unused-code-audit-task-3.txt`
+- `docs/2026-04-22-task-4-circular-layering-audit.txt`
+- `docs/2026-04-22-task-5-weak-contracts-audit.txt`
+- `docs/2026-04-22-task-6-try-catch-audit.txt`
+- `docs/2026-04-22-task-7-deprecated-legacy-fallback-audit.txt`
+- `docs/2026-04-22-task-8-comments-ai-slop-audit.txt`

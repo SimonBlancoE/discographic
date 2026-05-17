@@ -23,8 +23,12 @@ RUN set -eux; \
 # --user 1000:1000 (Docker) map to the correct home directory owner.
 RUN usermod -d /home/agent -m -l agent node
 
+ENV PNPM_HOME=/usr/local/share/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@10.22.0 --activate
+
 # Install Codex CLI (run as root before USER agent)
-RUN npm install -g @openai/codex
+RUN pnpm add --global @openai/codex
 
 USER agent
 

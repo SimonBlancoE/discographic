@@ -1,0 +1,657 @@
+# Discographic Code Quality Audit - 8 Subagent Findings
+
+Date: 2026-04-25
+Repository path: /home/octo/Projects/discographic-public
+Audit target: current working tree on branch `main` at commit `fbd40ea`
+Scope: `server/`, `src/`, `shared/`, `tests/`, and package/build configuration.
+
+Important context:
+- This report is research and recommendations only. No production code was changed by this audit.
+- The working tree already contained several untracked docs before this audit. They were not modified.
+- A separate worktree exists at `.worktrees/project-improvement-fixes`; this report audits the current root checkout, not that worktree.
+- Secrets were not inspected. `.env` was not read.
+
+Tools and commands used:
+- `npm test` baseline was not rerun during this report-only pass.
+- `npx --yes knip --reporter json`
+- `npx --yes depcheck --json`
+- `npx --yes madge --circular --extensions js,jsx server src shared tests`
+- `npx --yes madge --json --extensions js,jsx server src shared`
+- `npx --yes jscpd server src shared --format javascript,jsx --min-lines 8 --min-tokens 50 --reporters console,json`
+- targeted `rg`, `grep`, and `find` searches for exports/imports, try/catch, comments, weak type terms, legacy/fallback markers, and stale routes.
+
+Executive summary:
+- The project is small enough that duplication is not severe: `jscpd` found 4 clones totaling 51 duplicated lines / 774 duplicated tokens across app code.
+- The main quality risks are not raw duplication; they are weak/implicit contracts, long route modules that mix orchestration with business logic, broad catch/fallback patterns, and legacy migration code embedded in startup.
+- `madge` found no circular dependencies across app and test files.
+- `knip` found several exported symbols with no external consumers. Some are truly removable exports; others are internally used but should stop being exported.
+- The project is plain JavaScript. There are no project `.ts`, `.tsx`, or `.d.ts` files and no JSDoc typedef layer. Literal `any`/`unknown` type usage was not found in code, but the absence of strong API/data contracts is the equivalent weak typing problem.
+- The highest leverage improvements are: shared contracts for release/account/sync/import shapes, extracting sync/import route services, removing unused exports, replacing broad route try/catch with an async error wrapper, isolating legacy DB migrations, and removing decorative/stale comments.
+
+================================================================================
+SUBAGENT 1 - DRY / DEDUPLICATION / CONSOLIDATION
+================================================================================
+
+Research performed:
+- Ran `jscpd` against `server`, `src`, and `shared`.
+- Reviewed the reported clone pairs manually.
+- Scanned repeated serializers, status builders, filters, and test database setup patterns.
+
+Tool findings:
+- `jscpd` analyzed 107 files / 10,929 lines.
+- Clones found: 4.
+- Duplicated lines: 51 total (0.47%).
+- Duplicated tokens: 774 total (0.69%).
+
+Reported clones:
+1. `src/components/charts/FormatChart.jsx` and `src/components/charts/GenreChart.jsx`
+   - Both render Recharts pie charts with identical wrapper/container/tooltip/cell logic.
+   - Difference: color palette, inner radius, padding, click behavior.
+   - Recommendation: extract a small `PieBreakdownChart` component only if another pie chart is added or if chart tests become painful. The duplication is small and understandable today.
+
+2. `src/pages/Login.jsx` and `src/pages/Setup.jsx`
+   - Shared layout: auth shell, language selector, title/subtitle block, error panel, primary submit button, username/password fields.
+   - Difference: setup has validation and password confirmation.
+   - Recommendation: extract `AuthFormShell`, `LanguageSelect`, `AuthTextInput`, and `InlineFormError` if forms continue to grow. This would reduce visual drift and make auth copy changes safer.
+
+3. `src/lib/exportImage.js`
+   - The download/link-click/revoke sequence appears in both `downloadNodeAsPng` and fallback branch of `shareNodeAsPng`.
+   - Recommendation: extract `downloadBlob(blob, filename)` and `downloadDataUrl(dataUrl, filename)` helpers. This reduces DOM side-effect duplication and centralizes object URL cleanup.
+
+4. `src/App.jsx`
+   - Duplication is mostly nested markup around brand/nav layout, not a high-risk clone.
+   - Recommendation: no immediate refactor unless route-level code splitting is added; then split route config/navigation definitions together.
+
+Manual findings beyond `jscpd`:
+- `server/routes/sync.js` is 547 lines and mixes:
+  - sync state management,
+  - collection page fetching,
+  - upsert mapping,
+  - collection reconciliation,
+  - inventory sync,
+  - thumbnail warmup,
+  - value enrichment,
+  - route handlers.
+  This is the largest DRY/maintainability issue. Extracting functions by domain would reduce complexity more than micro-deduplicating JSX.
+
+- `server/routes/import.js` is 457 lines and mixes:
+  - file parsing,
+  - header mapping,
+  - row matching,
+  - preview caching,
+  - local DB apply,
+  - Discogs sync,
+  - import status routes.
+  Extract `server/services/importPreview.js` and keep `server/services/importSync.js` focused on sync-state summaries.
+
+- Export serialization is duplicated in spirit:
+  - `server/routes/export.js` has `serializeRelease`.
+  - `tests/export-fields.test.js` has its own copy of `serializeRelease` for assertions.
+  Tests should import a production serializer from a service instead of reimplementing it. Current tests can pass while production serialization drifts.
+
+- Release row shape logic is scattered across:
+  - `server/db.js` `hydrateRelease()`
+  - `server/routes/collection.js` `BASE_FIELDS`, `attachCoverUrls()`, `convertHydratedRelease()`
+  - `server/routes/export.js` `serializeRelease()`
+  - `src/lib/api.js` raw collection/detail methods
+  - `src/components/CollectionTable.jsx`, `ReleaseDetail.jsx`, `RandomReleaseCard.jsx`
+  This should become a shared release contract/normalizer.
+
+- Test DB setup is repeated across multiple test files:
+  - `tests/db-migration.test.js`
+  - `tests/preferences-api.test.js`
+  - `tests/inventory-sync.test.js`
+  - `tests/collection-reconcile.test.js`
+  - `tests/enrich-progress.test.js`
+  - `tests/notes-normalization.test.js`
+  Recommendation: add a lightweight `tests/helpers/sqlite.js` with `createTempDb(name, schemaSql)` and `cleanupTempDb(db, path)`.
+
+Recommended DRY work, in priority order:
+1. Extract shared release/export/account/sync contracts first. This prevents future duplication.
+2. Extract `server/routes/sync.js` services:
+   - `collectionSyncService`
+   - `inventorySyncService`
+   - `thumbnailWarmupService`
+   - `enrichmentService`
+   - `syncStateStore`
+3. Extract `server/routes/import.js` preview/apply helpers.
+4. Extract auth form shell only after product copy/layout settles.
+5. Keep small chart duplication unless more charts are added.
+
+================================================================================
+SUBAGENT 2 - TYPE DEFINITIONS / SHARED DATA SHAPES
+================================================================================
+
+Research performed:
+- Searched for `.ts`, `.tsx`, `.d.ts` files under project folders.
+- Searched for JSDoc typedefs, PropTypes, schema libraries, and shared contract modules.
+- Reviewed route serializers and UI consumers for duplicated implicit response shapes.
+
+Findings:
+- There are no project TypeScript files.
+- There are no project `.d.ts` files.
+- No JSDoc typedefs were found.
+- No PropTypes were found.
+- No runtime schema library is installed (`zod`, `valibot`, `joi`, `yup` absent from package.json).
+- Only one shared API contract module currently exists: `shared/contracts/dashboardStats.js`.
+
+Existing contract strengths:
+- `shared/contracts/dashboardStats.js` is a good pattern: it coerces backend payloads into stable client shapes and filters malformed rows.
+- `shared/collectionFilters.js` centralizes filter keys and normalization.
+- `shared/currency.js` centralizes supported currencies and currency normalization.
+
+Missing contracts that should be shared:
+1. Release contract
+   Current sources/consumers:
+   - `server/db.js` `hydrateRelease()`
+   - `server/routes/collection.js` collection/detail/random/covers responses
+   - `server/routes/export.js` export serializer
+   - `src/lib/api.js` `getCollection`, `getRelease`, `getRandomRelease`, `getCollectionCovers`
+   - `src/components/CollectionTable.jsx`, `ReleaseDetail.jsx`, `RandomReleaseCard.jsx`, `CoverWall.jsx`
+
+   Recommended shared module: `shared/contracts/release.js`
+   Suggested shapes:
+   - `StoredReleaseRow`
+   - `HydratedRelease`
+   - `CollectionRelease`
+   - `ReleaseDetail`
+   - `CoverWallRelease`
+   - `ReleasePriceFields`
+   Include normalization for arrays (`genres`, `styles`, `formats`, `labels`), notes text, tracklist, cover URLs, marketplace status, listing status, and display currency.
+
+2. Account/auth contract
+   Current sources/consumers:
+   - `server/routes/auth.js` `sanitizeUser()` and `/status`, `/me`, `/login`, `/bootstrap`
+   - `server/routes/account.js` `serializeAccount()`
+   - `src/lib/AuthContext.jsx`
+   - `src/pages/Settings.jsx`
+
+   Recommended shared modules:
+   - `shared/contracts/user.js` or `shared/contracts/account.js`
+   - normalize `AuthStatus`, `SessionUser`, `AccountSummary`, and `AccountUpdateResult`.
+
+   Current risk:
+   - `AuthContext.refreshAccountState()` fabricates `discogsConfigured=false`, `currency=EUR`, and `accountUnavailable=true` on any failure. Without an account contract that distinguishes unauthenticated, account missing, account fetch failed, and account configured, UI can show contradictory state.
+
+3. Sync status contract
+   Current sources/consumers:
+   - `server/routes/sync.js` in-memory sync states
+   - `src/components/SyncButton.jsx`
+   - i18n keys for `sync.phase.*`
+
+   Recommended shared module: `shared/contracts/syncStatus.js`
+   Suggested shapes:
+   - `SyncPhase`: idle | initializing | downloading | ready | error
+   - `SyncStatus`: idle | running | completed | failed
+   - `EnrichmentStatus`: idle | running | completed | failed
+   - `ThumbnailWarmupStatus`: idle | running | completed | failed
+   - one normalizer that ensures `pending/current/total/message` are always present.
+
+4. Import status contract
+   Current sources/consumers:
+   - `server/services/importSync.js`
+   - `server/routes/import.js`
+   - `src/lib/importSync.js`
+   - `src/components/ImportButton.jsx`
+
+   Recommendation:
+   - Move shared status constants and result metadata under `shared/contracts/importStatus.js` or `shared/contracts/syncStatus.js`.
+   - Currently server and client define compatible import status concepts in separate modules; this is a drift risk.
+
+5. Marketplace status contract
+   Current sources/consumers:
+   - `server/services/marketplaceValue.js`
+   - `server/services/enrichmentQueue.js`
+   - `server/routes/sync.js`
+   - `server/routes/collection.js`
+   - `server/routes/stats.js`
+   - `src/components/CollectionTable.jsx`
+   - `src/pages/Dashboard.jsx`
+
+   Recommendation:
+   - Move marketplace status constants to `shared/contracts/marketplace.js` if the UI needs to render states.
+   - Rename legacy `READY`/`ready` to the clearer `PRICED`/`priced` in a dedicated migration, as already called out in the improvement plan.
+
+Critical assessment:
+- The codebase's biggest type problem is not explicit `any`; it is unconstrained JSON contracts between Express routes and React components.
+- Because the app is plain JS, the best near-term path is shared runtime normalizers plus tests. A larger TypeScript migration can follow later.
+- Do not add ad hoc JSDoc typedefs in many files before centralizing contracts; that would create another duplication layer.
+
+Recommended implementation path:
+1. Add `shared/contracts/release.js` and update `src/lib/api.js` to normalize release responses.
+2. Add `shared/contracts/account.js` and update `AuthContext` + settings consumers.
+3. Add `shared/contracts/syncStatus.js` and update `SyncButton`/`ImportButton` consumers.
+4. Add contract tests before changing UI consumption.
+5. Only then consider TypeScript or checkJs.
+
+================================================================================
+SUBAGENT 3 - UNUSED CODE / KNIP / DEAD EXPORTS
+================================================================================
+
+Research performed:
+- Ran `npx --yes knip --reporter json`.
+- Ran `npx --yes depcheck --json`.
+- Manually checked reported symbols with `rg` to distinguish true dead code from exported-but-internally-used constants.
+
+Knip findings:
+- Unused exported symbol:
+  - `server/db.js`: `getUserByUsername`
+- Exported symbols with no external consumer but used internally by their own module:
+  - `shared/i18n.js`: `DEFAULT_LOCALE`, `SUPPORTED_LOCALES`, `interpolate`
+  - `shared/collectionFilters.js`: `DEFAULT_COLLECTION_FILTERS`
+  - `server/services/coverMedia.js`: `COVER_VARIANTS`
+  - `server/services/exchangeRates.js`: re-exported `SUPPORTED_CURRENCIES`
+  - `src/lib/importSync.js`: `IMPORT_TERMINAL_STATUSES`
+  - `src/lib/wallGrid.js`: `WALL_OVERSCAN_ROWS`
+  - `server/middleware/auth.js`: `requireDiscogsAccount`
+  - `src/lib/releaseEdits.js`: `normalizeNoteText`
+
+Manual validation:
+- `getUserByUsername` appears only in `server/db.js`. It is the clearest removal candidate.
+- `DEFAULT_COLLECTION_FILTERS` appears only in `shared/collectionFilters.js` and prior audit docs. It can be removed if not needed as public API.
+- `COVER_VARIANTS` is heavily used inside `server/services/coverMedia.js`; it should likely become a non-exported `const`, not removed.
+- `IMPORT_TERMINAL_STATUSES` is used by `isTerminalImportStatus()` inside the same file; make it internal unless tests need direct import.
+- `WALL_OVERSCAN_ROWS` is used as the default for `computeWallGridMetrics()` inside `src/lib/wallGrid.js`; make it internal unless callers intentionally override/import it.
+- `requireDiscogsAccount` is used by `getDiscogsClientForUser()` inside `server/middleware/auth.js`; make it internal unless routes directly need it.
+- `normalizeNoteText` is used by `applyOptimisticReleasePatch()` inside the same module; make it internal unless external callers need normalization alone.
+- `SUPPORTED_CURRENCIES` is imported from `shared/currency.js` and re-exported from `server/services/exchangeRates.js`; the re-export appears unnecessary.
+
+Depcheck findings:
+- No unused production dependencies reported.
+- `depcheck` reported `autoprefixer`, `postcss`, and `tailwindcss` as unused devDependencies. This is likely a false positive because Tailwind/PostCSS can be loaded by config/conventions rather than direct imports. Verify against `postcss.config.js`, `tailwind.config.js`, and CSS build before removing.
+
+Recommendation:
+- Safe first cleanup:
+  1. Remove `getUserByUsername` from `server/db.js`.
+  2. Remove `DEFAULT_COLLECTION_FILTERS` if no external API commitment exists.
+  3. Stop exporting internal constants/helpers listed above; keep them as local constants/functions.
+  4. Keep Tailwind/PostCSS devDependencies unless a build without them proves they are redundant.
+
+Caution:
+- Knip in plain JS projects can flag intentionally exported utility constants as unused even when they are part of a planned public module API. For this app, there is no package API surface, so local-only should be the default.
+
+================================================================================
+SUBAGENT 4 - CIRCULAR DEPENDENCIES / LAYERING
+================================================================================
+
+Research performed:
+- Ran `npx --yes madge --circular --extensions js,jsx server src shared tests`.
+- Ran `npx --yes madge --json --extensions js,jsx server src shared` for graph size and manual review.
+
+Tool result:
+- `madge` processed 93 files.
+- No circular dependency found.
+
+Graph notes:
+- App graph modules: 74 under `server`, `src`, and `shared`.
+- Server entrypoint imports `db` and all route modules.
+- Routes import `db`, middleware, services, and shared modules.
+- Shared modules do not import app/server modules, which is good.
+- Client code imports shared modules and UI libraries; shared modules do not import React.
+
+Layering risks despite no cycles:
+1. `server/db.js` is too central.
+   - It opens SQLite, creates schema, performs startup migrations, exports data-access helpers, hydrates releases, and migrates legacy data.
+   - This does not form a cycle today, but it creates a high-coupling hub.
+   - Recommendation: move migration functions into `server/services/dbMigrations.js` and data-access functions into domain repositories over time.
+
+2. Routes are service-heavy.
+   - `server/routes/sync.js` and `server/routes/import.js` contain most business logic inline.
+   - This avoids cycles today but makes future cycles more likely because route modules become the only place where logic can be reused.
+   - Recommendation: route modules should orchestrate request/response only; services should own sync/import logic.
+
+3. Shared contract boundary is underused.
+   - `shared/contracts/dashboardStats.js` is imported by both server and client.
+   - Other API shapes have no shared boundary, causing UI/backend implicit coupling.
+   - Recommendation: add contract modules rather than importing server services into client or client helpers into server.
+
+4. Tests sometimes duplicate production logic instead of importing services.
+   - Example: `tests/export-fields.test.js` has a test-local serializer rather than importing a production export serializer.
+   - This does not create cycles, but it weakens test authority.
+
+Recommended dependency policy:
+- `shared/` may be imported by `server/`, `src/`, and `tests/`.
+- `server/services/` may import `shared/` and low-level adapters, but not route modules.
+- `server/routes/` may import services and shared contracts, but should not own reusable business logic.
+- `src/lib/` may import `shared/` and browser APIs, but should not import components/pages.
+- `src/components/` may import `src/lib/`, hooks, and shared contracts.
+- `src/pages/` may orchestrate components and API calls.
+
+Conclusion:
+- There is no circular dependency cleanup required now.
+- The next architecture work should be preventive: reduce `db.js`, `sync.js`, and `import.js` hub behavior before adding more features.
+
+================================================================================
+SUBAGENT 5 - WEAK TYPES / ANY / UNKNOWN / STRONGER TYPES
+================================================================================
+
+Research performed:
+- Searched for exact `any`, `unknown`, JSDoc typedefs, TypeScript suppression comments, and PropTypes.
+- Inspected package dependencies for runtime schema/type libraries.
+- Reviewed implicit typed domains: release rows, users, accounts, sync status, import status, marketplace status, currency, filters.
+
+Findings:
+- No actual TypeScript `any` or `unknown` types exist because the project is JavaScript.
+- Exact `any`/`unknown` hits were prose in i18n strings/tests, not type annotations.
+- There are no TypeScript/JSDoc type definitions to consolidate.
+- The equivalent weak-type issues are implicit object shapes, broad `String(...)` coercions, unvalidated JSON payloads, and status strings scattered across files.
+
+Strong type opportunities by domain:
+1. Marketplace value result
+   Current:
+   - `fetchMarketplaceValue()` returns `{ estimatedValue, marketplaceStatus }` with no shared client/server result type.
+   - Status uses `READY`/`ready`, which is semantically weaker than `priced`.
+   Strong replacement:
+   - `MarketplaceStatus = 'pending' | 'priced' | 'unavailable' | 'failed'`
+   - `MarketplaceValueResult = { estimatedValue: number|null, marketplaceStatus: MarketplaceStatus, error: string|null }`
+
+2. Release rows
+   Current:
+   - Raw SQLite rows, hydrated rows, collection rows, cover rows, and detail rows are implicit.
+   Strong replacement:
+   - Define runtime normalizers in `shared/contracts/release.js`.
+   - If adopting TypeScript later, create `StoredReleaseRow`, `HydratedRelease`, `ReleaseSummary`, `ReleaseDetail`, `ReleaseTrack`, `ReleaseFormat`, `ReleaseLabel`, `ReleaseNote`.
+
+3. Account/auth
+   Current:
+   - `sanitizeUser()` and `serializeAccount()` return implicit objects.
+   - Client context derives booleans from missing/failed data.
+   Strong replacement:
+   - `SessionUser = { id:number, username:string, role:'admin'|'user', created_at:string|null }`
+   - `AuthStatus = { needsBootstrap:boolean, loggedIn:boolean, user:SessionUser|null }`
+   - `AccountSummary = { discogsUsername:string, tokenConfigured:boolean, tokenPreview:string|null, currency:Currency }`
+
+4. Sync/import statuses
+   Current:
+   - Server and client use string statuses by convention.
+   - `src/lib/importSync.js` duplicates concepts from `server/services/importSync.js`.
+   Strong replacement:
+   - Shared status unions/constants and normalizers.
+   - Use constants instead of inline strings.
+
+5. Currency
+   Current:
+   - `shared/currency.js` is good, but `server/services/exchangeRates.js` re-exports `SUPPORTED_CURRENCIES` unnecessarily.
+   Strong replacement:
+   - All callers import currency constants from `shared/currency.js` only.
+
+6. Request bodies
+   Current:
+   - `String(req.body.username || '')`, `String(req.body.password || '')`, etc.
+   - This guards runtime input but silently coerces arrays/objects into strings.
+   Strong replacement:
+   - Add body parsing helpers or schema validators for each endpoint.
+   - Example: `readRequiredString(body, 'username', { trim: true, minLength: 3 })`.
+
+Recommendation:
+- Do not start by sprinkling JSDoc everywhere.
+- Start with shared runtime contracts and tests.
+- Once contracts stabilize, enable TypeScript gradually with `allowJs`/`checkJs` or migrate shared modules first.
+
+Critical assessment:
+- The absence of explicit weak type keywords is not a clean bill of health.
+- The app currently relies on tests and naming conventions to keep object shapes aligned. That is workable at current size but risky as Wantlist, backups, saved views, and diagnostics are added.
+
+================================================================================
+SUBAGENT 6 - TRY/CATCH / DEFENSIVE PROGRAMMING / ERROR HIDING
+================================================================================
+
+Research performed:
+- Grepped for `try`, `catch`, `finally`, and `.catch(` across `server`, `src`, `shared`, and `tests`.
+- Manually classified catches into: legitimate boundary handling, cleanup/finally, per-item partial failure, and suspicious fallback/error hiding.
+
+High-level findings:
+- Try/catch usage is heavy but not uniformly bad.
+- Legitimate cases exist for untrusted input, network boundaries, image generation cleanup, JSON parsing, and per-record Discogs sync failures.
+- Problematic patterns are broad catches that fabricate fallback state, empty catches, and route-level catches that duplicate Express error handling.
+
+Legitimate catches to keep or keep with clearer comments:
+- `server/services/jsonStorage.js` `parseJson()` catches invalid DB JSON and returns a caller-provided fallback. This is a clear untrusted/stale-data boundary.
+- `server/services/notes.js` `parseStoredNotes()` handles legacy notes formats.
+- `server/services/coverMedia.js` URL parsing and cache-miss behavior handles untrusted remote image URLs and filesystem races.
+- `server/discogs.js` request retry/rate-limit handling is a clear external API boundary.
+- `src/lib/exportImage.js` uses `finally` to guarantee DOM clone cleanup.
+- `server/routes/import.js` catches per-field Discogs rating/note updates so one failed remote update does not discard all local import work.
+- `src/lib/api.js` `response.json().catch(...)` handles non-JSON error responses from the network boundary.
+
+Suspicious or removable catches:
+1. `src/pages/Collection.jsx`
+   - Empty `catch {}` when loading `collection_visible_columns` preference.
+   - `.catch(() => {})` when saving visible columns preference.
+   - Recommendation: surface non-blocking toast warnings or set a visible preference warning; do not silently ignore.
+
+2. `src/lib/AuthContext.jsx`
+   - `refresh()` catches all errors and fabricates logged-out/default state.
+   - `refreshAccountState().catch(() => null)` is used during login/refresh.
+   - Recommendation: distinguish unauthenticated from account endpoint unavailable. Use account contract states instead of swallowing.
+
+3. Route handler boilerplate catches
+   - `server/routes/collection.js`, `stats.js`, `export.js`, `admin.js`, `media.js`, `import.js`, `sync.js` have repeated `try { ... } catch (error) { res.status(...).json({ error: error.message }) }`.
+   - Recommendation: introduce `asyncHandler(fn)` and typed route errors (`HttpError`) so route files do not repeat broad catches.
+
+4. `server/routes/sync.js` `syncInventory()`
+   - Catches, logs, and rethrows; caller already catches and marks state failed.
+   - Recommendation: remove inner catch or add context by throwing a wrapped error. Current console log duplicates failure reporting.
+
+5. `server/routes/sync.js` thumbnail warmup per-cover empty catch
+   - There is a comment saying to continue warming remaining covers, so the role is specific.
+   - Recommendation: count failures and include a diagnostic/log summary instead of totally suppressing.
+
+6. `server/routes/collection.js` `enrichReleaseIfNeeded()` catches missing Discogs account and returns the non-enriched release.
+   - This may be intentional for browsing without a configured account, but it hides why detail enrichment did not happen.
+   - Recommendation: return an explicit `enrichmentUnavailable` flag or rely on account state in UI.
+
+7. `server/services/exchangeRates.js`
+   - Uses nested `.catch(() => null)` for ECB lookups and broad fallback to cached snapshot/default EUR rates.
+   - This is acceptable as a resilience strategy, but it should be documented as a business decision because pricing conversion can otherwise silently use stale/default data.
+
+Recommended cleanup strategy:
+1. Add route `asyncHandler` and `HttpError` helper. Replace route-level try/catch that only formats HTTP errors.
+2. Fix empty catches first (`Collection.jsx` preference load/save).
+3. Replace AuthContext fallback state with explicit account/auth contract state.
+4. Keep per-item import sync catches, but ensure failures are visible in import status.
+5. Keep JSON/URL/network boundary catches where they handle unsanitized input or external systems.
+6. Avoid console-only error handling; map background job errors to state visible in the UI.
+
+================================================================================
+SUBAGENT 7 - DEPRECATED / LEGACY / FALLBACK CODE
+================================================================================
+
+Research performed:
+- Searched for `/api/value`, `api.getValue`, `legacy`, `deprecated`, `fallback`, `_v2`, `READY`, and `ready` markers.
+- Reviewed migration and marketplace status code.
+
+Findings:
+1. Legacy `_v2` database migration code remains in `server/db.js`.
+   - `releases_v2`, `sync_log_v2`, and `settings_v2` are created during startup.
+   - `migrateReleases()`, `migrateSyncLog()`, and `migrateSettings()` live in `server/db.js`.
+   - This is startup-critical but old-version-specific.
+   - Recommendation: define a database upgrade policy, then move this code to named migration functions in `server/services/dbMigrations.js` or remove unsupported bridges with a clear startup error.
+
+2. Marketplace status uses legacy `READY`/`ready` semantics.
+   - `server/services/marketplaceValue.js` has `MARKETPLACE_STATUS.READY = 'ready'`.
+   - Tests assert `READY`.
+   - The improvement design plan calls for `priced`, not `ready`, and for failed/unknown values to remain null.
+   - Recommendation: migrate to `PRICED = 'priced'` and convert legacy ready rows in an idempotent migration.
+
+3. `/api/value` appears only in the improvement plan, not in live code.
+   - Search found no live route or client helper.
+   - No removal is needed for `/api/value` in current code.
+
+4. Fallback genre names in `VinylBadge`.
+   - `DEFAULT_GENRE_NAMES = ['JAZZ', 'ELECTRONIC', 'ROCK', 'SOUL', 'AMBIENT']` are decorative fallback values shown when stats have no genres.
+   - Recommendation: use a neutral loading/brand swatch state instead of fabricated genre names.
+
+5. Fallback/default copy and state can mislead users.
+   - Dashboard coverage copy includes implementation-history phrasing: `We rebuilt this section...` / Spanish equivalent.
+   - Recommendation: replace with collector-facing copy that describes what the metric means, not how the code changed.
+
+6. `server/db.js` default `SESSION_SECRET` in `server/index.js`.
+   - `process.env.SESSION_SECRET || 'discographic-dev-secret'` is convenient for development but risky for self-hosting if unnoticed.
+   - Recommendation: keep only in development mode or fail startup in production without a secret.
+
+7. Build warnings.
+   - Previous builds/test runs have shown Vite/react-babel deprecation warnings for esbuild options from plugin internals.
+   - `vite.config.js` itself does not define deprecated esbuild options.
+   - Recommendation: document dependency source and upgrade path; do not add local workaround unless warning affects build correctness.
+
+Recommended cleanup order:
+1. Marketplace `ready` -> `priced` migration and semantics.
+2. DB upgrade policy + move `_v2` migration code out of `server/db.js`.
+3. Replace `VinylBadge` fallback genres.
+4. Replace implementation-history dashboard copy.
+5. Harden production session secret behavior.
+
+================================================================================
+SUBAGENT 8 - AI SLOP / STUBS / UNHELPFUL COMMENTS / COPY
+================================================================================
+
+Research performed:
+- Searched comments across app code.
+- Searched for TODO/FIXME/HACK/stub/placeholder/dummy/fake/AI/generated/replaced/previous/new implementation/decorative markers.
+- Reviewed comment/copy quality manually.
+
+Findings:
+- No obvious generated-code banners or TODO/FIXME stubs were found.
+- There are several decorative section comments and implementation-history comments that should be removed or tightened.
+
+Comments/copy to remove or replace:
+1. `server/routes/import.js`
+   - Large banner comments:
+     - `// ---------------------------------------------------------------------------`
+     - `// Helpers`
+     - `// Background sync with Discogs`
+     - `// Routes`
+   - Recommendation: remove after extracting services, or replace with concise comments only where the control flow is non-obvious.
+
+2. `src/components/ImportButton.jsx`
+   - JSX section comments:
+     - `Idle: buttons + explanation`
+     - `Loading`
+     - `Preview`
+     - `Applying`
+     - `Result`
+     - `Inline errors`
+   - Recommendation: split render sections into small components/functions instead of using comments as structure.
+
+3. `server/routes/collection.js`
+   - `// --- Rating ---` and `// --- Notes (custom fields) ---`
+   - Recommendation: extract `updateRatingIfChanged()` and `updateNotesIfChanged()` or remove comments. Current comments label obvious code.
+
+4. `server/routes/sync.js`
+   - Some comments are useful:
+     - reconciliation requires complete sync before pruning;
+     - listing preference rules explain why one listing wins.
+   - Some comments label obvious work:
+     - `// Fetch all pages of the user's inventory`
+     - `// Update releases that match`
+     - `// --- Routes ---`
+   - Recommendation: keep invariant/rationale comments, remove section labels.
+
+5. `server/middleware/rateLimit.js`
+   - Comments explain Discogs request limit and wait behavior. Keep, but consider making console message English/local-neutral if logs are operator-facing.
+
+6. Dashboard i18n copy in `shared/i18n.js`
+   - English: `We rebuilt this section so it says something useful...`
+   - Spanish equivalent also references implementation history.
+   - Recommendation: replace with direct user copy such as: `See how much of your collection is documented and which records still need ratings, notes, or market data.`
+
+7. `VinylBadge` fallback genres
+   - The code fabricates genre labels for visual color. This is not a comment issue, but it reads as decorative slop because it represents data that may not exist.
+   - Recommendation: neutral swatches or app-brand colors when no genre stats exist.
+
+Assessment:
+- The codebase is not full of AI slop; the bigger issue is unextracted long files using comments as organization.
+- Prefer extracting named functions/modules over adding explanatory comments.
+- Keep comments that document external API quirks, data migration invariants, or non-obvious business rules.
+
+================================================================================
+CROSS-AGENT RECOMMENDED IMPLEMENTATION PLAN
+================================================================================
+
+Suggested sequence for actual code changes:
+1. Add/extend shared contracts
+   - `shared/contracts/release.js`
+   - `shared/contracts/account.js`
+   - `shared/contracts/syncStatus.js`
+   - optional `shared/contracts/marketplace.js`
+
+2. Fix marketplace semantics
+   - `READY` -> `PRICED`
+   - failed/unavailable values remain `NULL`
+   - dashboard and table display explicit status
+
+3. Remove unused exports
+   - remove `getUserByUsername`
+   - make internal-only constants/functions non-exported
+   - verify with `knip`
+
+4. Extract route services
+   - split `server/routes/sync.js`
+   - split `server/routes/import.js`
+   - move export serializer to service and import it in tests
+
+5. Replace broad/empty catches
+   - add route async error helper
+   - fix preference load/save errors
+   - clarify account unavailable state
+
+6. Isolate legacy startup migrations
+   - move `_v2` bridge code out of `server/db.js`
+   - add database upgrade policy doc
+
+7. Clean comments/copy
+   - remove decorative section comments
+   - replace dashboard implementation-history copy
+   - remove fabricated VinylBadge genre fallback
+
+8. Add automation guardrails
+   - Add scripts such as:
+     - `"lint:unused": "knip"`
+     - `"lint:deps": "madge --circular --extensions js,jsx server src shared tests"`
+     - optional `"lint:dup": "jscpd server src shared --format javascript,jsx --min-lines 8 --min-tokens 50"`
+   - Run these in CI alongside `npm test` and `npm run build`.
+
+================================================================================
+FILES MOST LIKELY TO CHANGE IN A CLEANUP PASS
+================================================================================
+
+High priority:
+- `server/routes/sync.js`
+- `server/routes/import.js`
+- `server/db.js`
+- `server/services/dbMigrations.js`
+- `server/services/marketplaceValue.js`
+- `server/routes/stats.js`
+- `server/routes/collection.js`
+- `src/lib/api.js`
+- `src/lib/AuthContext.jsx`
+- `src/components/SyncButton.jsx`
+- `src/components/ImportButton.jsx`
+- `src/components/CollectionTable.jsx`
+- `shared/contracts/dashboardStats.js`
+- new `shared/contracts/*.js` modules
+
+Medium priority:
+- `src/pages/Login.jsx`
+- `src/pages/Setup.jsx`
+- `src/lib/exportImage.js`
+- `src/components/charts/FormatChart.jsx`
+- `src/components/charts/GenreChart.jsx`
+- `src/components/VinylBadge.jsx`
+- `shared/i18n.js`
+- `tests/helpers/*` new helper files
+
+Low priority / verify before touching:
+- Tailwind/PostCSS devDependencies reported by depcheck: likely false positive.
+- Small chart duplication: acceptable unless more chart variants are added.
+
+================================================================================
+FINAL NOTES
+================================================================================
+
+- No circular dependencies are currently present.
+- No explicit `any` or `unknown` type annotations exist, but the app needs stronger shared contracts.
+- The most important quality improvement is reducing implicit data-shape coupling between Express routes and React components.
+- The next best improvement is splitting long route files into services with focused tests.
+- Do not remove fallback/error handling blindly. Keep it where it handles untrusted input, external APIs, filesystem/image operations, cleanup, or intentional partial success.

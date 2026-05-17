@@ -1,0 +1,231 @@
+Task 7 Audit: deprecated, legacy, fallback, and redundant code paths
+Date: 2026-04-22
+Repository: discographic-public
+Scope: current visual worktree plus committed baseline through e65a1eb
+Code changes: none
+
+Method
+- Reviewed the current worktree and recent baseline around app shell, dashboard, auth/account, sync, import, and DB bootstrap.
+- Searched for fallback and legacy patterns with ripgrep across `src`, `server`, `shared`, and `tests`.
+- Cross-checked route and client API consumers to distinguish active behavior from stale paths.
+
+Summary
+- The repo does not have a single catastrophic legacy subsystem, but it still carries several old compatibility and fallback paths in hot code paths.
+- The most important cleanup is not cosmetic. It is removing legacy startup migration baggage and eliminating fallback sentinels that now behave like real product state.
+- The latest visual worktree adds one new redundant path: the app shell now fetches dashboard stats on every page just to power the header badge.
+
+Findings
+
+1. High: legacy schema-bridge logic still runs in normal server startup
+Files:
+- `server/db.js:37-58`
+- `server/db.js:108-163`
+- `server/db.js:165-200`
+- `server/db.js:217-258`
+- `server/db.js:383-387`
+- `server/routes/auth.js:21-40`
+
+Assessment:
+- The DB bootstrap still creates transitional `_v2` tables, renames legacy tables, copies rows, and drops originals during normal app startup.
+- `cleanupStoredNotes(db)` also runs on every server boot, even though it exists to normalize old malformed note rows rather than to support normal runtime behavior.
+- The bootstrap route still calls `migrateLegacyDataToUser(user.id)`, which is a direct bridge from the old nullable-`user_id` world into the current multi-user schema.
+
+Why this is legacy baggage:
+- This code exists to preserve old database states, not to support current product behavior.
+- It keeps one-time upgrade logic inside the normal boot path and auth bootstrap path, which makes the low-level DB layer harder to reason about and harder to remove later.
+
+Risk:
+- Startup now depends on a large amount of historical compatibility logic.
+- Future schema changes are more likely to be added as more boot-time special cases instead of explicit migrations.
+
+Recommendation:
+- Move schema evolution to explicit, versioned migrations rather than repeated conditional boot-time rewrites.
+- Decide the oldest DB version still supported for in-place upgrade. After that cutoff, remove the `_v2` rename/copy/drop path and `migrateLegacyDataToUser`.
+- Move note cleanup into a one-time migration or admin repair task instead of unconditional startup work.
+
+2. High: value enrichment still uses fallback sentinel semantics that no longer fit the product
+Files:
+- `server/services/enrichmentQueue.js:1-15`
+- `server/routes/sync.js:185-202`
+- `server/routes/sync.js:404-419`
+- `server/routes/sync.js:541-545`
+- `server/routes/collection.js:62-77`
+- `server/routes/collection.js:79-98`
+
+Assessment:
+- Pending enrichment is still defined as `estimated_value IS NULL`.
+- Both release-detail enrichment and background enrichment collapse marketplace failures into `estimated_value = 0`.
+- That means an enrichment failure is no longer "unknown"; it becomes a stored zero, which removes the record from the pending queue and prevents future retry-by-null semantics.
+
+Why this is a fallback/legacy path:
+- `0` is being used as an old-style sentinel fallback for "could not fetch price", but the rest of the app increasingly treats persisted values as real data.
+- This is now a redundant state encoding: `NULL` means "pending", `0` means "failed/unknown", and positive numbers mean "priced", all in the same field.
+
+Risk:
+- Unknown value and genuine zero-ish value are no longer distinguishable.
+- Records can get stuck permanently out of the enrichment queue after a transient Discogs failure.
+
+Recommendation:
+- Keep `estimated_value` nullable for truly unknown value.
+- Add explicit enrichment state such as `enrichment_status`, `last_enriched_at`, and optionally `last_enrichment_error`.
+- Base queue membership on that explicit state rather than numeric sentinels.
+
+3. High: the collection value API path looks stale and internally redundant
+Files:
+- `server/index.js:72-80`
+- `src/lib/api.js:68`
+- `server/routes/sync.js:164-175`
+
+Additional evidence:
+- A repo-wide search found no callers of `api.getValue()` in `src` or `tests`.
+
+Assessment:
+- The server still exposes `/api/value`, and the client still exposes `api.getValue`, but nothing in the current UI calls it.
+- Separately, sync writes `collection_value` and `last_collection_sync_at` into settings, but no active reader uses those settings either.
+- The result is two overlapping stale strategies for collection value: an unused live API route and unused cached settings.
+
+Why this is deprecated/redundant code:
+- The route and the cached settings both survive from an earlier design, but neither is the current product path.
+- They increase surface area without providing current behavior.
+
+Risk:
+- Future contributors can mistake dead paths for supported behavior and build on the wrong source of truth.
+
+Recommendation:
+- Remove `/api/value`, `api.getValue`, and the unused `collection_value` / `last_collection_sync_at` settings if they are no longer part of the product.
+- If cached collection value is still wanted, wire a single real consumer to the settings-backed value and make that the only path.
+
+4. Medium-High: account state handling still behaves like a fallback mode and is duplicated across pages
+Files:
+- `src/lib/AuthContext.jsx:15-27`
+- `src/lib/AuthContext.jsx:30-49`
+- `src/App.jsx:20-43`
+- `src/pages/Dashboard.jsx:195-224`
+- `src/pages/Dashboard.jsx:284-308`
+- `src/pages/Collection.jsx:208-218`
+- `src/pages/CollectionWall.jsx:15-36`
+- `src/pages/Settings.jsx:278-283`
+
+Assessment:
+- `AuthContext` derives `discogsConfigured` and `accountUnavailable` from `/account`, then falls back to a fabricated safe state when auth/account calls fail.
+- Multiple pages independently branch on the same pair of flags and render their own unavailable/configure variants.
+- The new app-shell badge fetch in `App.jsx` adds another consumer of the same degraded-state logic.
+
+Why this is fallback/redundant code:
+- The app has effectively turned network/account ambiguity into a reusable fallback mode.
+- That fallback is now duplicated in multiple route components instead of being centralized.
+
+Risk:
+- The same state contract is implemented repeatedly across pages.
+- The difference between "Discogs not configured" and "Discogs status could not be loaded" remains fragile because both are derived from fallback behavior instead of a single authoritative state model.
+
+Recommendation:
+- Centralize the account gate and account-error presentation in one shared component or route-shell helper.
+- Keep `discogsConfigured` and account-load failure as separate explicit states, but stop duplicating the branch logic across dashboard, collection, wall, and app shell.
+
+5. Medium: the latest visual work introduced a redundant dashboard-domain fetch in the app shell
+Files:
+- `src/App.jsx:18-43`
+- `src/pages/Dashboard.jsx:195-224`
+- `src/components/VinylBadge.jsx:26-43`
+- `src/components/VinylBadge.jsx:55-60`
+
+Assessment:
+- The header badge now calls `api.getStats()` through `AppLayout` to obtain top genres.
+- The dashboard already loads the full stats payload separately.
+- This means the app shell depends on dashboard-domain data and duplicates the same data fetch even on non-dashboard pages.
+- On failure, the badge silently falls back to decorative default genres.
+
+Why this is redundant/fallback code:
+- It is a new redundant data path rather than shared state.
+- The default badge genres are a fallback presentation path, but the app does not distinguish decorative fallback from real user-derived genres.
+
+Risk:
+- Extra network load on every app mount.
+- The global shell becomes coupled to the heaviest dashboard payload.
+- Failures degrade silently into plausible-looking fake data.
+
+Recommendation:
+- If the badge is decorative, make it explicitly decorative and remove the stats dependency from the shell.
+- If it should reflect user data, expose a lightweight top-genres endpoint or share a cached stats resource rather than re-fetching the full dashboard payload from the shell.
+
+6. Medium: preferences still use a generic string bucket with ad hoc client parsing
+Files:
+- `server/routes/account.js:66-93`
+- `src/pages/Collection.jsx:64-75`
+- `src/pages/Collection.jsx:124-132`
+
+Assessment:
+- Preferences are stored behind a generic `/preferences/:key` API with manual whitelist maintenance.
+- `collection_visible_columns` is persisted as a raw string and parsed manually in the collection page.
+- Save and load behavior is still special-cased in UI code instead of being backed by a shared typed contract.
+
+Why this is legacy/fallback code:
+- This is a classic flexible preference bucket that works quickly but accumulates stringified state and silent fallback parsing over time.
+- It is the kind of path that survives from earlier simpler phases and becomes harder to clean once more preferences accumulate.
+
+Risk:
+- Adding new preferences will likely repeat the same manual parsing/stringifying pattern.
+- Preference failures can remain invisible because the contract is weak by design.
+
+Recommendation:
+- Introduce shared typed preference helpers or per-preference server contracts for non-trivial settings.
+- At minimum, centralize serialization/parsing for `collection_visible_columns` so the client page is not the contract owner.
+
+7. Medium: import preview and sync tracking are still process-local fallback infrastructure
+Files:
+- `server/routes/import.js:23-39`
+- `server/routes/import.js:205-217`
+- `server/routes/import.js:392-447`
+- `server/routes/import.js:453-455`
+- `src/components/ImportButton.jsx:44-59`
+
+Assessment:
+- Import previews and import sync states live in in-memory `Map`s inside the route module.
+- If the process restarts, previews disappear and sync state resets to `idle`.
+- The UI still treats `idle` as a poll-and-wait state, so a lost job can look like a stalled import rather than a final state.
+
+Why this is fallback code:
+- In-memory maps are a pragmatic temporary mechanism, but here they are effectively the product state model.
+- That is acceptable only while the app explicitly accepts single-process volatility.
+
+Risk:
+- Import state is not durable.
+- A restart or redeploy can erase active or recent job state with no durable reconciliation path.
+
+Recommendation:
+- Persist preview metadata and import-job status in the database if import is meant to be trustworthy across restarts.
+- If not, surface a real "job state lost" result instead of letting the client continue polling `idle`.
+
+8. Low-Medium: the app now has multiple "not configured vs unavailable" UX implementations instead of one shared contract
+Files:
+- `src/pages/Dashboard.jsx:284-308`
+- `src/pages/Collection.jsx:208-218`
+- `src/pages/CollectionWall.jsx:30-36`
+
+Assessment:
+- These are not exact duplicates, but they are parallel variants of the same UX concept.
+- The copy differs by page, which is fine, but the control flow is repeated in each route.
+
+Why this is redundant code:
+- It is repeated route gating logic rather than a reusable guard or layout concern.
+
+Recommendation:
+- Consolidate the conditional shell and let each page provide only the page-specific copy or CTA.
+
+What I did not find
+- No currently active third-party API deprecation issue stood out in the reviewed code.
+- No circular dependency was found in the current graph; this report is about stale and fallback paths, not import cycles.
+
+Recommended cleanup order
+1. Remove stale collection-value paths and decide whether cached settings or live API is the real source of truth.
+2. Replace `estimated_value` sentinel fallback semantics with explicit enrichment status.
+3. Isolate or retire legacy DB bootstrap/migration code once the supported upgrade window is defined.
+4. Centralize account-state gating and stop duplicating the unavailable/configure branches across pages.
+5. Decouple the header badge from a full dashboard stats fetch.
+6. Replace generic preference string handling with typed helpers.
+7. Decide whether import preview/state is allowed to stay process-local; if not, persist it.
+
+Bottom line
+- The main pre-PR cleanup target is not the visual work itself.
+- The real leftover quality debt is older fallback infrastructure still living in runtime code paths, plus one new redundant stats fetch added by the visual refresh.

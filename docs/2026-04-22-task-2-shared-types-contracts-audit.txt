@@ -1,0 +1,537 @@
+Task 2 of 8
+Shared Types / Contracts Audit
+Date: 2026-04-22
+Repo: discographic-public
+
+Scope
+- Priority 1: the current visual refresh worktree changes and their direct dependencies.
+- Priority 2: broader repo contract surfaces that interact with those changes.
+- No code changes were made for this task.
+
+Files reviewed first
+- src/components/HeroCarousel.jsx
+- src/components/VinylBadge.jsx
+- src/App.jsx
+- src/pages/Dashboard.jsx
+- src/pages/CollectionWall.jsx
+- shared/i18n.js
+- server/routes/stats.js
+- src/lib/achievements.js
+- src/components/charts/*
+
+Method
+- Read the new UI files and traced the data they consume.
+- Followed those payloads back to API routes and shared helpers.
+- Compared repeated prop, route, and derived-state shapes across the repo.
+- Focused on implicit JS object contracts rather than literal TS types, since the repo is plain JS.
+
+Executive summary
+- The most important missing shared contract is the dashboard stats payload. The new visual work expands the number of places consuming raw stats, but the repo still treats that payload as an untyped bag of nested fields.
+- The second most important gap is release shape centralization. Collection, random release, wall, and release detail all depend on overlapping but not explicit release contracts.
+- The third most important gap is account/auth and async job state. These are partially normalized at runtime, but not defined once and shared, so duplication persists across route, client API, context, and component layers.
+- One good pattern already exists: collection filters are centralized in shared/collectionFilters.js. That file is the clearest example of how other contracts should be treated.
+
+1. Dashboard stats contract is the highest-priority missing shared type
+
+What exists now
+- The stats route returns a mixed-shape payload from server/routes/stats.js:115.
+- Dashboard consumes that payload directly in src/pages/Dashboard.jsx:204, src/pages/Dashboard.jsx:249, src/pages/Dashboard.jsx:257, src/pages/Dashboard.jsx:265, src/pages/Dashboard.jsx:273, src/pages/Dashboard.jsx:335, src/pages/Dashboard.jsx:364, and src/pages/Dashboard.jsx:391.
+- Achievements consumes the same payload directly in src/lib/achievements.js:162 and then reads many nested properties in src/lib/achievements.js:169-179.
+- App now calls the same full stats endpoint just to populate the header badge with genres in src/App.jsx:28-32.
+
+Where the shape is implicit or inconsistent
+- totals uses snake_case keys:
+  - total_records
+  - total_value
+  - rated_records
+  - notes_records
+  - priced_records
+  - server/routes/stats.js:116-122
+- topValue is camelCase at the collection level but contains release fields with snake_case names like release_id and estimated_value:
+  - server/routes/stats.js:129-132
+- lastSync uses snake_case database column names:
+  - started_at
+  - finished_at
+  - records_synced
+  - status
+  - server/routes/stats.js:107-113
+- displayCurrency is camelCase:
+  - server/routes/stats.js:135
+- chart arrays are not all the same datum shape:
+  - genres, formats, labels, styles, decades are { name, count }
+  - server/routes/stats.js:25-27, 54-80
+  - growth is { month, count }
+  - server/routes/stats.js:82-88
+  - artists is { artist, count }
+  - server/routes/stats.js:98-105
+
+Why this is risky
+- The new visual refresh increases coupling to this payload. Dashboard and badge rendering now rely on several parts of it, but there is still no single definition of what a valid stats response is.
+- The route mixes naming conventions. That makes drift more likely when new consumers are added.
+- App is fetching the full dashboard payload just to use payload.genres.slice(0, 5) in src/App.jsx:28-32. That is a strong sign that the response contract is too broad for some consumers.
+- buildAchievements assumes the same payload semantics as Dashboard but lives in a separate domain helper. A future change to stats could silently break achievements without touching dashboard code.
+
+Concrete candidate shared contracts
+- DashboardStats
+  - totals: StatsTotals
+  - genres: NamedCountDatum[]
+  - decades: NamedCountDatum[]
+  - formats: NamedCountDatum[]
+  - labels: NamedCountDatum[]
+  - styles: NamedCountDatum[]
+  - growth: GrowthPoint[]
+  - topValue: TopValueRelease[]
+  - artists: ArtistCountDatum[]
+  - lastSync: SyncLogSummary | null
+  - displayCurrency: CurrencyCode
+- StatsTotals
+  - total_records
+  - total_value
+  - rated_records
+  - notes_records
+  - priced_records
+- NamedCountDatum
+  - name
+  - count
+- ArtistCountDatum
+  - artist
+  - count
+- GrowthPoint
+  - month
+  - count
+- TopValueRelease
+  - id
+  - release_id
+  - artist
+  - title
+  - year
+  - cover_url
+  - estimated_value
+- SyncLogSummary
+  - started_at
+  - finished_at
+  - records_synced
+  - status
+
+Recommendation
+- Create one shared contract module for dashboard stats, even in JS. A JSDoc-backed module in shared/contracts/stats.js would be enough.
+- Decide whether to keep the API in database-style snake_case or normalize it to client-style camelCase. Right now it does both.
+- Either split badge data into a smaller endpoint, or at minimum expose a reusable contract helper like getTopGenresFromStats(stats) so App is not ad hoc slicing raw payloads.
+
+2. Badge and chart datum shapes are duplicated and too forgiving
+
+What exists now
+- HeroCarousel builds slides from translated keys into objects with kicker, title, sub, where in src/components/HeroCarousel.jsx:41-46.
+- VinylBadge accepts genres and normalizes each entry via string-or-object heuristics in src/components/VinylBadge.jsx:14-24 and src/components/VinylBadge.jsx:26-37.
+- GenreChart, StylesChart, FormatChart, LabelChart, and DecadeChart all consume raw arrays with specific assumptions:
+  - GenreChart expects { name, count } in src/components/charts/GenreChart.jsx:14-17
+  - StylesChart expects { name, count } in src/components/charts/StylesChart.jsx:11-16
+  - GrowthChart expects { month, count } and then derives { month, total, added } in src/components/charts/GrowthChart.jsx:30-35
+- FilterPanel expects options = { genres, styles, decades, formats, labels } in src/components/FilterPanel.jsx:6-12.
+
+Where duplication shows up
+- VinylBadge is effectively declaring its own input contract instead of consuming the dashboard genre datum contract:
+  - it accepts strings
+  - it accepts objects with .name
+  - it ignores .count
+  - src/components/VinylBadge.jsx:14-24
+- Chart components each embed their own assumptions about datum keys instead of relying on a shared chart datum family.
+- GrowthChart invents a second internal chart contract, cumulative = { month, total, added }, but that shape is not named or reused.
+- FilterPanel relies on implicit option bucket names that must line up with server/services/releaseFilters.js:76-81 and CollectionWall state in src/pages/CollectionWall.jsx:21-25.
+
+Why this is risky
+- The badge currently succeeds because stats.genres happens to be compatible with the local string-or-object fallback logic. That is convenient, not safe.
+- Overly flexible input contracts hide upstream mistakes. If badge input drifts from { name, count } to something else, buildBadgeGenres may keep working while silently discarding useful fields.
+- Filter option payloads are shared across collection and wall surfaces but not defined once, which makes future additions easy to miss.
+
+Concrete candidate shared contracts
+- DashboardFeatureSlide
+  - kicker
+  - title
+  - sub
+  - where
+- BadgeGenre
+  - name
+  - bg
+- NamedCountDatum
+  - name
+  - count
+- GrowthPoint
+  - month
+  - count
+- GrowthSeriesPoint
+  - month
+  - total
+  - added
+- CollectionFilterOptions
+  - genres: string[]
+  - styles: string[]
+  - decades: number[]
+  - formats: string[]
+  - labels: string[]
+
+Recommendation
+- Treat NamedCountDatum as a shared core contract and use it explicitly for genres, styles, labels, formats, and decades where possible.
+- Tighten VinylBadge so it expects one stable input type instead of string-or-object unions.
+- If HeroCarousel remains data-driven, move the generated feature object shape into a tiny helper so the contract is obvious and testable.
+
+3. Auth, account, and session contracts are split across route, context, and page state
+
+What exists now
+- Auth status response:
+  - server/routes/auth.js:12-18
+- User summary shape:
+  - server/routes/auth.js:8-10
+- Account summary shape:
+  - server/routes/account.js:18-24
+- AuthContext derives runtime state from those responses:
+  - src/lib/AuthContext.jsx:15-27
+  - src/lib/AuthContext.jsx:58-97
+- Settings page separately loads and stores account fields:
+  - src/pages/Settings.jsx:278-283
+  - src/pages/Settings.jsx:291-296
+
+Where duplication shows up
+- The user summary shape is implicit in both the route and the context:
+  - id
+  - username
+  - role
+  - created_at
+- The account summary shape is used in AuthContext and Settings:
+  - discogsUsername
+  - tokenConfigured
+  - tokenPreview
+  - currency
+- AuthContext exposes a third derived shape to the rest of the app:
+  - loading
+  - needsBootstrap
+  - user
+  - loggedIn
+  - isAdmin
+  - discogsConfigured
+  - accountUnavailable
+  - currency
+  - methods
+  - src/lib/AuthContext.jsx:58-97
+
+Why this is risky
+- Settings manages tokenConfigured and tokenPreview locally instead of consuming a shared AccountSummary contract helper.
+- App, Dashboard, Collection, and CollectionWall all rely on the derived booleans discogsConfigured and accountUnavailable, but those booleans are derived from an implicit API contract.
+- Any change to account route shape now has at least three consumers to keep in sync:
+  - AuthContext
+  - Settings
+  - any direct api.getAccount call
+
+Concrete candidate shared contracts
+- UserSummary
+  - id
+  - username
+  - role
+  - created_at
+- AuthStatusResponse
+  - needsBootstrap
+  - loggedIn
+  - user: UserSummary | null
+- AccountSummary
+  - discogsUsername
+  - tokenConfigured
+  - tokenPreview
+  - currency
+- AccountUpdateResponse
+  - AccountSummary
+  - cacheReset
+  - message
+- AuthContextValue
+  - loading
+  - needsBootstrap
+  - user
+  - loggedIn
+  - isAdmin
+  - discogsConfigured
+  - accountUnavailable
+  - currency
+  - login/bootstrap/logout/refreshAccount/setCurrencyPreference/refresh
+
+Recommendation
+- Centralize the response contracts for auth and account in one shared contract module.
+- Add small runtime normalizers on the client side, such as normalizeAuthStatus and normalizeAccountSummary, so components depend on one shape only.
+
+4. Release contracts remain the broadest repo-wide gap
+
+What exists now
+- The release route defines a field list in server/routes/collection.js:12-38.
+- The DB hydration step expands JSON fields and adds notes_text in server/db.js:278-292.
+- The route then attaches extra cover URL variants in server/routes/collection.js:48-55.
+- Different endpoints expose different slices of the same domain object:
+  - collection list: server/routes/collection.js:104-135
+  - random release: server/routes/collection.js:141-157
+  - wall covers: server/routes/collection.js:163-172
+  - detail release: server/routes/collection.js:178-187
+
+Where duplication shows up
+- Collection table expects:
+  - id
+  - instance_id
+  - cover_url
+  - title
+  - artist
+  - year
+  - genres
+  - formats
+  - labels
+  - rating
+  - notes_text
+  - estimated_value
+  - listing_status
+  - listing_price
+  - src/components/CollectionTable.jsx:40-113
+- Release detail expects:
+  - all of the above plus styles, country, date_added, synced_at, tracklist, release_id, detail_cover_url
+  - src/pages/ReleaseDetail.jsx:104-147
+  - src/pages/ReleaseDetail.jsx:178-201
+- Random release expects:
+  - id
+  - title
+  - artist
+  - year
+  - genres
+  - estimated_value
+  - detail_cover_url or cover_url
+  - src/components/RandomReleaseCard.jsx:73-86
+- CoverWall expects:
+  - id
+  - title
+  - artist
+  - cover_url
+  - wall_cover_url
+  - poster_cover_url
+  - genres
+  - styles
+  - formats
+  - labels
+  - year
+  - src/components/CoverWall.jsx:32
+  - src/components/CoverWall.jsx:153-170
+
+Why this is risky
+- The repo has a real runtime release model, but not a declared one. hydrateRelease and attachCoverUrls are effectively type constructors, but they are not treated as a shared contract boundary.
+- Several UI surfaces render release data with overlapping but not identical assumptions. A field rename or omission in one route could easily break one surface and not the others.
+- The random release card and wall both rely on variant cover URLs, but those URLs are attached ad hoc after hydration rather than represented as a named cover-variant contract.
+
+Concrete candidate shared contracts
+- BaseReleaseRow
+  - raw DB-backed fields from collection.js BASE_FIELDS
+- HydratedRelease
+  - BaseReleaseRow plus parsed arrays plus notes_text
+- ReleaseCoverVariants
+  - cover_url
+  - detail_cover_url
+  - wall_cover_url
+  - poster_cover_url
+- ClientRelease
+  - HydratedRelease plus ReleaseCoverVariants plus converted currency fields
+- CollectionRelease
+  - ClientRelease fields required by CollectionTable
+- WallRelease
+  - subset optimized for CoverWall and WindowedCoverWallGrid
+- RandomRelease
+  - subset optimized for RandomReleaseCard
+- ReleaseDetailContract
+  - detail-screen shape including tracklist and external link fields
+- ReleaseUpdatePatch
+  - rating?
+  - notes?
+- Track
+  - position
+  - title
+  - duration
+- NoteEntry
+  - field_id
+  - value
+
+Recommendation
+- Define the repo’s canonical client-side release contract once and document which endpoints return which subsets.
+- Consider a small client normalizer, even in plain JS, so components do not depend directly on route implementation details.
+
+5. Import and sync job state are still split between server and client definitions
+
+What exists now
+- Server import sync state builder:
+  - server/services/importSync.js:12-118
+- Client import status metadata:
+  - src/lib/importSync.js:1-40
+- ImportButton consumes the server response and client metadata:
+  - src/components/ImportButton.jsx:44-68
+  - src/components/ImportButton.jsx:122-157
+- Sync status is built locally in server/routes/sync.js:21-45 and then consumed in src/components/SyncButton.jsx:23-30, src/components/SyncButton.jsx:54-85, and src/components/SyncButton.jsx:126-132.
+
+Where duplication shows up
+- Import status enum lives in at least two places:
+  - server/services/importSync.js:29, 41, 53, 66, 78, 89, 100
+  - src/lib/importSync.js:1-24
+- Import failure shape is only defined server-side:
+  - dbId
+  - releaseId
+  - instanceId
+  - artist
+  - title
+  - reason
+  - server/services/importSync.js:1-9
+- Sync status shape is not centralized at all. The server builds:
+  - status
+  - current
+  - total
+  - phase
+  - message
+  - enrichment
+  - thumbnails
+  - inventory
+  - timestamps
+  - server/routes/sync.js:23-35 and later updates throughout the file
+- SyncButton assumes those nested objects exist with specific keys in src/components/SyncButton.jsx:23-30, 126-132, and 236-259.
+
+Why this is risky
+- Server and client import state are logically one contract but physically split.
+- Sync state is even looser than import state; it is a de facto contract with no named definition on either side.
+- Nested optional status objects such as enrichment and thumbnails are easy to drift because there is no one shape that describes them.
+
+Concrete candidate shared contracts
+- ImportStatus
+  - 'idle' | 'running' | 'completed' | 'partial' | 'failed' | 'local_only'
+- ImportFailure
+  - dbId
+  - releaseId
+  - instanceId
+  - artist
+  - title
+  - reason
+- ImportSyncState
+  - locale
+  - status
+  - current
+  - total
+  - applied
+  - synced
+  - failed
+  - failures: ImportFailure[]
+  - message
+- SyncPhase
+  - 'idle' | 'downloading' | 'ready' | other phases already emitted in sync.js
+- SyncSubtaskState
+  - status
+  - current
+  - total
+  - pending
+  - message
+- SyncState
+  - locale
+  - status
+  - phase
+  - current
+  - total
+  - message
+  - startedAt
+  - finishedAt
+  - recordsSynced
+  - enrichment?: SyncSubtaskState
+  - thumbnails?: SyncSubtaskState
+  - inventory?: { status, message }
+
+Recommendation
+- Move the status enums and shared state fields into a single shared contract module and let both server and client consume it.
+- This is especially worthwhile before more UI polish is added to sync and import surfaces.
+
+6. Achievement output is stable enough to deserve a named contract
+
+What exists now
+- buildAchievements produces:
+  - { tiered, hidden }
+  - src/lib/achievements.js:162-290
+- AchievementsPanel assumes the shape of each object directly:
+  - tier.currentTier
+  - tier.unlockedTierCount
+  - tier.totalTiers
+  - tier.nextGoal
+  - tier.nextLabel
+  - badgeText
+  - unlocked
+  - hidden
+  - src/components/AchievementsPanel.jsx:7-25
+  - src/components/AchievementsPanel.jsx:28-73
+  - src/components/AchievementsPanel.jsx:84-132
+
+Why this matters
+- This is not the most urgent contract gap, but it is now part of the redesigned dashboard and has a non-trivial nested shape.
+- Without a named contract, future dashboard work can accidentally break the panel by changing builder output fields.
+
+Concrete candidate shared contracts
+- AchievementTier
+  - currentTier
+  - unlockedTierCount
+  - totalTiers
+  - nextGoal
+  - nextLabel
+  - completed
+- TieredAchievement
+  - id
+  - emoji
+  - title
+  - description
+  - progress
+  - tier: AchievementTier
+  - hidden: false
+  - unlocked
+  - badgeText
+- HiddenAchievement
+  - id
+  - emoji
+  - title
+  - description
+  - unlocked
+  - hidden: true
+  - badgeText
+- AchievementBundle
+  - tiered: TieredAchievement[]
+  - hidden: HiddenAchievement[]
+
+Recommendation
+- Define the achievement output contract once next to buildAchievements. This is lower priority than stats and release contracts, but worth doing while dashboard work is active.
+
+7. Positive example already in the repo: collection filters
+
+What is working
+- shared/collectionFilters.js:1-44 centralizes the filter key set and default filter object.
+- server/services/releaseFilters.js:4-45 consumes the shared filter shape.
+- Collection and CoverWall both consume the same shared filter contract:
+  - src/pages/Collection.jsx
+  - src/components/CoverWall.jsx:10, 23, 67, 143
+
+What is still missing around it
+- FilterPanel still consumes an implicit CollectionFilterOptions object:
+  - src/components/FilterPanel.jsx:6-12
+- CollectionWall stores filters returned by the covers endpoint without a named options contract:
+  - src/pages/CollectionWall.jsx:10-25
+
+Recommendation
+- Use collection filters as the model for the rest of the repo: one shared source for keys/defaults/normalization, then separate route or UI helpers on top.
+
+Recommended priority order
+1. Centralize the dashboard stats contract and decide on naming consistency.
+2. Centralize the canonical client release contract plus cover variants.
+3. Centralize auth/account/session response contracts and their client normalizers.
+4. Centralize import/sync state contracts.
+5. Tighten chart datum and badge input contracts.
+6. Define achievement output contract.
+
+Low-risk first implementation path
+- Add JSDoc contract modules under shared/contracts/ instead of converting the repo to TypeScript.
+- Start with:
+  - shared/contracts/stats.js
+  - shared/contracts/release.js
+  - shared/contracts/auth.js
+  - shared/contracts/jobs.js
+- Then add tiny client normalizers so components stop depending directly on raw route payloads.
+
+Bottom line
+- The visual refresh is not introducing brand new contract chaos by itself. It is exposing an older pattern in the repo: rich UI surfaces are built directly on implicit route shapes.
+- The current worktree’s most pressing contract problem is the stats payload, because the new dashboard and badge now depend on it in multiple places without one authoritative definition.

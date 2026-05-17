@@ -1,0 +1,264 @@
+Discographic unused-code audit
+Task 3 of 8
+Date: 2026-04-22
+
+Scope
+- Current worktree, with latest visual changes reviewed first:
+  - `shared/i18n.js`
+  - `src/App.jsx`
+  - `src/index.css`
+  - `src/pages/Dashboard.jsx`
+  - `src/components/HeroCarousel.jsx`
+  - `src/components/VinylBadge.jsx`
+  - `tests/i18n-columns.test.js`
+  - `tests/vinyl-badge.test.js`
+- Then whole-repo source, styles, helpers, tests, and exported symbols.
+
+Method
+- `git status --short` to identify the active worktree delta.
+- `npx --yes madge --extensions js,jsx --orphans src server shared`
+  - Result: only `server/index.js` and `src/main.jsx`, which are real entrypoints.
+- `npx --yes madge --extensions js,jsx --circular src server shared`
+  - Result: no circular dependencies.
+- `npx --yes knip` and `timeout 20s npx --yes knip`
+  - No useful output in this environment. I did not use it as evidence.
+- `rg` across `src`, `server`, `shared`, and `tests` for import/use-site verification.
+- CSS selector verification by searching for selector names outside `src/index.css`.
+
+Executive summary
+- There is no large dead-file problem in the source tree right now. The prior cleanup already removed the obvious orphaned components.
+- The latest visual work does not introduce major dead code. Most of the new hero/badge code is live.
+- The strongest confirmed-unused items are:
+  - one unused local binding in the dashboard hero
+  - one fully unused shared constant
+  - three dead CSS selectors left behind from earlier dashboard UI work
+- There are also a few exported symbols that are still functionally used inside their own modules, but their exported surface is not consumed anywhere else.
+- I found no dead tests in the strict sense: no skipped tests, no orphaned helper files in `tests`, and no test files that are obviously unreachable by Vitest.
+
+Latest worktree changes first
+
+1. Confirmed-unused in the latest changes
+
+- Unused local binding in the new dashboard hero:
+  - `locale` is destructured and never used in `HeroPanel`.
+  - Reference: `src/pages/Dashboard.jsx:37`
+  - Confidence: high
+  - Verification: direct file inspection plus repo search shows no use of that local in the component body.
+
+2. Not dead in the latest changes
+
+- `src/components/HeroCarousel.jsx` is live through `Dashboard`.
+  - References: `src/pages/Dashboard.jsx:5`, `src/pages/Dashboard.jsx:67`
+- `src/components/VinylBadge.jsx` is live through `App`.
+  - References: `src/App.jsx:13`, `src/App.jsx:51`
+- The new i18n keys for the hero and badge are live and covered by tests.
+  - References: `src/components/HeroCarousel.jsx:42-45`, `src/components/HeroCarousel.jsx:120`, `src/components/VinylBadge.jsx:60`, `tests/i18n-columns.test.js:69-93`
+- The new hero/badge CSS is largely live.
+  - Verified selectors include `hero-panel`, `hero-orb`, `hero-chip`, `feature-carousel*`, `vinyl-badge`, and `vinyl-record*`.
+  - References: `src/index.css:124-463`, `src/App.jsx:50-51`, `src/pages/Dashboard.jsx:61-77`, `src/components/HeroCarousel.jsx:97-139`, `src/components/VinylBadge.jsx:58-79`
+
+Whole-repo confirmed-unused items
+
+1. Fully unused constant
+
+- `DEFAULT_COLLECTION_FILTERS` is defined but not referenced anywhere in the repo.
+  - Reference: `shared/collectionFilters.js:10`
+  - Confidence: high
+  - Verification:
+    - repo-wide symbol search found only the definition
+    - `Collection` and `CoverWall` use `createCollectionFilters(...)` instead
+  - Notes:
+    - This is the strongest fully dead symbol I found.
+
+2. Dead CSS selectors
+
+- `.sparkline-wrap`
+  - Reference: `src/index.css:566`
+  - Confidence: high
+  - Verification:
+    - selector search found no runtime class usage outside `src/index.css`
+    - consistent with the earlier removal of the sparkline component
+
+- `.coverage-row`
+  - Reference: `src/index.css:579`
+  - Confidence: high
+  - Verification:
+    - selector search found no usage outside `src/index.css`
+
+- `.coverage-row__fill`
+  - References: `src/index.css:584`, `src/index.css:769`
+  - Confidence: high
+  - Verification:
+    - selector search found no usage outside `src/index.css`
+    - still referenced in the reduced-motion override, but only within CSS itself
+
+3. No confirmed dead source files
+
+- `madge --orphans` did not find dormant source modules.
+- Reported files were only:
+  - `server/index.js`
+  - `src/main.jsx`
+- Those are true entrypoints, not dead files.
+- Confidence: high
+
+4. No confirmed dead tests
+
+- No `it.skip`, `test.skip`, `describe.skip`, `it.only`, `test.only`, or `describe.only` matches in `tests/`.
+- All files under `tests/` match Vitest’s naming convention and are active candidates for the test runner.
+- Confidence: medium-high
+  - This confirms “not skipped / not obviously unreachable”.
+  - It does not prove every test is still high-value.
+
+Confirmed-unused export surface
+
+These are not fully dead implementations. The code is used internally within the same module, but the exported API itself is not consumed elsewhere. I would treat these as cleanup candidates, not urgent bugs.
+
+1. `IMPORT_TERMINAL_STATUSES`
+- Reference: `src/lib/importSync.js:1`
+- Confidence: high
+- Verification:
+  - repo-wide search found no imports or external references
+  - the symbol is only used by `isTerminalImportStatus` inside the same module
+- Recommendation:
+  - stop exporting it unless there is a near-term external consumer planned
+
+2. `WALL_OVERSCAN_ROWS`
+- Reference: `src/lib/wallGrid.js:3`
+- Confidence: high
+- Verification:
+  - repo-wide search found no imports or external references
+  - it is only used as the internal default value inside `computeWallGridMetrics`
+- Recommendation:
+  - keep it as an internal constant if configurability is not needed
+
+3. `COVER_VARIANTS`
+- Reference: `server/services/coverMedia.js:13`
+- Confidence: high
+- Verification:
+  - repo-wide search found no imports or external references
+  - the constant is used throughout `coverMedia.js` itself
+- Recommendation:
+  - remove the export unless callers outside the service are expected soon
+
+Suspected-unused or lower-value API surface
+
+1. `playing` prop on `VinylBadge`
+- Reference: `src/components/VinylBadge.jsx:39`
+- Caller evidence: `src/App.jsx:51`
+- Confidence: medium
+- Why only medium:
+  - current repo search found no `<VinylBadge ... playing={...}>` usage
+  - but it is a plausible future prop for motion control, so this may be intentional API headroom
+- Assessment:
+  - today it looks unused by the app
+  - if the badge is not intended to be reused elsewhere, the prop is probably unnecessary
+
+2. `buildBadgeGenres` as a public export
+- Reference: `src/components/VinylBadge.jsx:26`
+- External consumer: `tests/vinyl-badge.test.js:2`
+- Confidence: medium-high
+- Assessment:
+  - the function itself is not dead; the component uses it internally at `src/components/VinylBadge.jsx:43`
+  - the public export appears to exist only for white-box testing
+  - this is not dead code, but it is test-shaped API surface rather than app-shaped API surface
+- Recommendation:
+  - either keep it intentionally as a test seam
+  - or move it to a dedicated helper module
+  - or switch the test to render/assert behavior and make the helper private
+
+Symbols checked and found to be live
+
+The following were reviewed because they looked like likely dead-code candidates or surfaced during the search, but they are in use:
+
+- `getActiveCollectionFilters`
+  - References: `shared/collectionFilters.js:41`, `src/pages/Collection.jsx:17`, `src/components/CoverWall.jsx:10`
+
+- `parseRetryAfter`
+  - References: `server/middleware/rateLimit.js:40`, `server/discogs.js:1`, `server/discogs.js:39`
+
+- `joinNames`
+  - References: `src/lib/format.js:30`, `src/components/CollectionTable.jsx:3`, `src/components/RandomReleaseCard.jsx:5`, `src/pages/ReleaseDetail.jsx:8`
+
+- `tooltipProps`
+  - References: `src/components/charts/ChartTooltip.jsx:1` and all chart components
+
+- `resolveNoteFieldId`, `replaceNoteText`, `countMeaningfulNoteRows`, `cleanupStoredNotes`
+  - Live in server routes, startup normalization, and tests
+
+- `selectTapeteVariant`, `isAllowedRemoteImageUrl`
+  - Live in `server/services/coverMedia.js`, `server/routes/media.js`, and tests
+
+Dead styles vs runtime-generated styles
+
+I explicitly did not mark these as dead even though selector searches do not show JSX class usage:
+
+- `.chart-wrap .recharts-tooltip-wrapper`
+- `.chart-wrap .recharts-default-tooltip`
+
+References: `src/index.css:518-522`
+
+Reason:
+- those classes are injected by Recharts at runtime
+- they are styled via descendant selectors from `.chart-wrap`
+- chart containers using `.chart-wrap` are still active across the dashboard charts
+
+Dead tests
+
+No confirmed dead tests.
+
+Evidence:
+- no skipped or focused tests detected
+- no non-test helper files under `tests/`
+- no test files targeting already-removed source files
+
+One nuance:
+- `tests/vinyl-badge.test.js` is valid, but it tests `buildBadgeGenres` directly instead of the rendered badge behavior
+- that makes the exported helper look more permanent than the app actually requires
+- I would call that a test design smell, not a dead test
+
+Confidence model
+
+High confidence
+- exact symbol/selector search found only the definition and no use-sites
+- examples:
+  - `shared/collectionFilters.js:10`
+  - `src/index.css:566`
+  - `src/index.css:579`
+  - `src/index.css:584`
+  - `src/pages/Dashboard.jsx:37`
+
+Medium-high confidence
+- exported symbol is used internally but not externally
+- examples:
+  - `src/lib/importSync.js:1`
+  - `src/lib/wallGrid.js:3`
+  - `server/services/coverMedia.js:13`
+
+Medium confidence
+- API surface appears unused in current app code, but may be intentional for future callers
+- example:
+  - `src/components/VinylBadge.jsx:39`
+
+Recommendations
+
+1. Remove the confirmed dead items first
+- `locale` binding in `HeroPanel`
+- `DEFAULT_COLLECTION_FILTERS`
+- `.sparkline-wrap`
+- `.coverage-row`
+- `.coverage-row__fill`
+
+2. Then tighten exported surface
+- make `IMPORT_TERMINAL_STATUSES`, `WALL_OVERSCAN_ROWS`, and `COVER_VARIANTS` internal unless external consumers are planned
+
+3. Decide whether `VinylBadge` is a private app component or a reusable component
+- if private, drop the unused `playing` prop and avoid test-driven public exports
+- if reusable, document the prop and keep the export intentionally
+
+Bottom line
+- The repo is in decent shape on dead code.
+- The current problem is not orphaned modules; it is smaller residue:
+  - one unused local
+  - one unused constant
+  - a few stale selectors
+  - a handful of exported symbols that are broader than current usage requires

@@ -38,7 +38,7 @@
     "verify:upgrade-path": "pnpm run scan:js-sources && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run test:upgrade-smoke:docker",
     "verify": "pnpm run scan:js-sources && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run test:upgrade-smoke",
     "test": "vitest run",
-    "sandcastle": "pnpm exec tsx .sandcastle/main.ts",
+    "sandcastle": "tsx .sandcastle/main.ts",
     "test:instance:start": "bash scripts/test-instance.sh start",
     "test:instance:stop": "bash scripts/test-instance.sh stop"
   },
@@ -60,7 +60,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@ai-hero/sandcastle": "^0.5.7",
+    "@ai-hero/sandcastle": "0.5.10",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^4.17.21",
     "@types/express-session": "^1.19.0",

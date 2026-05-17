@@ -1,0 +1,251 @@
+Discographic
+Task 4 of 8 Audit: Circular Dependencies and Unstable Layering Boundaries
+Date: 2026-04-22
+
+Scope
+- Reviewed the latest worktree changes first:
+  - `src/App.jsx`
+  - `src/components/HeroCarousel.jsx`
+  - `src/components/VinylBadge.jsx`
+  - `src/pages/Dashboard.jsx`
+  - `shared/i18n.js`
+- Then reviewed the wider import graph across `src`, `server`, and `shared`.
+- No application code was changed for this task.
+
+Method
+- Ran `npx --yes madge --extensions js,jsx --circular src server shared`
+- Ran `npx --yes madge --extensions js,jsx src server shared`
+- Read the main boundary files directly with line numbers.
+- Searched for route-to-route, service-to-route, component-to-page, and other back-edge imports.
+
+Result Summary
+- Actual circular dependencies: none found.
+- Import graph status: currently acyclic and materially healthier than before the media-service extraction.
+- Main risks now are not real cycles. They are boundary leaks that would make future cycles more likely:
+  - the app shell now depends on analytics data for a decorative header feature
+  - a server service imports a parsing helper from the DB bootstrap module
+  - the DB bootstrap module executes a domain service during startup
+  - the shared i18n runtime is carrying too much cross-tier responsibility
+  - long-lived in-memory job state still lives inside route modules
+
+Evidence
+- `madge` processed the codebase and reported: `No circular dependency found!`
+- Search for service/page back-edge imports found no matches:
+  - no `server/services/*` importing `server/routes/*`
+  - no `src/components/*` importing `src/pages/*`
+
+Findings
+
+1. No actual circular dependencies in the current graph
+Severity: none, but important baseline
+
+Evidence
+- `madge --circular src server shared` returned no cycles.
+- The latest UI additions are leaf components:
+  - [HeroCarousel.jsx](/home/octo/Projects/discographic-public/src/components/HeroCarousel.jsx:1)
+  - [VinylBadge.jsx](/home/octo/Projects/discographic-public/src/components/VinylBadge.jsx:1)
+- They only depend on hooks/context, not pages or app-shell internals:
+  - [HeroCarousel.jsx](/home/octo/Projects/discographic-public/src/components/HeroCarousel.jsx:2)
+  - [HeroCarousel.jsx](/home/octo/Projects/discographic-public/src/components/HeroCarousel.jsx:3)
+  - [VinylBadge.jsx](/home/octo/Projects/discographic-public/src/components/VinylBadge.jsx:2)
+  - [VinylBadge.jsx](/home/octo/Projects/discographic-public/src/components/VinylBadge.jsx:3)
+
+Assessment
+- The graph is clean today. There is no urgent cycle bug to fix.
+- The useful work is preventive: keep specific boundaries from becoming bidirectional later.
+
+Recommendation
+- Treat this as a layering audit, not a cycle-remediation task.
+- Preserve the current rule that leaf UI components stay page-agnostic and route handlers stay service-consumers only.
+
+2. The app shell now depends on analytics data for a decorative header feature
+Severity: medium
+
+Evidence
+- The root layout fetches stats directly to feed the header badge:
+  - [App.jsx](/home/octo/Projects/discographic-public/src/App.jsx:10)
+  - [App.jsx](/home/octo/Projects/discographic-public/src/App.jsx:15)
+  - [App.jsx](/home/octo/Projects/discographic-public/src/App.jsx:20)
+  - [App.jsx](/home/octo/Projects/discographic-public/src/App.jsx:28)
+  - [App.jsx](/home/octo/Projects/discographic-public/src/App.jsx:31)
+  - [App.jsx](/home/octo/Projects/discographic-public/src/App.jsx:51)
+- The dashboard also fetches stats for its own main content:
+  - [Dashboard.jsx](/home/octo/Projects/discographic-public/src/pages/Dashboard.jsx:16)
+  - [Dashboard.jsx](/home/octo/Projects/discographic-public/src/pages/Dashboard.jsx:177)
+  - [Dashboard.jsx](/home/octo/Projects/discographic-public/src/pages/Dashboard.jsx:195)
+  - [Dashboard.jsx](/home/octo/Projects/discographic-public/src/pages/Dashboard.jsx:204)
+
+Assessment
+- This is not a cycle, but it is a weak boundary.
+- `AppLayout` is supposed to be shell/navigation/chrome. It now depends on dashboard-domain data shape (`payload.genres`) to render the header badge.
+- That increases top-level coupling to `/stats` and duplicates the domain fetch already happening in `Dashboard`.
+- The likely future failure mode is not "import loop today". It is "someone moves stats selection or badge shaping into dashboard code and then starts importing page-level helpers into the shell".
+
+Why this matters
+- The shell should not need to know the analytics payload contract just to paint branding.
+- Once the shell owns feature data needs, it becomes easier to justify back-edge imports from page/domain code into app chrome.
+
+Recommendation
+- Introduce a dedicated shared hook or provider for lightweight stats summary, for example `useCollectionSummary()` or `AppShellDataProvider`.
+- Keep `VinylBadge` as a presentational leaf.
+- Prefer either:
+  - one shared stats fetch cached above both `AppLayout` and `Dashboard`, or
+  - a tiny header-specific endpoint/selector that returns only what the shell needs.
+
+3. `server/services/releaseFilters.js` imports upward into the DB bootstrap module
+Severity: medium
+
+Evidence
+- `releaseFilters` imports `parseJson` from `db.js`:
+  - [releaseFilters.js](/home/octo/Projects/discographic-public/server/services/releaseFilters.js:1)
+- The same service otherwise behaves like domain/query logic:
+  - [releaseFilters.js](/home/octo/Projects/discographic-public/server/services/releaseFilters.js:4)
+  - [releaseFilters.js](/home/octo/Projects/discographic-public/server/services/releaseFilters.js:48)
+- `db.js` is not a narrow codec utility. It is the DB bootstrap and migration module:
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:1)
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:37)
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:108)
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:250)
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:260)
+
+Assessment
+- This is a layering inversion.
+- A service should not depend on the DB bootstrap module for a generic JSON parser.
+- Today it is still acyclic because `db.js` does not import `releaseFilters.js`.
+- But this creates obvious cycle pressure: if `db.js` ever starts delegating filter extraction, option hydration, or release-shaping back into `releaseFilters.js`, the graph closes immediately.
+
+Why this matters
+- `server/db.js` has side effects on import: schema creation, migration work, note cleanup, and connection setup.
+- Pulling a tiny parser out of that module would reduce hidden coupling and make the service layer less brittle.
+
+Recommendation
+- Extract `parseJson` and `stringifyJson` into a lower-level utility such as `server/lib/jsonCodec.js`.
+- Keep `db.js` focused on DB connection, migration, and persistence helpers.
+- Do not let service modules depend on bootstrap modules for general-purpose helpers.
+
+4. `server/db.js` still depends on a domain service during startup
+Severity: medium
+
+Evidence
+- `db.js` imports the notes service:
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:5)
+- It executes domain cleanup during DB bootstrap:
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:250)
+  - [db.js](/home/octo/Projects/discographic-public/server/db.js:258)
+- The notes module is currently pure and does not import the DB:
+  - [notes.js](/home/octo/Projects/discographic-public/server/services/notes.js:1)
+  - [notes.js](/home/octo/Projects/discographic-public/server/services/notes.js:74)
+
+Assessment
+- This is not a cycle today, but it is another inversion in dependency direction.
+- The DB layer should ideally be the lowest layer. Instead, it now runs a domain normalization service during initialization.
+- That works because `notes.js` is still discipline-heavy and side-effect-free.
+- If `notes.js` later grows a DB read, settings lookup, or route-oriented translation dependency, the cycle appears immediately.
+
+Recommendation
+- Move boot-time note cleanup into an explicit migration module or migration step.
+- If note normalization must stay shared, isolate the pure note codec in a very small low-level module with no DB knowledge.
+- Keep startup/bootstrap modules from calling domain services unless that dependency is deliberately permanent and tightly constrained.
+
+5. Shared i18n is becoming a high-fanout cross-tier runtime boundary
+Severity: low to medium
+
+Evidence
+- Server request locale plumbing depends on `shared/i18n.js`:
+  - [server/index.js](/home/octo/Projects/discographic-public/server/index.js:18)
+  - [server/index.js](/home/octo/Projects/discographic-public/server/index.js:30)
+  - [server/index.js](/home/octo/Projects/discographic-public/server/index.js:31)
+  - [server/index.js](/home/octo/Projects/discographic-public/server/index.js:32)
+- Client context depends on the same shared runtime:
+  - [I18nContext.jsx](/home/octo/Projects/discographic-public/src/lib/I18nContext.jsx:2)
+  - [I18nContext.jsx](/home/octo/Projects/discographic-public/src/lib/I18nContext.jsx:6)
+  - [I18nContext.jsx](/home/octo/Projects/discographic-public/src/lib/I18nContext.jsx:15)
+- Toasts and formatting utilities also depend on it directly:
+  - [ToastContext.jsx](/home/octo/Projects/discographic-public/src/lib/ToastContext.jsx:2)
+  - [ToastContext.jsx](/home/octo/Projects/discographic-public/src/lib/ToastContext.jsx:24)
+  - [ToastContext.jsx](/home/octo/Projects/discographic-public/src/lib/ToastContext.jsx:55)
+  - [format.js](/home/octo/Projects/discographic-public/src/lib/format.js:1)
+  - [format.js](/home/octo/Projects/discographic-public/src/lib/format.js:4)
+  - [format.js](/home/octo/Projects/discographic-public/src/lib/format.js:18)
+  - [api.js](/home/octo/Projects/discographic-public/src/lib/api.js:1)
+  - [api.js](/home/octo/Projects/discographic-public/src/lib/api.js:5)
+  - [api.js](/home/octo/Projects/discographic-public/src/lib/api.js:80)
+
+Assessment
+- This is not wrong by itself. Shared pure locale helpers are legitimate.
+- The risk is concentration: `shared/i18n.js` is now a cross-tier dependency used by request middleware, browser storage logic, formatting, toast labels, and API fallback behavior.
+- That makes it one of the easiest places to accidentally introduce a future cross-layer import.
+- If this module ever imports browser-only code, React helpers, server utilities, or formatting services, it becomes a cycle or bundling problem immediately.
+
+Recommendation
+- Keep `shared/i18n.js` strictly pure and data-oriented.
+- Split tier-specific behavior:
+  - browser locale persistence/access in `src/lib/locale.js`
+  - server locale resolution in middleware
+- Avoid adding any UI concerns, request objects, or formatting helpers back into `shared/i18n.js`.
+
+6. In-memory job state still lives inside route modules
+Severity: low to medium
+
+Evidence
+- Sync route owns long-lived state:
+  - [sync.js](/home/octo/Projects/discographic-public/server/routes/sync.js:13)
+  - [sync.js](/home/octo/Projects/discographic-public/server/routes/sync.js:21)
+  - [sync.js](/home/octo/Projects/discographic-public/server/routes/sync.js:41)
+- Import route owns preview cache and import state:
+  - [import.js](/home/octo/Projects/discographic-public/server/routes/import.js:23)
+  - [import.js](/home/octo/Projects/discographic-public/server/routes/import.js:28)
+  - [import.js](/home/octo/Projects/discographic-public/server/routes/import.js:34)
+
+Assessment
+- This is not a cycle today.
+- It is a boundary smell because route modules now act as HTTP adapters and state containers/orchestrators.
+- That makes later reuse awkward. If another service, admin tool, worker, or test helper needs access to sync/import state, the easiest bad move is to import a route module from somewhere else.
+- That is exactly how route-driven cycles tend to start.
+
+Recommendation
+- Move long-lived route state into dedicated service/store modules:
+  - `server/services/syncStateStore.js`
+  - `server/services/importPreviewStore.js`
+  - `server/services/importStateStore.js`
+- Keep routes as request/response adapters only.
+
+7. Positive boundary improvement: the previous media route/service leak is fixed
+Severity: positive note
+
+Evidence
+- `sync.js` now depends on media helpers through the service layer:
+  - [sync.js](/home/octo/Projects/discographic-public/server/routes/sync.js:4)
+- `media.js` also consumes those helpers from the service module:
+  - [media.js](/home/octo/Projects/discographic-public/server/routes/media.js:4)
+  - [media.js](/home/octo/Projects/discographic-public/server/routes/media.js:8)
+- Shared implementation lives in the service:
+  - [coverMedia.js](/home/octo/Projects/discographic-public/server/services/coverMedia.js:13)
+  - [coverMedia.js](/home/octo/Projects/discographic-public/server/services/coverMedia.js:64)
+  - [coverMedia.js](/home/octo/Projects/discographic-public/server/services/coverMedia.js:144)
+
+Assessment
+- This was the main route/service near-cycle from the earlier audit and it is now resolved cleanly.
+- Do not regress this by letting route modules expose reusable helpers again.
+
+Recommendation
+- Keep the current rule explicit:
+  - reusable logic lives in `server/services/*`
+  - `server/routes/*` should never be imported from other routes or services
+
+Priority Recommendations
+1. Extract JSON codec helpers out of `server/db.js`.
+2. Move boot-time note cleanup out of `server/db.js` into migration/bootstrap code that does not depend on domain services.
+3. Pull shell-level stats fetching into a dedicated shared data hook/provider instead of leaving it duplicated in `AppLayout` and `Dashboard`.
+4. Keep `shared/i18n.js` pure and avoid adding tier-specific behavior there.
+5. Move sync/import in-memory state stores out of route modules before more background-job features accumulate.
+
+Bottom Line
+- There are no current circular imports to block a PR.
+- The codebase is structurally safe enough to merge.
+- The main remaining risk is architectural drift, not a present cycle:
+  - shell depending on feature-domain data
+  - low-level DB module carrying service dependencies
+  - high-fanout shared runtime modules
+  - route modules owning reusable state
+- If those seams stay disciplined, the graph should remain acyclic.

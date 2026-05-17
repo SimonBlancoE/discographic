@@ -1,0 +1,482 @@
+Task 1 of 8: DRY / Consolidation Audit
+Date: 2026-04-22
+Scope:
+- Latest worktree focus:
+  - shared/i18n.js
+  - src/App.jsx
+  - src/index.css
+  - src/pages/Dashboard.jsx
+  - src/components/HeroCarousel.jsx
+  - src/components/VinylBadge.jsx
+  - tests/vinyl-badge.test.js
+- Surrounding code reviewed for interaction and duplication:
+  - src/lib/api.js
+  - src/lib/format.js
+  - src/lib/achievements.js
+  - src/hooks/useReducedMotion.js
+  - src/components/LoadingSkeletons.jsx
+  - src/components/RandomReleaseCard.jsx
+  - shared/collectionFilters.js
+  - tests/i18n-columns.test.js
+
+No code was changed for this task.
+
+Executive Summary
+
+The recent visual work is generally coherent, but it introduced a new layer of duplication around stats fetching, stats-shape interpretation, feature metadata, and visual tokens. The most important problem is not the CSS or the carousel itself. It is that the app now fetches the same stats payload in more than one place and repeatedly re-derives small slices of the same data for the badge, hero, dashboard cards, and achievements. That duplication will make future UI changes more expensive and easier to desynchronize.
+
+The best consolidation target is a small stats domain layer:
+- one fetch/caching entrypoint
+- one set of selectors for top genre, top artist, coverage counts, and badge genres
+- one shared collection link/query builder for dashboard drilldowns
+
+Everything else is secondary to that.
+
+1. Concrete Duplication Findings
+
+1.1 Duplicate stats fetches for the same session state
+
+Severity: High
+
+Evidence:
+- src/App.jsx:20-43
+- src/pages/Dashboard.jsx:195-224
+
+Details:
+- AppLayout fetches /stats only to derive badge genres for the header.
+- Dashboard fetches /stats again for the main page.
+- Both flows gate on the same account state and both degrade to an empty/absent result when Discogs is unavailable.
+
+Why this matters:
+- This is duplicated network work on the critical path of the logged-in shell.
+- It duplicates account-state branching and response-shape assumptions.
+- It makes the header badge and dashboard vulnerable to drifting behavior if one side starts filtering or normalizing the stats response differently.
+
+Current duplicate logic:
+- src/App.jsx:23-38 decides when to fetch and slices payload.genres.
+- src/pages/Dashboard.jsx:196-218 decides when to fetch and stores the full payload.
+
+What should exist instead:
+- A shared stats hook or provider, for example:
+  - src/hooks/useStats.js
+  - src/lib/statsClient.js
+  - src/lib/StatsContext.jsx
+- If the app wants to keep the header light, a dedicated summary endpoint or selector layer could also work:
+  - api.getStatsSummary()
+  - selectBadgeGenres(stats)
+
+
+1.2 Repeated interpretation of the stats payload shape
+
+Severity: High
+
+Evidence:
+- src/App.jsx:28-32
+- src/pages/Dashboard.jsx:71-79
+- src/pages/Dashboard.jsx:144-148
+- src/pages/Dashboard.jsx:246-279
+- src/lib/achievements.js:167-179
+- src/components/VinylBadge.jsx:14-37
+
+Details:
+- The same response structure is interpreted in several places:
+  - top genres for the badge
+  - top genre count/name for dashboard stat cards
+  - total/rated/notes/priced coverage for readiness
+  - top artist/top genre counts for achievements
+  - genre entry normalization in VinylBadge
+
+Symptoms:
+- App assumes stats.genres can be sliced directly.
+- Dashboard assumes stats.totals, stats.styles, stats.artists[0], and stats.genres[0].
+- buildAchievements pulls counts and list lengths again from the raw stats object.
+- VinylBadge accepts multiple input shapes and normalizes them locally, which means the presentational component is compensating for upstream contract looseness.
+
+Why this matters:
+- The payload contract is effectively "whoever remembers the field names."
+- Any backend stats shape change will fan out across App, Dashboard, achievements, and the badge.
+- It makes tests more fragmented because behavior is derived in many places instead of one.
+
+What should exist instead:
+- A shared stats adapter/selectors module, for example:
+  - src/lib/stats.js
+  - selectBadgeGenres(stats)
+  - selectTopArtist(stats)
+  - selectTopGenre(stats)
+  - selectCoverageTotals(stats)
+  - selectMappedStyleCount(stats)
+- VinylBadge should ideally receive already-shaped display data or a narrower contract rather than normalizing arbitrary values itself.
+
+
+1.3 Dashboard drilldown URLs are built ad hoc despite shared filter primitives already existing
+
+Severity: Medium
+
+Evidence:
+- src/pages/Dashboard.jsx:187-193
+- src/pages/Dashboard.jsx:391-395
+- src/lib/api.js:56
+- shared/collectionFilters.js:1-44
+
+Details:
+- Dashboard builds collection URLs manually with new URLSearchParams in two places.
+- The collection feature already has shared filter keys/defaults in shared/collectionFilters.js.
+- Collection itself already centralizes active filters through getActiveCollectionFilters.
+
+Why this matters:
+- The app already started consolidating collection-filter semantics, but dashboard drilldowns stopped short of using that shared layer.
+- If filter names, normalization rules, or empty-value rules change, dashboard links can drift from collection state handling.
+
+What should exist instead:
+- Extend shared/collectionFilters.js with one link/query helper, for example:
+  - buildCollectionSearch(filters)
+  - createCollectionSearchParams(filters)
+- Use that helper from Dashboard, Collection, and any future chart drilldowns.
+
+
+1.4 Dashboard feature metadata has no shared source of truth
+
+Severity: Medium
+
+Evidence:
+- src/components/HeroCarousel.jsx:5-6
+- src/components/HeroCarousel.jsx:41-46
+- shared/i18n.js:198-221
+- shared/i18n.js:657-680
+- tests/i18n-columns.test.js:68-94
+
+Details:
+- HeroCarousel owns FEATURE_KEYS = ['charts', 'random', 'curate', 'wall', 'export'].
+- shared/i18n.js manually defines four keys per feature per locale:
+  - kicker
+  - title
+  - sub
+  - where
+- tests/i18n-columns.test.js manually repeats the same matrix as VISUAL_I18N_KEYS.
+
+Why this matters:
+- Adding a new slide or renaming one currently means editing:
+  - HeroCarousel feature list
+  - Spanish message keys
+  - English message keys
+  - the test manifest
+- That is not catastrophic, but it is exactly the kind of lightweight duplication that causes maintenance misses.
+
+What should exist instead:
+- A tiny shared manifest, for example:
+  - shared/dashboardFeatures.js with ['charts', 'random', 'curate', 'wall', 'export']
+- Tests should derive the expected translation keys from that manifest.
+- The locale content still needs separate Spanish/English values; only the feature identity list should be shared.
+
+
+1.5 Achievements maintain a second localization/content system outside shared/i18n.js
+
+Severity: Medium
+
+Evidence:
+- src/pages/Dashboard.jsx:282
+- src/lib/achievements.js:5-118
+
+Details:
+- Dashboard uses the main i18n system for the page shell.
+- buildAchievements uses ACHIEVEMENT_COPY, a separate bilingual copy registry embedded in src/lib/achievements.js.
+
+Why this matters:
+- This is duplicated localization infrastructure, not just duplicated strings.
+- It bypasses the existing translation coverage checks in shared/i18n.js.
+- It creates two places where locale-aware copy is stored and maintained.
+
+Why it is relevant to the latest work:
+- The updated dashboard now leans harder on achievements as a primary section.
+- That increases the cost of having achievement copy live outside the shared content system.
+
+What should exist instead:
+- Either:
+  - move achievement strings into shared/i18n.js
+- Or:
+  - create a dedicated shared content registry used consistently by locale and tests
+
+The current split is workable, but it is not clean.
+
+
+1.6 Visual tokens are repeated as literals across CSS and component code
+
+Severity: Medium
+
+Evidence:
+- src/index.css:124-175
+- src/index.css:188-290
+- src/index.css:293-467
+- src/components/VinylBadge.jsx:5-11
+
+Details:
+- The new visual layer repeats the same brand colors and gradient language in several places:
+  - hero panel surfaces
+  - hero orbs
+  - badge shell
+  - carousel active dots
+  - badge swatches
+
+This is not all "bad duplication." Some variation is intentional. The issue is that the system now has enough custom visual language that it would benefit from one token layer for:
+- pink/cyan brand ramps
+- motion durations/easing
+- reusable gradients for accent pills/dots/badge shells
+
+Why this matters:
+- Theme changes now require editing both CSS and JS constants.
+- The badge swatch palette lives in component code while the rest of the visual identity lives in CSS.
+
+What should exist instead:
+- Prefer CSS custom properties in src/index.css for shared color ramps/durations.
+- If the badge swatches must stay data-driven in JS, at least move them to a shared visual-tokens module.
+
+
+1.7 Dashboard state blocks duplicate structure and only differ by copy
+
+Severity: Low to Medium
+
+Evidence:
+- src/pages/Dashboard.jsx:284-307
+- src/pages/Collection.jsx:208-214
+- src/pages/CollectionWall.jsx:30-31
+
+Details:
+- Dashboard has two nearly identical early returns for:
+  - account unavailable
+  - Discogs not configured
+- Collection and Wall also have separate account-gating messages and structures.
+
+Why this matters:
+- The latest dashboard changes increased the amount of page-specific empty-state UI.
+- Right now the duplication is still manageable, but if product wants consistent account-gating behavior, these pages will drift.
+
+What should exist instead:
+- A small AccountGateState / DiscogsGateState component only if the team wants cross-page consistency.
+- If the UX should stay intentionally different per page, keep it local.
+
+
+1.8 The i18n validation test now has a growing amount of manual key bookkeeping
+
+Severity: Low to Medium
+
+Evidence:
+- tests/i18n-columns.test.js:5-94
+
+Details:
+- The test file already holds separate manual key inventories for exports, backend import strings, backend media strings, client fallbacks, and now visual hero/badge strings.
+- The new VISUAL_I18N_KEYS section continues that pattern.
+
+Why this matters:
+- The test is useful, but it is becoming a registry of registries.
+- Some of those key families can be derived from shared manifests instead of enumerated by hand.
+
+What should exist instead:
+- Keep manual arrays where no source manifest exists.
+- Generate visual feature keys from a shared feature manifest.
+- Consider separating "translation coverage manifests" by domain so the file stops accumulating unrelated responsibilities.
+
+
+2. Shared Helpers / Contracts That Should Exist
+
+Priority order:
+
+2.1 A shared stats domain layer
+
+Recommended shape:
+- src/hooks/useStats.js
+- or src/lib/statsClient.js + src/lib/statsSelectors.js
+
+Minimum responsibilities:
+- fetch/cached load of /stats
+- account-aware reset behavior
+- selectors:
+  - selectBadgeGenres
+  - selectTopArtist
+  - selectTopGenre
+  - selectCoverageTotals
+  - selectMappedStyleCount
+  - selectMilestone
+
+
+2.2 A shared collection query builder
+
+Recommended location:
+- shared/collectionFilters.js
+
+Recommended additions:
+- buildCollectionSearch(filters)
+- createCollectionSearchParams(filters)
+
+Use sites:
+- src/pages/Dashboard.jsx
+- src/pages/Collection.jsx
+- any future chart/table drilldowns
+
+
+2.3 A shared dashboard feature manifest
+
+Recommended location:
+- shared/dashboardFeatures.js
+
+Recommended contents:
+- DASHBOARD_FEATURE_KEYS = ['charts', 'random', 'curate', 'wall', 'export']
+- optional helper to expand i18n suffixes for tests
+
+Use sites:
+- src/components/HeroCarousel.jsx
+- tests/i18n-columns.test.js
+
+
+2.4 A shared visual token registry
+
+Recommended form:
+- Prefer CSS custom properties in src/index.css
+- Use JS tokens only where the value must be data-driven
+
+Good candidates:
+- brand pink/cyan accents
+- feature-carousel active dot gradient
+- badge shell gradient
+- animation durations for badge/carousel accents
+
+
+2.5 A narrower badge input contract
+
+Current:
+- VinylBadge accepts flexible genre entries and normalizes them itself.
+
+Better:
+- Upstream code passes either:
+  - a clean array of names
+  - or a clean array of badge items
+
+Recommended split:
+- src/lib/badgeGenres.js for the pure shaping helper
+- src/components/VinylBadge.jsx as a presentational component only
+
+
+2.6 Achievement copy should join the same localization system as the rest of the dashboard
+
+Recommended direction:
+- move achievement copy into shared/i18n.js
+- or create a dedicated shared achievement locale registry that can be validated in tests
+
+The current ACHIEVEMENT_COPY object is readable, but architecturally it is a parallel translation system.
+
+
+3. What Should Stay Duplicated
+
+3.1 Locale-specific message values should stay duplicated across languages
+
+Files:
+- shared/i18n.js
+
+Reason:
+- Spanish and English strings are content, not implementation duplication.
+- The right target is shared manifests for key identity, not forced deduplication of translated text.
+
+
+3.2 Small presentational subcomponents local to Dashboard should stay local unless reused elsewhere
+
+Files:
+- src/pages/Dashboard.jsx:36-174
+
+Includes:
+- HeroPanel
+- StatCard
+- ChartCard
+- CoverageMetric
+- CoveragePanel
+
+Reason:
+- These are tightly coupled to dashboard layout and copy.
+- Extracting them now would mostly move code around without simplifying dependencies.
+
+
+3.3 HeroCarousel and VinylBadge should not be over-consolidated into one motion abstraction yet
+
+Files:
+- src/components/HeroCarousel.jsx:33-143
+- src/components/VinylBadge.jsx:39-82
+
+Reason:
+- Both rotate through indexed content, but the behavior is materially different:
+  - HeroCarousel supports drag, controls, pause/resume, and a ticker
+  - VinylBadge is a lightweight ambient badge
+- A shared hook is only worth it if a third animated rotator appears or if timing logic starts diverging in bugs.
+
+
+3.4 Skeleton layout should keep mirroring the final dashboard structure
+
+Files:
+- src/components/LoadingSkeletons.jsx:5-45
+
+Reason:
+- Skeletons are intentionally repetitive because their job is to resemble the target layout.
+- Over-abstracting them usually hurts readability more than it helps.
+
+
+3.5 Tiny inline icon components can stay where they are
+
+Files:
+- src/components/HeroCarousel.jsx:8-31
+
+Reason:
+- Pin, ArrowL, and ArrowR are only used there.
+- Extracting them would not reduce complexity.
+
+
+4. Prioritized Recommendations
+
+Priority 1
+- Introduce a shared stats layer and stop fetching /stats independently in App and Dashboard.
+- Move payload-shape interpretation into selectors.
+
+Why first:
+- Highest maintenance cost.
+- Prevents future drift between badge, dashboard, and achievements.
+- Removes the biggest duplication introduced by the recent visual work.
+
+
+Priority 2
+- Add a shared collection query builder and use it for dashboard drilldowns.
+
+Why second:
+- Small change, immediate cleanliness win.
+- The shared filter layer already exists, so this finishes that consolidation.
+
+
+Priority 3
+- Extract a shared dashboard feature manifest and derive visual i18n coverage checks from it.
+
+Why third:
+- Small, low-risk consolidation.
+- Directly reduces multi-file bookkeeping for the carousel.
+
+
+Priority 4
+- Consolidate achievement copy into the same localization system or a validated shared registry.
+
+Why fourth:
+- More structural than urgent.
+- Important because achievements are now a prominent dashboard surface.
+
+
+Priority 5
+- Introduce visual tokens only where repetition is stable and intentional.
+
+Why fifth:
+- Worth doing, but only after the data/domain duplications are fixed.
+- This is design-system cleanup, not the main maintainability bottleneck.
+
+
+Priority 6
+- Leave HeroCarousel/VinylBadge motion logic separate for now.
+
+Why:
+- There is some superficial repetition, but consolidation would currently trade clarity for abstraction.
+
+
+Bottom Line
+
+The main DRY issue in the current worktree is not "too many CSS classes" or "too many JSX nodes." It is repeated ownership of the same stats data and repeated interpretation of the same stats contract. Fix that first. After that, the next best consolidations are the collection query builder and the dashboard feature manifest. Everything else should be treated as selective cleanup, not blanket abstraction.
