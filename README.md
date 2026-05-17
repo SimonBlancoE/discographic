@@ -12,7 +12,7 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/get-docker/)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-22.x-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/database-SQLite-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 <br />
@@ -103,7 +103,7 @@ Then open **http://localhost:3800** in your browser.
 > This is a throwaway QA-only instance. It is not part of the normal setup flow and it does not keep persistent data.
 >
 > ```bash
-> npm run test:instance:start -- --host 127.0.0.1 --port 3801
+> pnpm run test:instance:start -- --host 127.0.0.1 --port 3801
 > ```
 >
 > That command starts a disposable Docker instance with these users already created:
@@ -114,7 +114,7 @@ Then open **http://localhost:3800** in your browser.
 > All data lives in memory only. When you finish testing, destroy everything with:
 >
 > ```bash
-> npm run test:instance:stop -- --host 127.0.0.1 --port 3801
+> pnpm run test:instance:stop -- --host 127.0.0.1 --port 3801
 > ```
 
 ### 2. Create your first user
@@ -158,20 +158,20 @@ Your database and cached covers are preserved - they live in a Docker volume sep
 
 ## Local development
 
-If you want to work on the code instead of just running the app:
+If you want to work on the code instead of just running the app, use Node.js 22.x and pnpm:
 
 ```bash
-npm install
+pnpm install
 ```
 
 You need two terminals:
 
 ```bash
 # Terminal 1 - API server with direct TypeScript execution
-npm run dev:server
+pnpm run dev:server
 
 # Terminal 2 - Vite dev server with hot reload
-npm run dev
+pnpm run dev
 ```
 
 - Frontend: http://localhost:5173

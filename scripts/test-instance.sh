@@ -151,7 +151,7 @@ Admin: admin-demo / demo12345
 User: user-demo / demo12345
 
 Destroy it with:
-npm run test:instance:stop -- --host ${host} --port ${port}
+pnpm run test:instance:stop -- --host ${host} --port ${port}
 EOF
 }
 

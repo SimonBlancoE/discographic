@@ -2,6 +2,7 @@
   "name": "discographic",
   "version": "0.3.3",
   "type": "module",
+  "packageManager": "pnpm@10.22.0",
   "description": "Self-hosted Discogs collection manager for vinyl collectors",
   "author": "Simon Blanco",
   "license": "MIT",
@@ -19,11 +20,11 @@
     "self-hosted"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22 <23"
   },
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:app && npm run build:server",
+    "build": "pnpm run build:app && pnpm run build:server",
     "build:app": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "preview": "vite preview",
@@ -34,10 +35,10 @@
     "scan:js-sources": "tsx scripts/scan-javascript-sources.ts",
     "test:upgrade-smoke": "tsx scripts/upgrade-smoke.ts",
     "test:upgrade-smoke:docker": "DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=false DISCOGRAPHIC_UPGRADE_SMOKE_REQUIRE_DOCKER=true tsx scripts/upgrade-smoke.ts",
-    "verify:upgrade-path": "npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke:docker",
-    "verify": "npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke",
+    "verify:upgrade-path": "pnpm run scan:js-sources && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run test:upgrade-smoke:docker",
+    "verify": "pnpm run scan:js-sources && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run test:upgrade-smoke",
     "test": "vitest run",
-    "sandcastle": "npx --yes tsx .sandcastle/main.ts",
+    "sandcastle": "pnpm exec tsx .sandcastle/main.ts",
     "test:instance:start": "bash scripts/test-instance.sh start",
     "test:instance:stop": "bash scripts/test-instance.sh stop"
   },
@@ -61,7 +62,7 @@
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.5.7",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/express": "^5.0.6",
+    "@types/express": "^4.17.21",
     "@types/express-session": "^1.19.0",
     "@types/lodash": "^4.17.24",
     "@types/multer": "^2.1.0",
@@ -75,7 +76,7 @@
     "tailwindcss": "^3.4.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
-    "vite": "^5.2.11",
+    "vite": "^6.0.0",
     "vitest": "^4.1.2"
   }
 }
