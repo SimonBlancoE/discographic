@@ -3,11 +3,17 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 type PackageJson = {
+  engines: {
+    node: string;
+  };
   homepage: string;
+  packageManager: string;
   repository: {
     url: string;
   };
   scripts: Record<string, string>;
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
 };
 
 type Tsconfig = {
@@ -38,6 +44,35 @@ const getTrackedJavaScriptSources = (): string[] =>
 const packageJson = readJson<PackageJson>('package.json');
 
 describe('TypeScript migration toolchain guardrails', () => {
+  it('declares pnpm, Node 22, and runtime-matched type packages as the supported toolchain', () => {
+    expect(packageJson.packageManager).toBe('pnpm@10.22.0');
+    expect(fileExists('pnpm-lock.yaml')).toBe(true);
+    expect(fileExists('package-lock.json')).toBe(false);
+    expect(fileExists('.node-version')).toBe(true);
+    expect(readText('.node-version').trim()).toMatch(/^22\./);
+    expect(packageJson.engines.node).toBe('>=22 <23');
+
+    const pnpmWorkspace = readText('pnpm-workspace.yaml');
+    expect(pnpmWorkspace).toContain('onlyBuiltDependencies:');
+    expect(pnpmWorkspace).toContain('better-sqlite3');
+    expect(pnpmWorkspace).toContain('esbuild');
+    expect(pnpmWorkspace).toContain('sharp');
+    expect(pnpmWorkspace).toContain('ignoredBuiltDependencies:');
+    expect(pnpmWorkspace).toContain('@parcel/watcher');
+    expect(pnpmWorkspace).toContain('msgpackr-extract');
+    expect(pnpmWorkspace).toContain('trustPolicy: no-downgrade');
+    expect(pnpmWorkspace).toContain('trustPolicyExclude:');
+    expect(pnpmWorkspace).toContain('undici-types');
+    expect(pnpmWorkspace).toContain('semver');
+    expect(pnpmWorkspace).not.toContain('trustPolicy: off');
+
+    expect(packageJson.dependencies.express).toMatch(/^\^4\./);
+    expect(packageJson.devDependencies['@types/express']).toMatch(/^\^4\./);
+    expect(packageJson.devDependencies['@types/node']).toMatch(/^\^22\./);
+    expect(packageJson.devDependencies.vite).toMatch(/^\^6\./);
+    expect(packageJson.devDependencies.vitest).toMatch(/^\^4\./);
+  });
+
   it('defines strict no-emit TypeScript defaults with a server build config', () => {
     expect(fileExists('tsconfig.json')).toBe(true);
     expect(fileExists('tsconfig.server.json')).toBe(true);
@@ -69,7 +104,7 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(packageJson.scripts.server).toBe('tsx server/index.ts');
     expect(packageJson.scripts['build:app']).toBe('vite build');
     expect(packageJson.scripts['build:server']).toBe('tsc -p tsconfig.server.json');
-    expect(packageJson.scripts.build).toBe('npm run build:app && npm run build:server');
+    expect(packageJson.scripts.build).toBe('pnpm run build:app && pnpm run build:server');
     expect(packageJson.scripts.start).toBe('node dist/server/start.js');
     expect(packageJson.scripts['scan:js-sources']).toBe('tsx scripts/scan-javascript-sources.ts');
     expect(packageJson.scripts['test:upgrade-smoke']).toBe('tsx scripts/upgrade-smoke.ts');
@@ -77,9 +112,9 @@ describe('TypeScript migration toolchain guardrails', () => {
       'DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=false DISCOGRAPHIC_UPGRADE_SMOKE_REQUIRE_DOCKER=true tsx scripts/upgrade-smoke.ts'
     );
     expect(packageJson.scripts['verify:upgrade-path']).toBe(
-      'npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke:docker'
+      'pnpm run scan:js-sources && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run test:upgrade-smoke:docker'
     );
-    expect(packageJson.scripts.verify).toBe('npm run scan:js-sources && npm run typecheck && npm run test && npm run build && npm run test:upgrade-smoke');
+    expect(packageJson.scripts.verify).toBe('pnpm run scan:js-sources && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run test:upgrade-smoke');
   });
 
   it('enforces zero tracked JavaScript source files, including tool config', () => {
@@ -120,13 +155,13 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(contributing).toContain('Direct contributions are not accepted');
     expect(contributing).toContain('TypeScript-only');
     expect(contributing).toContain('untrusted boundary');
-    expect(contributing).toContain('npm run typecheck');
-    expect(contributing).toContain('npm run test');
-    expect(contributing).toContain('npm run build');
-    expect(contributing).toContain('npm run test:upgrade-smoke');
-    expect(contributing).toContain('npm run test:upgrade-smoke:docker');
-    expect(contributing).toContain('npm run verify:upgrade-path');
-    expect(contributing).toContain('npm run verify');
+    expect(contributing).toContain('pnpm run typecheck');
+    expect(contributing).toContain('pnpm run test');
+    expect(contributing).toContain('pnpm run build');
+    expect(contributing).toContain('pnpm run test:upgrade-smoke');
+    expect(contributing).toContain('pnpm run test:upgrade-smoke:docker');
+    expect(contributing).toContain('pnpm run verify:upgrade-path');
+    expect(contributing).toContain('pnpm run verify');
     expect(contributing).toContain('Docker daemon is unreachable');
     expect(contributing).toContain('reachable Docker daemon');
     expect(contributing).toContain('The JavaScript scan is expected to pass once the tracked source tree is TypeScript-only');
@@ -140,8 +175,14 @@ describe('TypeScript migration toolchain guardrails', () => {
     const dockerfile = readText('Dockerfile');
     const dockerignore = readText('.dockerignore');
 
+    expect(dockerfile).toContain('COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./');
+    expect(dockerfile).toContain('RUN pnpm install --frozen-lockfile');
+    expect(dockerfile).toContain('RUN pnpm install --prod --frozen-lockfile');
+    expect(dockerfile).toContain('RUN pnpm run build');
     expect(dockerfile).toContain('COPY --from=build /app/dist ./dist');
-    expect(dockerfile).toContain('CMD ["npm", "run", "start"]');
+    expect(dockerfile).toContain('CMD ["pnpm", "run", "start"]');
+    expect(dockerfile).not.toMatch(/^RUN npm\b/m);
+    expect(dockerfile).not.toContain('CMD ["npm"');
     expect(dockerfile).not.toContain('COPY --from=build /app/data ./data');
     expect(dockerignore).toContain('data');
   });

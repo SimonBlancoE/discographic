@@ -12,7 +12,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/get-docker/)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-22.x-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/database-SQLite-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 <br />
@@ -102,7 +102,7 @@ Después abre **http://localhost:3800** en tu navegador.
 Si quieres una instancia desechable para QA con usuarios ya creados y sin datos persistentes:
 
 ```bash
-npm run test:instance:start -- --host 127.0.0.1 --port 3801
+pnpm run test:instance:start -- --host 127.0.0.1 --port 3801
 ```
 
 Ese comando arranca una instancia Docker temporal con estos usuarios ya creados:
@@ -113,7 +113,7 @@ Ese comando arranca una instancia Docker temporal con estos usuarios ya creados:
 Todos los datos viven solo en memoria. Cuando termines de probar, destrúyelo todo con:
 
 ```bash
-npm run test:instance:stop -- --host 127.0.0.1 --port 3801
+pnpm run test:instance:stop -- --host 127.0.0.1 --port 3801
 ```
 
 ### 2. Crea tu primer usuario
@@ -157,20 +157,20 @@ Tu base de datos y tus portadas cacheadas se conservan - viven en un volumen de 
 
 ## Desarrollo local
 
-Si quieres trabajar en el código en vez de solo ejecutar la aplicación:
+Si quieres trabajar en el código en vez de solo ejecutar la aplicación, usa Node.js 22.x y pnpm:
 
 ```bash
-npm install
+pnpm install
 ```
 
 Necesitas dos terminales:
 
 ```bash
 # Terminal 1 - servidor API con ejecución directa de TypeScript
-npm run dev:server
+pnpm run dev:server
 
 # Terminal 2 - servidor Vite con hot reload
-npm run dev
+pnpm run dev
 ```
 
 - Frontend: http://localhost:5173

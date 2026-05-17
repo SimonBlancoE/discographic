@@ -15,14 +15,14 @@ Normalize and validate data at the first untrusted boundary, then keep the inter
 
 ## Verification
 
-- Required before review: `npm run typecheck`, `npm run test`, and `npm run build`.
-- Migration gate: `npm run verify`.
-- Upgrade gate for this migration slice: `npm run test:upgrade-smoke`.
-- Docker-enforced self-hosted upgrade gate: `npm run test:upgrade-smoke:docker`.
-- Full Docker-capable upgrade-path verification for this migration slice: `npm run verify:upgrade-path`.
-- `npm run verify` chains the tracked-file JavaScript source scan, typecheck, tests, build, and upgrade smoke in one command.
-- `npm run verify:upgrade-path` is the authoritative issue-15 / PRD-9 completion gate on a Docker-capable runner.
-- `npm run verify` and `npm run test:upgrade-smoke` will skip the Docker half automatically when `docker` is unavailable on PATH or the Docker daemon is unreachable.
-- Use `npm run test:upgrade-smoke:docker` for the final migration verification in a Docker-capable environment; it clears the skip flag and treats Docker as mandatory, including a reachable Docker daemon.
+- Required before review: `pnpm run typecheck`, `pnpm run test`, and `pnpm run build`.
+- Migration gate: `pnpm run verify`.
+- Upgrade gate for this migration slice: `pnpm run test:upgrade-smoke`.
+- Docker-enforced self-hosted upgrade gate: `pnpm run test:upgrade-smoke:docker`.
+- Full Docker-capable upgrade-path verification for this migration slice: `pnpm run verify:upgrade-path`.
+- `pnpm run verify` chains the tracked-file JavaScript source scan, typecheck, tests, build, and upgrade smoke in one command.
+- `pnpm run verify:upgrade-path` is the authoritative issue-15 / PRD-9 completion gate on a Docker-capable runner.
+- `pnpm run verify` and `pnpm run test:upgrade-smoke` will skip the Docker half automatically when `docker` is unavailable on PATH or the Docker daemon is unreachable.
+- Use `pnpm run test:upgrade-smoke:docker` for the final migration verification in a Docker-capable environment; it clears the skip flag and treats Docker as mandatory, including a reachable Docker daemon.
 - Set `DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true` only when you need to force the non-Docker path even on a machine that has Docker.
 - The JavaScript scan is expected to pass once the tracked source tree is TypeScript-only; treat any reported project-owned `.js`, `.jsx`, `.mjs`, or `.cjs` file as a regression.

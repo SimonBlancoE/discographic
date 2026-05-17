@@ -1,0 +1,14 @@
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+  - sharp
+
+ignoredBuiltDependencies:
+  - '@parcel/watcher'
+  - msgpackr-extract
+
+trustPolicy: no-downgrade
+
+trustPolicyExclude:
+  - undici-types
+  - semver

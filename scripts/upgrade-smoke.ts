@@ -87,7 +87,7 @@ function getDockerAvailability(): DockerAvailability {
 }
 
 function ensureBuildArtifacts(): void {
-  assert(existsSync(distStartPath), 'Missing dist/server/start.js. Run `npm run build` before `npm run test:upgrade-smoke`.');
+  assert(existsSync(distStartPath), 'Missing dist/server/start.js. Run `pnpm run build` before `pnpm run test:upgrade-smoke`.');
 }
 
 function getAvailablePort(): Promise<number> {
