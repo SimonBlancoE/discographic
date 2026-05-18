@@ -351,7 +351,7 @@ function Settings() {
 
         <label className="block space-y-2 text-sm text-slate-300">
           <span>{tokenConfigured ? t('settings.newTokenOptional') : t('settings.discogsToken')}</span>
-          <input value={newToken} onChange={(e) => setNewToken(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input type="password" autoComplete="off" value={newToken} onChange={(e) => setNewToken(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
         </label>
 
         {error && <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>}

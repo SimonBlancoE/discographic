@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { resolveDockerSmokePlan } from './upgradeSmokePolicy.js';
+import { resolveDockerSmokePlan, retryPortBindRace } from './upgradeSmokePolicy.js';
 
 type LegacyFixture = {
   tempRoot: string;
@@ -534,7 +534,7 @@ async function assertLegacyAppBehavior(baseUrl: string, cachedCoverPath: string,
 }
 
 async function runCompiledStartSmoke(): Promise<void> {
-  await withLegacyFixture(async (fixture) => {
+  await retryPortBindRace(() => withLegacyFixture(async (fixture) => {
     const port = await getAvailablePort();
     const baseUrl = `http://127.0.0.1:${port}`;
     const runtime = startManagedProcess('node', [distStartPath], {
@@ -560,11 +560,11 @@ async function runCompiledStartSmoke(): Promise<void> {
     if (failure) {
       throw failure;
     }
-  });
+  }));
 }
 
 async function runDockerSmoke(): Promise<void> {
-  await withLegacyFixture(async (fixture) => {
+  await retryPortBindRace(() => withLegacyFixture(async (fixture) => {
     const port = await getAvailablePort();
     const baseUrl = `http://127.0.0.1:${port}`;
     const imageTag = `discographic-upgrade-smoke:${Date.now()}`;
@@ -609,7 +609,7 @@ async function runDockerSmoke(): Promise<void> {
     if (failure) {
       throw failure;
     }
-  });
+  }));
 }
 
 async function main(): Promise<void> {

@@ -122,7 +122,11 @@ type RawWallResponse = {
 
 function toQueryString(params: QueryParams): string {
   return new URLSearchParams(
-    Object.fromEntries(Object.entries(params).map(([key, value]) => [key, String(value)]))
+    Object.fromEntries(
+      Object.entries(params)
+        .filter(([, value]) => value != null)
+        .map(([key, value]) => [key, String(value)])
+    )
   ).toString();
 }
 

@@ -458,8 +458,7 @@ describe('Radar release detail page', () => {
       }
     });
 
-    const event = new Event('beforeunload', { cancelable: true }) as Event & { returnValue?: string };
-    event.returnValue = undefined;
+    const event = new Event('beforeunload', { cancelable: true });
 
     window.dispatchEvent(event);
 

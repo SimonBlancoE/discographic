@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  retryPortBindRace,
   resolveDockerSmokePlan,
   type DockerSmokePlan,
   type DockerSmokePlanInput,
@@ -137,4 +138,35 @@ describe('upgrade smoke docker policy', () => {
       expect(resolveDockerSmokePlan(testCase.input)).toEqual(testCase.expected);
     });
   }
+});
+
+describe('upgrade smoke port binding retry policy', () => {
+  it('retries transient EADDRINUSE failures before succeeding', async () => {
+    let attempts = 0;
+
+    await expect(
+      retryPortBindRace(async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('listen EADDRINUSE: address already in use 127.0.0.1:3801');
+        }
+        return 'ok';
+      })
+    ).resolves.toBe('ok');
+
+    expect(attempts).toBe(2);
+  });
+
+  it('does not retry unrelated smoke failures', async () => {
+    let attempts = 0;
+
+    await expect(
+      retryPortBindRace(async () => {
+        attempts += 1;
+        throw new Error('compiled runtime: expected dashboard totals.total_records=2');
+      })
+    ).rejects.toThrow('expected dashboard totals');
+
+    expect(attempts).toBe(1);
+  });
 });

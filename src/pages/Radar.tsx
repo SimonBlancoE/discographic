@@ -622,21 +622,31 @@ function Radar() {
     let timer: number | null = null;
 
     async function pollStatus() {
+      let nextStatus: RadarUpdateRunStatus;
+
       try {
-        const nextStatus = await api.getRadarStatus();
-
-        if (cancelled) {
-          return;
-        }
-
-        setUpdateStatusError('');
-        setUpdateRun(nextStatus);
-
-        if (nextStatus.isRunning) {
+        nextStatus = await api.getRadarStatus();
+      } catch {
+        if (!cancelled) {
+          setUpdateStatusError(t('radar.updateStatusError'));
           timer = window.setTimeout(pollStatus, UPDATE_POLL_MS);
-          return;
         }
+        return;
+      }
 
+      if (cancelled) {
+        return;
+      }
+
+      setUpdateStatusError('');
+      setUpdateRun(nextStatus);
+
+      if (nextStatus.isRunning) {
+        timer = window.setTimeout(pollStatus, UPDATE_POLL_MS);
+        return;
+      }
+
+      try {
         const nextRadar = await api.getRadar();
         if (!cancelled) {
           applyRadarUpdateResult(nextStatus, nextRadar);
