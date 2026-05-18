@@ -475,13 +475,6 @@ function RadarReleaseRow({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
-          <Link
-            to={detailPath}
-            data-radar-detail-action={String(releaseKey)}
-            className="inline-flex items-center justify-center rounded-full border border-brand-100/60 bg-brand-400/15 px-4 py-2 text-sm text-white no-underline transition hover:border-brand-100 hover:bg-brand-400/25"
-          >
-            {t('radar.openDetail')}
-          </Link>
           <a
             href={`https://www.discogs.com/release/${item.release_id}`}
             target="_blank"

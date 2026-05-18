@@ -1002,8 +1002,9 @@ describe('Radar page', () => {
     expect(detailLink?.textContent).toContain('Artist B');
     expect(detailLink?.textContent).toContain(messages['radar.currentPrice']);
     expect(detailLink?.textContent).toContain(messages['radar.priority']);
-    expect(detailAction?.getAttribute('href')).toBe('/radar/22');
-    expect(detailAction?.textContent).toContain(messages['radar.openDetail']);
+    expect(detailLink?.getAttribute('aria-label')).toContain(messages['radar.openDetail']);
+    expect(detailAction).toBeNull();
+    expect(rendered.textContent ?? '').not.toContain(messages['radar.openDetail']);
   });
 
   it('filters Radar rows from the normalized list contract and shows natural state labels', async () => {
