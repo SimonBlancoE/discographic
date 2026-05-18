@@ -131,6 +131,7 @@ const RADAR_KEYS = [
   'radar.filter.failed',
   'radar.filterEmptyTitle',
   'radar.filterEmptyBody',
+  'radar.openDetail',
   'radar.enrichTitle',
   'radar.enrichBody',
   'radar.enrichState.idle',

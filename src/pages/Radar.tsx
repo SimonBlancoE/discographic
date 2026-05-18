@@ -384,6 +384,7 @@ function RadarReleaseRow({
   t,
 }: RadarReleaseRowProps) {
   const releaseKey = item.id ?? item.release_id ?? 0;
+  const detailPath = `/radar/${releaseKey}`;
   const opportunityReasons = getOrderedRadarOpportunityReasons(item);
   const stateLabelKeys = getRadarStateLabelKeys(item);
   const collectionMatch = item.opportunity.collection_match;
@@ -393,47 +394,73 @@ function RadarReleaseRow({
   return (
     <li className="px-4 py-4 sm:px-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 gap-4">
-          {item.cover_url ? (
-            <img
-              src={item.cover_url}
-              alt={`${item.artist} - ${item.title}`}
-              data-radar-cover={String(releaseKey)}
-              className="h-20 w-20 flex-none rounded-2xl border border-white/10 object-cover shadow-[0_12px_30px_rgba(15,23,42,0.35)]"
-            />
-          ) : (
-            <div
-              data-radar-cover={String(releaseKey)}
-              className="flex h-20 w-20 flex-none items-end rounded-2xl border border-dashed border-white/10 bg-slate-900/80 p-3 text-[11px] uppercase tracking-[0.22em] text-slate-500"
-            >
-              #{item.release_id}
-            </div>
-          )}
-
-          <div className="min-w-0 space-y-3">
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">#{item.release_id}</p>
-              <p className="truncate text-sm text-slate-300">{item.artist}</p>
-              <Link
-                to={`/radar/${releaseKey}`}
-                data-radar-detail={String(releaseKey)}
-                className="block font-display text-xl leading-tight text-white no-underline transition hover:text-brand-100"
+        <div className="min-w-0 flex-1 space-y-3">
+          <Link
+            to={detailPath}
+            data-radar-detail={String(releaseKey)}
+            aria-label={`${t('radar.openDetail')}: ${item.artist} - ${item.title}`}
+            className="group -m-3 flex w-full min-w-0 gap-4 rounded-2xl border border-transparent p-3 text-inherit no-underline transition hover:border-brand-200/30 hover:bg-white/5 focus-visible:border-brand-100 focus-visible:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-100/40"
+          >
+            {item.cover_url ? (
+              <img
+                src={item.cover_url}
+                alt={`${item.artist} - ${item.title}`}
+                data-radar-cover={String(releaseKey)}
+                className="h-20 w-20 flex-none rounded-2xl border border-white/10 object-cover shadow-[0_12px_30px_rgba(15,23,42,0.35)] transition group-hover:border-brand-100/40"
+              />
+            ) : (
+              <div
+                data-radar-cover={String(releaseKey)}
+                className="flex h-20 w-20 flex-none items-end rounded-2xl border border-dashed border-white/10 bg-slate-900/80 p-3 text-[11px] uppercase tracking-[0.22em] text-slate-500 transition group-hover:border-brand-100/40"
               >
-                {item.title}
-              </Link>
-              {item.year ? <p className="text-sm text-slate-500">{item.year}</p> : null}
-            </div>
+                #{item.release_id}
+              </div>
+            )}
 
-            <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
-              {releaseFields.map(({ labelKey, value, valueClassName }) => (
-                <div key={labelKey}>
-                  <dt className={RADAR_RELEASE_FIELD_LABEL_CLASS}>{t(labelKey)}</dt>
-                  <dd className={valueClassName}>{value}</dd>
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">#{item.release_id}</p>
+                <p className="truncate text-sm text-slate-300">{item.artist}</p>
+                <p className="font-display text-xl leading-tight text-white transition group-hover:text-brand-100">
+                  {item.title}
+                </p>
+                {item.year ? <p className="text-sm text-slate-500">{item.year}</p> : null}
+              </div>
+
+              <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
+                {releaseFields.map(({ labelKey, value, valueClassName }) => (
+                  <div key={labelKey}>
+                    <dt className={RADAR_RELEASE_FIELD_LABEL_CLASS}>{t(labelKey)}</dt>
+                    <dd className={valueClassName}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              {hasLabels ? (
+                <div className="flex flex-wrap gap-2">
+                  {stateLabelKeys.map((labelKey) => (
+                    <span
+                      key={labelKey}
+                      className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-950/35 px-3 py-1 text-xs uppercase tracking-[0.18em] text-amber-100"
+                    >
+                      {t(labelKey)}
+                    </span>
+                  ))}
+                  {opportunityReasons.map((reason) => (
+                    <span
+                      key={reason}
+                      className="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-950/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-100"
+                    >
+                      {t(`radar.opportunity.${reason}`)}
+                    </span>
+                  ))}
                 </div>
-              ))}
-            </dl>
+              ) : null}
+            </div>
+          </Link>
 
-            {collectionMatch?.primary_release_id != null ? (
+          {collectionMatch?.primary_release_id != null ? (
+            <div className="pt-1 sm:pl-24">
               <Link
                 to={`/collection/${collectionMatch.primary_release_id}`}
                 data-radar-collection={String(releaseKey)}
@@ -443,40 +470,28 @@ function RadarReleaseRow({
                   count: collectionMatch.copy_count,
                 })}
               </Link>
-            ) : null}
-
-            {hasLabels ? (
-              <div className="flex flex-wrap gap-2">
-                {stateLabelKeys.map((labelKey) => (
-                  <span
-                    key={labelKey}
-                    className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-950/35 px-3 py-1 text-xs uppercase tracking-[0.18em] text-amber-100"
-                  >
-                    {t(labelKey)}
-                  </span>
-                ))}
-                {opportunityReasons.map((reason) => (
-                  <span
-                    key={reason}
-                    className="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-950/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-100"
-                  >
-                    {t(`radar.opportunity.${reason}`)}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
 
-        <a
-          href={`https://www.discogs.com/release/${item.release_id}`}
-          target="_blank"
-          rel="noreferrer"
-          data-radar-discogs={String(releaseKey)}
-          className="inline-flex shrink-0 items-center justify-center self-start rounded-full border border-brand-200/40 px-4 py-2 text-sm text-brand-100 no-underline transition hover:border-brand-100 hover:text-white"
-        >
-          {t('radar.openDiscogs')}
-        </a>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+          <Link
+            to={detailPath}
+            data-radar-detail-action={String(releaseKey)}
+            className="inline-flex items-center justify-center rounded-full border border-brand-100/60 bg-brand-400/15 px-4 py-2 text-sm text-white no-underline transition hover:border-brand-100 hover:bg-brand-400/25"
+          >
+            {t('radar.openDetail')}
+          </Link>
+          <a
+            href={`https://www.discogs.com/release/${item.release_id}`}
+            target="_blank"
+            rel="noreferrer"
+            data-radar-discogs={String(releaseKey)}
+            className="inline-flex items-center justify-center rounded-full border border-brand-200/40 px-4 py-2 text-sm text-brand-100 no-underline transition hover:border-brand-100 hover:text-white"
+          >
+            {t('radar.openDiscogs')}
+          </a>
+        </div>
       </div>
     </li>
   );
