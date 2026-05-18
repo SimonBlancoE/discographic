@@ -25,6 +25,7 @@
     "server/**/*.d.ts",
     "shared/**/*.ts",
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "types/**/*.d.ts"
   ]
 }

@@ -169,6 +169,13 @@ describe('Settings page', () => {
     expect(refreshDashboardStats).toHaveBeenCalledTimes(1);
   });
 
+  it('masks the Discogs token input', async () => {
+    const rendered = await renderSettings();
+    const tokenInput = getInputByLabel(rendered, 'settings.newTokenOptional');
+
+    expect(tokenInput.getAttribute('type')).toBe('password');
+  });
+
   it('refreshes account and dashboard state after resetting local data', async () => {
     const rendered = await renderSettings();
     const resetButton = getButtonByText(rendered, 'settings.reset');

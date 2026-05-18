@@ -8,6 +8,9 @@ import type { SyncStatusState } from '../../shared/contracts/syncStatus.js';
 
 const POLL_MS = 2000;
 const MAX_POLL_ERRORS = 3;
+type PollOptions = {
+  reportFailure?: boolean;
+};
 
 function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: SyncCompleteHandler; disabled?: boolean }) {
   const { t } = useI18n();
@@ -54,7 +57,7 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
     enrichPollTimer.current = setTimeout(pollEnrich, POLL_MS);
   }
 
-  const poll = useCallback(async () => {
+  const poll = useCallback(async ({ reportFailure = false }: PollOptions = {}) => {
     if (disposed.current) return;
     try {
       const next = await api.getSyncStatus();
@@ -82,6 +85,8 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
           return;
         }
 
+        setSyncStatusError(t('sync.statusError', { error: getErrorMessage(error, t('client.networkError')) }));
+      } else if (reportFailure) {
         setSyncStatusError(t('sync.statusError', { error: getErrorMessage(error, t('client.networkError')) }));
       }
     }
@@ -197,7 +202,7 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
   function retrySyncStatus() {
     syncPollFailures.current = 0;
     setSyncStatusError('');
-    void poll();
+    void poll({ reportFailure: true });
   }
 
   function retryEnrichStatus() {

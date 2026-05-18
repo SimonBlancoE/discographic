@@ -88,6 +88,7 @@ function Collection() {
   const [savedViewName, setSavedViewName] = useState('');
   const [selectedSavedViewId, setSelectedSavedViewId] = useState('');
   const saveColumnsTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const collectionLoadSequence = useRef(0);
   const [displayCurrency, setDisplayCurrency] = useState<Currency>(currency || DEFAULT_CURRENCY);
 
   useEffect(() => {
@@ -101,6 +102,9 @@ function Collection() {
     nextSortOrder = sortOrder,
     nextCurrency = displayCurrency,
   ): Promise<void> => {
+    const requestSequence = collectionLoadSequence.current + 1;
+    collectionLoadSequence.current = requestSequence;
+
     try {
       setLoading(true);
       const response = await api.getCollection({
@@ -111,11 +115,17 @@ function Collection() {
         sortOrder: nextSortOrder,
         currency: nextCurrency
       });
-      setPayload(response);
+      if (collectionLoadSequence.current === requestSequence) {
+        setPayload(response);
+      }
     } catch (error) {
-      toast.error(t('collection.loadError', { error: getErrorMessage(error, t('client.networkError')) }));
+      if (collectionLoadSequence.current === requestSequence) {
+        toast.error(t('collection.loadError', { error: getErrorMessage(error, t('client.networkError')) }));
+      }
     } finally {
-      setLoading(false);
+      if (collectionLoadSequence.current === requestSequence) {
+        setLoading(false);
+      }
     }
   }, [displayCurrency, filters, page, sortBy, sortOrder, t, toast]);
 

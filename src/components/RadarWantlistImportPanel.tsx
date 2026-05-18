@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type Ref } from 'react';
+import { useRef, useState, type ChangeEvent, type Ref } from 'react';
 import type { RadarResponse } from '../../shared/contracts/radar.js';
 import { api } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
@@ -205,6 +205,8 @@ function RadarWantlistImportPanel({
   const [preview, setPreview] = useState<RadarWantlistPreviewResponse | null>(null);
   const [applyResult, setApplyResult] = useState<RadarWantlistApplyResponse['result'] | null>(null);
   const [error, setError] = useState('');
+  const requestInFlightRef = useRef(false);
+  const isBusy = phase === 'loading' || phase === 'applying';
 
   async function handleFileSelect(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -212,6 +214,12 @@ function RadarWantlistImportPanel({
       return;
     }
 
+    if (requestInFlightRef.current) {
+      event.target.value = '';
+      return;
+    }
+
+    requestInFlightRef.current = true;
     setPhase('loading');
     setError('');
     setApplyResult(null);
@@ -224,20 +232,26 @@ function RadarWantlistImportPanel({
       setPreview(null);
       setError(getErrorMessage(nextError, t('client.networkError')));
       setPhase('idle');
+    } finally {
+      requestInFlightRef.current = false;
+      event.target.value = '';
     }
-
-    event.target.value = '';
   }
 
   function downloadTemplate(format: RadarWantlistTemplateFormat) {
+    if (requestInFlightRef.current) {
+      return;
+    }
+
     api.downloadRadarWantlistTemplate(format);
   }
 
   async function handleApplyPreview() {
-    if (!preview?.previewId) {
+    if (!preview?.previewId || requestInFlightRef.current) {
       return;
     }
 
+    requestInFlightRef.current = true;
     setPhase('applying');
     setError('');
 
@@ -252,6 +266,8 @@ function RadarWantlistImportPanel({
         error: getErrorMessage(nextError, t('client.networkError')),
       }));
       setPhase('preview');
+    } finally {
+      requestInFlightRef.current = false;
     }
   }
 
@@ -270,14 +286,30 @@ function RadarWantlistImportPanel({
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <label className="secondary-button cursor-pointer">
+        <label className={`secondary-button ${isBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
           {t('radar.import.upload')}
-          <input type="file" accept=".csv,.xlsx" onChange={handleFileSelect} className="hidden" />
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={handleFileSelect}
+            disabled={isBusy}
+            className="hidden"
+          />
         </label>
-        <button type="button" className="secondary-button" onClick={() => downloadTemplate('csv')}>
+        <button
+          type="button"
+          className="secondary-button disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => downloadTemplate('csv')}
+          disabled={isBusy}
+        >
           {t('radar.import.downloadCsvTemplate')}
         </button>
-        <button type="button" className="secondary-button" onClick={() => downloadTemplate('xlsx')}>
+        <button
+          type="button"
+          className="secondary-button disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => downloadTemplate('xlsx')}
+          disabled={isBusy}
+        >
           {t('radar.import.downloadXlsxTemplate')}
         </button>
       </div>
@@ -302,13 +334,13 @@ function RadarWantlistImportPanel({
 
       {applyResult ? <ApplyResultBanner result={applyResult} t={t} /> : null}
 
-      {phase === 'preview' && preview ? (
+      {(phase === 'preview' || phase === 'applying') && preview ? (
         <div className="space-y-4">
           <WantlistPreview preview={preview} t={t} />
           <button
             type="button"
             onClick={() => void handleApplyPreview()}
-            disabled={!preview.previewId || preview.summary.validRows === 0}
+            disabled={isBusy || !preview.previewId || preview.summary.validRows === 0}
             className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
           >
             {t('radar.import.apply')}

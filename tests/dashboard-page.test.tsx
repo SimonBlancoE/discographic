@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Dashboard from '../src/pages/Dashboard';
+import type { DashboardStats } from '../shared/contracts/dashboardStats.js';
 
 const authState = vi.hoisted(() => ({
   accountUnavailable: false,
@@ -13,7 +14,7 @@ const authState = vi.hoisted(() => ({
 }));
 
 const dashboardStatsState = vi.hoisted(() => ({
-  stats: null,
+  stats: null as DashboardStats | null,
   loading: false,
   error: null,
   refresh: vi.fn(),

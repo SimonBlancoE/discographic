@@ -88,6 +88,7 @@ describe('TypeScript migration toolchain guardrails', () => {
     });
     expect(tsconfig.include).toContain('tailwind.config.ts');
     expect(tsconfig.include).toContain('scripts/**/*.ts');
+    expect(tsconfig.include).toContain('tests/**/*.tsx');
     expect(serverTsconfig.extends).toBe('./tsconfig.json');
     expect(serverTsconfig.compilerOptions).toMatchObject({
       noEmit: false,

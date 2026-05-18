@@ -140,6 +140,14 @@ const messages = {
   'radar.saveFailed': 'Radar could not save your local decision. Try again.',
 } satisfies Record<string, string>;
 
+function translate(key: string, values?: Record<string, string | number>) {
+  const template = messages[key as keyof typeof messages] ?? key;
+  return Object.entries(values ?? {}).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+    template,
+  );
+}
+
 const RADAR_TEST_TIMESTAMP = '2026-05-10T00:00:00Z';
 
 type RadarReleaseFixture = Pick<RadarRelease, 'id' | 'release_id' | 'title' | 'artist'> & {
@@ -184,10 +192,6 @@ function createRadarRelease(overrides: RadarReleaseFixture): RadarRelease {
     marketplace: {
       status: 'pending',
       estimated_price: null,
-      listing_status: null,
-      listing_price: null,
-      listing_currency: null,
-      listing_price_eur: null,
       last_checked_at: null,
       ...overrides.marketplace,
     },
@@ -234,13 +238,7 @@ vi.mock('../src/lib/AuthContext', () => ({
 
 vi.mock('../src/lib/I18nContext', () => ({
   useI18n: () => ({
-    t: (key: string, values?: Record<string, string | number>) => {
-      const template = messages[key as keyof typeof messages] ?? key;
-      return Object.entries(values ?? {}).reduce(
-        (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
-        template,
-      );
-    },
+    t: translate,
   }),
 }));
 
@@ -593,6 +591,99 @@ describe('Radar page', () => {
     expect(text).toContain('New Artist');
   });
 
+  it('retries transient Radar update status failures while a run is active', async () => {
+    vi.useFakeTimers();
+    authState.capabilities.canUseRadar = true;
+
+    getRadar
+      .mockResolvedValueOnce(createRadarResponse())
+      .mockResolvedValueOnce(
+        createRadarResponse([
+          createRadarRelease({
+            id: 41,
+            release_id: 941,
+            title: 'Completed Want',
+            artist: 'Recovered Artist',
+          }),
+        ]),
+      );
+    getRadarStatus
+      .mockResolvedValueOnce({
+        phase: 'reviewing_prices',
+        current: 1,
+        total: 2,
+        pending: 1,
+        progressPercent: 50,
+        message: 'Reviewing Radar prices.',
+        startedAt: '2026-05-10T12:00:00Z',
+        finishedAt: null,
+        wantlist: {
+          totalFetched: 2,
+          added: 1,
+          updated: 1,
+          reactivated: 0,
+          markedMissing: 0,
+          ignored: 0,
+        },
+        isRunning: true,
+        isTerminal: false,
+        canStop: true,
+      })
+      .mockRejectedValueOnce(new Error('temporary status failure'))
+      .mockResolvedValueOnce({
+        phase: 'completed',
+        current: 2,
+        total: 2,
+        pending: 0,
+        progressPercent: 100,
+        message: 'Radar update completed.',
+        startedAt: '2026-05-10T12:00:00Z',
+        finishedAt: '2026-05-10T12:01:00Z',
+        wantlist: {
+          totalFetched: 2,
+          added: 1,
+          updated: 1,
+          reactivated: 0,
+          markedMissing: 0,
+          ignored: 0,
+        },
+        isRunning: false,
+        isTerminal: true,
+        canStop: false,
+      });
+
+    try {
+      const rendered = await renderRadar();
+
+      expect(rendered.textContent ?? '').toContain(messages['radar.updating']);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(rendered.textContent ?? '').toContain(messages['radar.updateStatusError']);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const text = rendered.textContent ?? '';
+
+      expect(getRadarStatus).toHaveBeenCalledTimes(3);
+      expect(text).toContain(messages['radar.updateAction']);
+      expect(text).toContain(messages['radar.updatePhase.completed']);
+      expect(text).toContain('Completed Want');
+      expect(text).toContain('Recovered Artist');
+      expect(text).not.toContain(messages['radar.updateStatusError']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns to the full Radar list after a completed update finishes from a filtered view', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValueOnce(
@@ -926,10 +1017,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'priced',
             estimated_price: 16,
-            listing_status: 'For Sale',
-            listing_price: 16,
-            listing_currency: 'EUR',
-            listing_price_eur: 16,
             last_checked_at: RADAR_TEST_TIMESTAMP,
           },
           opportunity: {
@@ -987,10 +1074,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'priced',
             estimated_price: 20,
-            listing_status: 'For Sale',
-            listing_price: 20,
-            listing_currency: 'EUR',
-            listing_price_eur: 20,
             last_checked_at: RADAR_TEST_TIMESTAMP,
           },
           opportunity: {
@@ -1200,6 +1283,9 @@ describe('Radar page', () => {
     expect(uploadInput).not.toBeNull();
     expect(importHeading).not.toBeNull();
     expect(radarList).not.toBeNull();
+    if (!importHeading || !radarList) {
+      throw new Error('Expected Radar import heading and list to exist');
+    }
 
     const scrollIntoView = vi.fn();
     Object.defineProperty(importHeading, 'scrollIntoView', {
@@ -1215,7 +1301,7 @@ describe('Radar page', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(importHeading);
     const importFollowsRadarList = Boolean(
-      radarList?.compareDocumentPosition(importHeading as HTMLHeadingElement) & Node.DOCUMENT_POSITION_FOLLOWING,
+      radarList.compareDocumentPosition(importHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(importFollowsRadarList).toBe(true);
 

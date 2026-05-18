@@ -15,6 +15,8 @@ export type DockerSmokePlanInput = {
   dockerDaemonReachable: boolean;
 };
 
+const defaultPortBindRaceAttempts = 3;
+
 export function resolveDockerSmokePlan({
   skipDocker,
   requireDocker,
@@ -67,4 +69,31 @@ export function resolveDockerSmokePlan({
     action: 'run',
     message: null,
   };
+}
+
+function isPortBindRaceError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return /EADDRINUSE|address already in use|port is already allocated|Bind for .* failed/i.test(message);
+}
+
+export async function retryPortBindRace<Result>(
+  run: () => Promise<Result>,
+  attempts = defaultPortBindRaceAttempts
+): Promise<Result> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= attempts || !isPortBindRaceError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
 }
