@@ -127,6 +127,7 @@ const RADAR_KEYS = [
   'radar.filter.inCollection',
   'radar.filter.attention',
   'radar.filter.hiddenResolved',
+  'radar.filter.missingFromSource',
   'radar.filter.pending',
   'radar.filter.failed',
   'radar.filterEmptyTitle',
