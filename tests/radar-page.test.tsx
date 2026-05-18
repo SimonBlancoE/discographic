@@ -49,6 +49,7 @@ const messages = {
   'radar.summary.failed': 'Failed',
   'radar.summary.unavailable': 'Unavailable',
   'radar.filtersTitle': 'Filters',
+  'radar.filterCount': 'Showing {count} of {total}',
   'radar.filter.all': 'All wanted releases',
   'radar.filter.opportunities': 'Active opportunities',
   'radar.filter.belowTarget': 'Below target',
@@ -1089,16 +1090,34 @@ describe('Radar page', () => {
             default_visible: true,
           },
         }),
+        createRadarRelease({
+          id: 16,
+          release_id: 516,
+          title: 'Active Pending',
+          artist: 'Artist F',
+          year: 2018,
+        }),
+        createRadarRelease({
+          id: 17,
+          release_id: 517,
+          title: 'Active Failed',
+          artist: 'Artist G',
+          year: 2019,
+          marketplace: {
+            status: 'failed',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+        }),
       ],
       summary: {
-        total: 5,
-        active: 2,
+        total: 7,
+        active: 4,
         hidden: 1,
         resolved: 1,
         missingFromSource: 1,
         priced: 2,
-        pending: 1,
-        failed: 1,
+        pending: 2,
+        failed: 2,
         unavailable: 1,
       },
     });
@@ -1107,20 +1126,19 @@ describe('Radar page', () => {
     const text = () => rendered.textContent ?? '';
 
     expect(text()).toContain('Below Target');
-    expect(text()).toContain('Pending Hidden');
-    expect(text()).toContain('Resolved Error');
-    expect(text()).toContain('No Price');
     expect(text()).toContain('Back Again');
+    expect(text()).toContain('Active Pending');
+    expect(text()).toContain('Active Failed');
+    expect(text()).not.toContain('Pending Hidden');
+    expect(text()).not.toContain('Resolved Error');
+    expect(text()).not.toContain('No Price');
     expect(text()).toContain(messages['radar.opportunity.below_target']);
     expect(text()).toContain(messages['radar.opportunity.high_priority_available']);
     expect(text()).toContain(messages['radar.opportunity.available_again']);
     expect(text()).toContain(messages['radar.opportunity.already_in_collection']);
     expect(text()).toContain(messages['radar.state.pending']);
     expect(text()).toContain(messages['radar.state.failed']);
-    expect(text()).toContain(messages['radar.state.unavailable']);
-    expect(text()).toContain(messages['radar.state.hidden']);
-    expect(text()).toContain(messages['radar.state.resolved']);
-    expect(text()).toContain(messages['radar.state.missingFromSource']);
+    expect(text()).not.toContain(messages['radar.state.unavailable']);
 
     await clickRadarFilter(rendered, 'opportunities');
     expect(text()).toContain('Below Target');
@@ -1134,7 +1152,7 @@ describe('Radar page', () => {
 
     await clickRadarFilter(rendered, 'high_priority');
     expect(text()).toContain('Below Target');
-    expect(text()).toContain('Pending Hidden');
+    expect(text()).not.toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
 
     await clickRadarFilter(rendered, 'in_collection');
@@ -1142,23 +1160,39 @@ describe('Radar page', () => {
     expect(text()).not.toContain('Back Again');
 
     await clickRadarFilter(rendered, 'attention');
-    expect(text()).toContain('Pending Hidden');
-    expect(text()).toContain('Resolved Error');
-    expect(text()).toContain('No Price');
+    expect(text()).toContain('Active Pending');
+    expect(text()).toContain('Active Failed');
+    expect(text()).not.toContain('Pending Hidden');
+    expect(text()).not.toContain('Resolved Error');
+    expect(text()).not.toContain('No Price');
     expect(text()).not.toContain('Below Target');
     expect(text()).not.toContain('Back Again');
 
-    await clickRadarFilter(rendered, 'hidden_resolved');
+    await clickRadarFilter(rendered, 'hidden');
     expect(text()).toContain('Pending Hidden');
+    expect(text()).toContain(messages['radar.state.hidden']);
+    expect(text()).not.toContain('Resolved Error');
+    expect(text()).not.toContain('Below Target');
+
+    await clickRadarFilter(rendered, 'resolved');
     expect(text()).toContain('Resolved Error');
+    expect(text()).toContain(messages['radar.state.resolved']);
+    expect(text()).not.toContain('Pending Hidden');
+
+    await clickRadarFilter(rendered, 'missing_from_source');
+    expect(text()).toContain('No Price');
+    expect(text()).toContain(messages['radar.state.unavailable']);
+    expect(text()).toContain(messages['radar.state.missingFromSource']);
     expect(text()).not.toContain('Below Target');
 
     await clickRadarFilter(rendered, 'pending');
-    expect(text()).toContain('Pending Hidden');
+    expect(text()).toContain('Active Pending');
+    expect(text()).not.toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
 
     await clickRadarFilter(rendered, 'failed');
-    expect(text()).toContain('Resolved Error');
+    expect(text()).toContain('Active Failed');
+    expect(text()).not.toContain('Resolved Error');
     expect(text()).not.toContain('Pending Hidden');
   });
 
@@ -1233,6 +1267,176 @@ describe('Radar page', () => {
     expect(attentionText).toContain('Waiting On Price');
     expect(attentionText).toContain('Needs Retry');
     expect(attentionText).not.toContain('Operational Opportunity');
+  });
+
+  it('uses one informative filter panel where every summary category can filter the list', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        createRadarRelease({
+          id: 31,
+          release_id: 701,
+          title: 'Active Priced',
+          artist: 'Artist Active',
+          marketplace: {
+            status: 'priced',
+            estimated_price: 21,
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+        }),
+        createRadarRelease({
+          id: 32,
+          release_id: 702,
+          title: 'Hidden Pending',
+          artist: 'Artist Hidden',
+          local: {
+            hidden: true,
+          },
+        }),
+        createRadarRelease({
+          id: 33,
+          release_id: 703,
+          title: 'Resolved Failed',
+          artist: 'Artist Resolved',
+          local: {
+            resolved: true,
+          },
+          marketplace: {
+            status: 'failed',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+        }),
+        createRadarRelease({
+          id: 34,
+          release_id: 704,
+          title: 'Unavailable Missing',
+          artist: 'Artist Missing',
+          source: {
+            status: 'missing',
+            last_seen_at: RADAR_TEST_TIMESTAMP,
+          },
+          marketplace: {
+            status: 'unavailable',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+        }),
+        createRadarRelease({
+          id: 35,
+          release_id: 705,
+          title: 'Active Unavailable',
+          artist: 'Artist Unavailable',
+          marketplace: {
+            status: 'unavailable',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+        }),
+      ],
+      summary: {
+        total: 5,
+        active: 2,
+        hidden: 1,
+        resolved: 1,
+        missingFromSource: 1,
+        priced: 1,
+        pending: 1,
+        failed: 1,
+        unavailable: 2,
+      },
+    });
+
+    const rendered = await renderRadar();
+    const filterPanel = rendered.querySelector('[data-radar-filter-panel="true"]');
+
+    expect(rendered.querySelectorAll('[data-radar-filter-panel="true"]')).toHaveLength(1);
+    expect(filterPanel?.textContent).toContain(messages['radar.filtersTitle']);
+    expect(filterPanel?.querySelector('[data-radar-filter="active"]')?.textContent).toContain(messages['radar.summary.active']);
+    expect(filterPanel?.querySelector('[data-radar-filter="priced"]')?.textContent).toContain(messages['radar.summary.priced']);
+    expect(filterPanel?.querySelector('[data-radar-filter="unavailable"]')?.textContent).toContain(messages['radar.summary.unavailable']);
+    expect(filterPanel?.querySelector('[data-radar-filter="hidden"]')?.textContent).toContain(messages['radar.summary.hidden']);
+    expect(filterPanel?.querySelector('[data-radar-filter="resolved"]')?.textContent).toContain(messages['radar.summary.resolved']);
+    expect(filterPanel?.querySelector('[data-radar-filter="missing_from_source"]')?.textContent).toContain(messages['radar.summary.missingFromSource']);
+
+    await clickRadarFilter(rendered, 'active');
+    expect(rendered.textContent ?? '').toContain('Active Priced');
+    expect(rendered.textContent ?? '').toContain('Active Unavailable');
+    expect(rendered.textContent ?? '').not.toContain('Hidden Pending');
+    expect(rendered.textContent ?? '').not.toContain('Resolved Failed');
+    expect(rendered.textContent ?? '').not.toContain('Unavailable Missing');
+
+    await clickRadarFilter(rendered, 'priced');
+    expect(rendered.textContent ?? '').toContain('Active Priced');
+    expect(rendered.textContent ?? '').not.toContain('Hidden Pending');
+
+    await clickRadarFilter(rendered, 'unavailable');
+    expect(rendered.textContent ?? '').toContain('Active Unavailable');
+    expect(rendered.textContent ?? '').not.toContain('Unavailable Missing');
+    expect(rendered.textContent ?? '').not.toContain('Active Priced');
+
+    await clickRadarFilter(rendered, 'hidden');
+    expect(rendered.textContent ?? '').toContain('Hidden Pending');
+    expect(rendered.textContent ?? '').not.toContain('Resolved Failed');
+
+    await clickRadarFilter(rendered, 'resolved');
+    expect(rendered.textContent ?? '').toContain('Resolved Failed');
+    expect(rendered.textContent ?? '').not.toContain('Hidden Pending');
+
+    await clickRadarFilter(rendered, 'missing_from_source');
+    expect(rendered.textContent ?? '').toContain('Unavailable Missing');
+    expect(rendered.textContent ?? '').not.toContain('Active Priced');
+  });
+
+  it('keeps releases removed from Discogs out of the default Radar list after an update', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue({
+      items: [
+        createRadarRelease({
+          id: 41,
+          release_id: 801,
+          title: 'Still Wanted',
+          artist: 'Artist Current',
+          opportunity: {
+            default_visible: true,
+          },
+        }),
+        createRadarRelease({
+          id: 42,
+          release_id: 802,
+          title: 'Removed In Discogs',
+          artist: 'Artist Removed',
+          source: {
+            status: 'missing',
+            last_seen_at: RADAR_TEST_TIMESTAMP,
+          },
+          marketplace: {
+            status: 'unavailable',
+            last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+        }),
+      ],
+      summary: {
+        total: 2,
+        active: 1,
+        hidden: 0,
+        resolved: 0,
+        missingFromSource: 1,
+        priced: 0,
+        pending: 1,
+        failed: 0,
+        unavailable: 1,
+      },
+    });
+
+    const rendered = await renderRadar();
+
+    expect(rendered.textContent ?? '').toContain('Still Wanted');
+    expect(rendered.textContent ?? '').not.toContain('Removed In Discogs');
+    expect(rendered.querySelector('[data-radar-filter="all"]')?.textContent).toContain('1');
+    expect(rendered.querySelector('[data-radar-filter="missing_from_source"]')?.textContent).toContain('1');
+
+    await clickRadarFilter(rendered, 'missing_from_source');
+
+    expect(rendered.textContent ?? '').toContain('Removed In Discogs');
+    expect(rendered.textContent ?? '').not.toContain('Still Wanted');
   });
 
   it('shows Wantlist template actions, preview validation, and applies the preview into Radar', async () => {
