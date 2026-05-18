@@ -100,6 +100,7 @@ const messages = {
   'radar.import.applyBreakdown': '1 new · 0 merged',
   'radar.import.applyNextStep': 'Radar was updated locally. Review the imported releases below, then use Update Radar when you want to refresh Wantlist data and prices from Discogs.',
   'radar.import.applyFailed': 'Radar could not import this preview: boom',
+  'radar.openDetail': 'View details',
   'radar.openDiscogs': 'Open on Discogs',
   'radar.priority': 'Priority',
   'radar.priority.low': 'Low',
@@ -994,9 +995,15 @@ describe('Radar page', () => {
 
     const rendered = await renderRadar();
     const detailLink = rendered.querySelector('a[data-radar-detail="22"]') as HTMLAnchorElement | null;
+    const detailAction = rendered.querySelector('a[data-radar-detail-action="22"]') as HTMLAnchorElement | null;
 
     expect(detailLink?.getAttribute('href')).toBe('/radar/22');
     expect(detailLink?.textContent).toContain('Single Match');
+    expect(detailLink?.textContent).toContain('Artist B');
+    expect(detailLink?.textContent).toContain(messages['radar.currentPrice']);
+    expect(detailLink?.textContent).toContain(messages['radar.priority']);
+    expect(detailAction?.getAttribute('href')).toBe('/radar/22');
+    expect(detailAction?.textContent).toContain(messages['radar.openDetail']);
   });
 
   it('filters Radar rows from the normalized list contract and shows natural state labels', async () => {
