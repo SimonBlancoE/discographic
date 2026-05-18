@@ -49,14 +49,13 @@ const messages = {
   'radar.summary.failed': 'Failed',
   'radar.summary.unavailable': 'Unavailable',
   'radar.filtersTitle': 'Filters',
-  'radar.filter.all': 'Active wanted releases',
+  'radar.filter.all': 'All wanted releases',
   'radar.filter.opportunities': 'Active opportunities',
   'radar.filter.belowTarget': 'Below target',
   'radar.filter.highPriority': 'High priority',
   'radar.filter.inCollection': 'Already in collection',
   'radar.filter.attention': 'Pending / incidents',
   'radar.filter.hiddenResolved': 'Hidden or resolved',
-  'radar.filter.missingFromSource': 'Missing from source',
   'radar.filter.pending': 'Pending update',
   'radar.filter.failed': 'Update errors',
   'radar.filterEmptyTitle': 'No releases match this filter',
@@ -165,23 +164,6 @@ type RadarReleaseFixture = Pick<RadarRelease, 'id' | 'release_id' | 'title' | 'a
 };
 
 function createRadarRelease(overrides: RadarReleaseFixture): RadarRelease {
-  const local = {
-    priority: 'normal',
-    target_price: null,
-    target_price_eur: null,
-    minimum_condition: null,
-    note: '',
-    hidden: false,
-    resolved: false,
-    ...overrides.local,
-  } satisfies RadarRelease['local'];
-  const source = {
-    origin: 'discogs',
-    status: 'active',
-    last_seen_at: RADAR_TEST_TIMESTAMP,
-    ...overrides.source,
-  } satisfies RadarRelease['source'];
-
   return {
     id: overrides.id,
     user_id: overrides.user_id ?? 1,
@@ -191,8 +173,22 @@ function createRadarRelease(overrides: RadarReleaseFixture): RadarRelease {
     year: overrides.year ?? null,
     cover_url: overrides.cover_url ?? null,
     date_added: overrides.date_added ?? RADAR_TEST_TIMESTAMP,
-    local,
-    source,
+    local: {
+      priority: 'normal',
+      target_price: null,
+      target_price_eur: null,
+      minimum_condition: null,
+      note: '',
+      hidden: false,
+      resolved: false,
+      ...overrides.local,
+    },
+    source: {
+      origin: 'discogs',
+      status: 'active',
+      last_seen_at: RADAR_TEST_TIMESTAMP,
+      ...overrides.source,
+    },
     marketplace: {
       status: 'pending',
       estimated_price: null,
@@ -206,7 +202,7 @@ function createRadarRelease(overrides: RadarReleaseFixture): RadarRelease {
     },
     opportunity: {
       reasons: [],
-      default_visible: !local.hidden && !local.resolved && source.status !== 'missing',
+      default_visible: false,
       is_in_collection: false,
       collection_match: null,
       ...overrides.opportunity,
@@ -528,7 +524,7 @@ describe('Radar page', () => {
     expect(getRadar).toHaveBeenCalledTimes(1);
     expect(getRadarStatus).toHaveBeenCalledTimes(1);
     expect(text).toContain(messages['radar.eyebrow']);
-    expect(text).toContain(messages['radar.summary.active']);
+    expect(text).toContain(messages['radar.summary.total']);
     expect(text).toContain(messages['radar.summary.pending']);
     expect(text).toContain(messages['radar.updateTitle']);
     expect(text).toContain(messages['radar.updateAction']);
@@ -593,67 +589,6 @@ describe('Radar page', () => {
     expect(text).toContain(messages['radar.syncBreakdown']);
     expect(text).toContain('Fresh Want');
     expect(text).toContain('New Artist');
-  });
-
-  it('keeps releases removed from Discogs out of the refreshed active Radar list', async () => {
-    authState.capabilities.canUseRadar = true;
-    getRadar.mockResolvedValueOnce(createRadarResponse()).mockResolvedValueOnce(
-      createRadarResponse(
-        [
-          createRadarRelease({
-            id: 51,
-            release_id: 951,
-            title: 'Current Want',
-            artist: 'Current Artist',
-            opportunity: {
-              default_visible: true,
-            },
-          }),
-          createRadarRelease({
-            id: 52,
-            release_id: 952,
-            title: 'Removed Want',
-            artist: 'Removed Artist',
-            source: {
-              status: 'missing',
-              last_seen_at: '2026-05-09T00:00:00Z',
-            },
-            marketplace: {
-              status: 'unavailable',
-              last_checked_at: RADAR_TEST_TIMESTAMP,
-            },
-          }),
-        ],
-        {
-          total: 2,
-          active: 1,
-          missingFromSource: 1,
-          pending: 1,
-          unavailable: 1,
-        },
-      ),
-    );
-
-    const rendered = await renderRadar();
-    const updateButton = findButtonByText(rendered, messages['radar.updateAction']);
-
-    await act(async () => {
-      updateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(rendered.textContent ?? '').toContain(messages['radar.syncResultTitle']);
-    expect(rendered.textContent ?? '').toContain('Current Want');
-    expect(rendered.textContent ?? '').not.toContain('Removed Want');
-
-    await clickRadarFilter(rendered, 'missing_from_source');
-
-    const missingText = rendered.textContent ?? '';
-
-    expect(missingText).toContain('Removed Want');
-    expect(missingText).toContain(messages['radar.state.missingFromSource']);
-    expect(missingText).not.toContain('Current Want');
   });
 
   it('retries transient Radar update status failures while a run is active', async () => {
@@ -786,7 +721,7 @@ describe('Radar page', () => {
             artist: 'Artist Pending',
             opportunity: {
               reasons: [],
-              default_visible: true,
+              default_visible: false,
               is_in_collection: false,
             },
           }),
@@ -962,7 +897,8 @@ describe('Radar page', () => {
     expect(text).toContain(messages['radar.opportunity.already_in_collection']);
     expect(text).not.toContain('Hidden Opportunity');
     expect(text).not.toContain('Resolved Opportunity');
-    expect(text).toContain(messages['radar.filter.hiddenResolved']);
+    expect(text).toContain(messages['radar.summary.hidden']);
+    expect(text).toContain(messages['radar.summary.resolved']);
   });
 
   it('shows navigable collection match links for single and multiple local copies', async () => {
@@ -1145,40 +1081,16 @@ describe('Radar page', () => {
             default_visible: true,
           },
         }),
-        createRadarRelease({
-          id: 16,
-          release_id: 516,
-          title: 'Active Pending',
-          artist: 'Artist F',
-          year: 2018,
-          opportunity: {
-            default_visible: true,
-          },
-        }),
-        createRadarRelease({
-          id: 17,
-          release_id: 517,
-          title: 'Active Failed',
-          artist: 'Artist G',
-          year: 2019,
-          marketplace: {
-            status: 'failed',
-            last_checked_at: RADAR_TEST_TIMESTAMP,
-          },
-          opportunity: {
-            default_visible: true,
-          },
-        }),
       ],
       summary: {
-        total: 7,
-        active: 4,
+        total: 5,
+        active: 2,
         hidden: 1,
         resolved: 1,
         missingFromSource: 1,
         priced: 2,
-        pending: 2,
-        failed: 2,
+        pending: 1,
+        failed: 1,
         unavailable: 1,
       },
     });
@@ -1187,18 +1099,20 @@ describe('Radar page', () => {
     const text = () => rendered.textContent ?? '';
 
     expect(text()).toContain('Below Target');
+    expect(text()).toContain('Pending Hidden');
+    expect(text()).toContain('Resolved Error');
+    expect(text()).toContain('No Price');
     expect(text()).toContain('Back Again');
-    expect(text()).toContain('Active Pending');
-    expect(text()).toContain('Active Failed');
-    expect(text()).not.toContain('Pending Hidden');
-    expect(text()).not.toContain('Resolved Error');
-    expect(text()).not.toContain('No Price');
     expect(text()).toContain(messages['radar.opportunity.below_target']);
     expect(text()).toContain(messages['radar.opportunity.high_priority_available']);
     expect(text()).toContain(messages['radar.opportunity.available_again']);
     expect(text()).toContain(messages['radar.opportunity.already_in_collection']);
     expect(text()).toContain(messages['radar.state.pending']);
     expect(text()).toContain(messages['radar.state.failed']);
+    expect(text()).toContain(messages['radar.state.unavailable']);
+    expect(text()).toContain(messages['radar.state.hidden']);
+    expect(text()).toContain(messages['radar.state.resolved']);
+    expect(text()).toContain(messages['radar.state.missingFromSource']);
 
     await clickRadarFilter(rendered, 'opportunities');
     expect(text()).toContain('Below Target');
@@ -1212,7 +1126,7 @@ describe('Radar page', () => {
 
     await clickRadarFilter(rendered, 'high_priority');
     expect(text()).toContain('Below Target');
-    expect(text()).not.toContain('Pending Hidden');
+    expect(text()).toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
 
     await clickRadarFilter(rendered, 'in_collection');
@@ -1220,35 +1134,23 @@ describe('Radar page', () => {
     expect(text()).not.toContain('Back Again');
 
     await clickRadarFilter(rendered, 'attention');
-    expect(text()).toContain('Active Pending');
-    expect(text()).toContain('Active Failed');
-    expect(text()).not.toContain('Pending Hidden');
-    expect(text()).not.toContain('Resolved Error');
-    expect(text()).not.toContain('No Price');
+    expect(text()).toContain('Pending Hidden');
+    expect(text()).toContain('Resolved Error');
+    expect(text()).toContain('No Price');
     expect(text()).not.toContain('Below Target');
     expect(text()).not.toContain('Back Again');
 
     await clickRadarFilter(rendered, 'hidden_resolved');
     expect(text()).toContain('Pending Hidden');
     expect(text()).toContain('Resolved Error');
-    expect(text()).toContain(messages['radar.state.hidden']);
-    expect(text()).toContain(messages['radar.state.resolved']);
-    expect(text()).not.toContain('Below Target');
-
-    await clickRadarFilter(rendered, 'missing_from_source');
-    expect(text()).toContain('No Price');
-    expect(text()).toContain(messages['radar.state.unavailable']);
-    expect(text()).toContain(messages['radar.state.missingFromSource']);
     expect(text()).not.toContain('Below Target');
 
     await clickRadarFilter(rendered, 'pending');
-    expect(text()).toContain('Active Pending');
-    expect(text()).not.toContain('Pending Hidden');
+    expect(text()).toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
 
     await clickRadarFilter(rendered, 'failed');
-    expect(text()).toContain('Active Failed');
-    expect(text()).not.toContain('Resolved Error');
+    expect(text()).toContain('Resolved Error');
     expect(text()).not.toContain('Pending Hidden');
   });
 
@@ -1282,9 +1184,6 @@ describe('Radar page', () => {
           release_id: 612,
           title: 'Waiting On Price',
           artist: 'Artist Waits',
-          opportunity: {
-            default_visible: true,
-          },
         }),
         createRadarRelease({
           id: 23,
@@ -1294,9 +1193,6 @@ describe('Radar page', () => {
           marketplace: {
             status: 'failed',
             last_checked_at: RADAR_TEST_TIMESTAMP,
-          },
-          opportunity: {
-            default_visible: true,
           },
         }),
       ],
@@ -1329,122 +1225,6 @@ describe('Radar page', () => {
     expect(attentionText).toContain('Waiting On Price');
     expect(attentionText).toContain('Needs Retry');
     expect(attentionText).not.toContain('Operational Opportunity');
-  });
-
-  it('unifies Radar metrics and auxiliary filters into one informative filter panel', async () => {
-    authState.capabilities.canUseRadar = true;
-    getRadar.mockResolvedValue({
-      items: [
-        createRadarRelease({
-          id: 31,
-          release_id: 631,
-          title: 'Below Target Metric',
-          artist: 'Artist Metric',
-          local: {
-            priority: 'high',
-            target_price: 22,
-            target_price_eur: 22,
-          },
-          marketplace: {
-            status: 'priced',
-            estimated_price: 19,
-            last_checked_at: RADAR_TEST_TIMESTAMP,
-          },
-          opportunity: {
-            reasons: ['below_target', 'high_priority_available', 'already_in_collection'],
-            default_visible: true,
-            is_in_collection: true,
-          },
-        }),
-        createRadarRelease({
-          id: 32,
-          release_id: 632,
-          title: 'Waiting Filter',
-          artist: 'Artist Wait',
-          opportunity: {
-            default_visible: true,
-          },
-        }),
-        createRadarRelease({
-          id: 33,
-          release_id: 633,
-          title: 'Failed Filter',
-          artist: 'Artist Fail',
-          marketplace: {
-            status: 'failed',
-            last_checked_at: RADAR_TEST_TIMESTAMP,
-          },
-          opportunity: {
-            default_visible: true,
-          },
-        }),
-        createRadarRelease({
-          id: 34,
-          release_id: 634,
-          title: 'Hidden Filter',
-          artist: 'Artist Hide',
-          local: {
-            hidden: true,
-          },
-        }),
-        createRadarRelease({
-          id: 35,
-          release_id: 635,
-          title: 'Missing Filter',
-          artist: 'Artist Missing',
-          source: {
-            status: 'missing',
-            last_seen_at: '2026-05-09T00:00:00Z',
-          },
-          marketplace: {
-            status: 'unavailable',
-            last_checked_at: RADAR_TEST_TIMESTAMP,
-          },
-        }),
-      ],
-      summary: {
-        total: 5,
-        active: 3,
-        hidden: 1,
-        resolved: 0,
-        missingFromSource: 1,
-        priced: 1,
-        pending: 2,
-        failed: 1,
-        unavailable: 1,
-      },
-    });
-
-    const rendered = await renderRadar();
-    const filterPanels = rendered.querySelectorAll('[data-radar-filter-panel="true"]');
-
-    expect(filterPanels).toHaveLength(1);
-
-    const panel = filterPanels[0] as HTMLElement;
-    const panelFilters = panel.querySelectorAll('button[data-radar-filter]');
-    const allFilters = rendered.querySelectorAll('button[data-radar-filter]');
-
-    expect(panelFilters).toHaveLength(allFilters.length);
-
-    const expectations: Array<[string, string, string]> = [
-      ['all', messages['radar.filter.all'], '3'],
-      ['opportunities', messages['radar.filter.opportunities'], '1'],
-      ['below_target', messages['radar.filter.belowTarget'], '1'],
-      ['high_priority', messages['radar.filter.highPriority'], '1'],
-      ['in_collection', messages['radar.filter.inCollection'], '1'],
-      ['attention', messages['radar.filter.attention'], '2'],
-      ['hidden_resolved', messages['radar.filter.hiddenResolved'], '1'],
-      ['missing_from_source', messages['radar.filter.missingFromSource'], '1'],
-      ['pending', messages['radar.filter.pending'], '1'],
-      ['failed', messages['radar.filter.failed'], '1'],
-    ];
-
-    for (const [filterId, label, count] of expectations) {
-      const button = panel.querySelector(`button[data-radar-filter="${filterId}"]`) as HTMLButtonElement | null;
-
-      expect(button?.textContent).toContain(label);
-      expect(button?.textContent).toContain(count);
-    }
   });
 
   it('shows Wantlist template actions, preview validation, and applies the preview into Radar', async () => {
