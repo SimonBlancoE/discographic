@@ -16,7 +16,6 @@ const messages = {
   'radar.detailLoading': 'Loading Radar release...',
   'radar.detailLoadFailed': 'Radar release could not be loaded. Try again in a moment.',
   'radar.detailNotFound': 'Radar release not found.',
-  'radar.detailMarketplacePrice': 'Marketplace estimate',
   'radar.detailSourceOrigin': 'Source',
   'radar.detailSourceStatus': 'Source status',
   'radar.sourceOrigin.discogs': 'Discogs',
@@ -32,9 +31,16 @@ const messages = {
   'radar.priority.high': 'High',
   'radar.targetPrice': 'Target price',
   'radar.minimumCondition': 'Minimum condition',
-  'radar.minimumCondition.info': 'Saved for future listing filters. Informational only in Radar v1.',
+  'radar.minimumCondition.info': 'Saved as a personal buying preference. It does not create automatic classifications.',
   'radar.minimumCondition.none': 'No preference',
+  'radar.minimumCondition.M': 'Mint (M)',
+  'radar.minimumCondition.NM': 'Near Mint (NM)',
   'radar.minimumCondition.VG+': 'Very Good Plus (VG+)',
+  'radar.minimumCondition.VG': 'Very Good (VG)',
+  'radar.minimumCondition.G+': 'Good Plus (G+)',
+  'radar.minimumCondition.G': 'Good (G)',
+  'radar.minimumCondition.F': 'Fair (F)',
+  'radar.minimumCondition.P': 'Poor (P)',
   'radar.note': 'Note',
   'radar.hidden': 'Hidden',
   'radar.resolved': 'Resolved',
@@ -235,12 +241,12 @@ describe('Radar release detail page', () => {
     expect(discogsLink?.getAttribute('href')).toBe('https://www.discogs.com/release/622');
     expect(text).toContain('Artist B - Single Match');
     expect(text).toContain('#622');
-    expect(text).toContain(messages['radar.detailMarketplacePrice']);
+    expect(text).not.toContain('Marketplace estimate');
     expect(text).toContain(messages['radar.detailSourceOrigin']);
     expect(text).toContain(messages['radar.sourceOrigin.discogs']);
     expect(text).toContain(messages['radar.detailSourceStatus']);
     expect(text).toContain(messages['radar.sourceStatus.active']);
-    expect(text).toContain(messages['radar.opportunity.below_target']);
+    expect(text).not.toContain(messages['radar.opportunity.below_target']);
     expect(text).toContain('View 1 copy in your collection');
     expect(text).toContain(messages['radar.priority']);
     expect(text).toContain(messages['radar.note']);

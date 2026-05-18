@@ -194,7 +194,7 @@ describe('radar storage', () => {
             updated_at: '2026-05-10T00:00:00Z',
           },
           opportunity: {
-            reasons: ['high_priority_available'],
+            reasons: [],
             default_visible: true,
             is_in_collection: false,
             collection_match: null,
@@ -347,7 +347,7 @@ describe('radar storage', () => {
     });
   });
 
-  it('derives opportunity reasons, already-owned flags, and default ordering for the active Radar list', () => {
+  it('derives collection flags and default Wantlist ordering for the active Radar list', () => {
     migrateRadarStorage(db);
 
     db.prepare(`
@@ -539,11 +539,11 @@ describe('radar storage', () => {
       };
     }>;
 
-    expect(items.find((item) => item.release_id === 401)?.opportunity.reasons).toEqual(['below_target']);
-    expect(items.find((item) => item.release_id === 402)?.opportunity.reasons).toEqual(['high_priority_available']);
-    expect(items.find((item) => item.release_id === 403)?.opportunity.reasons).toEqual(['available_again']);
+    expect(items.find((item) => item.release_id === 401)?.opportunity.reasons).toEqual([]);
+    expect(items.find((item) => item.release_id === 402)?.opportunity.reasons).toEqual([]);
+    expect(items.find((item) => item.release_id === 403)?.opportunity.reasons).toEqual([]);
     expect(items.find((item) => item.release_id === 404)?.opportunity).toEqual({
-      reasons: ['already_in_collection'],
+      reasons: [],
       default_visible: true,
       is_in_collection: true,
       collection_match: {
@@ -560,9 +560,61 @@ describe('radar storage', () => {
       .filter((item) => item.opportunity.default_visible)
       .map((item) => item.release_id);
 
-    expect(visibleReleaseIds.slice(0, 4)).toEqual([401, 402, 403, 404]);
-    expect(visibleReleaseIds.slice(4, 7)).toEqual(expect.arrayContaining([405, 406, 407]));
-    expect(visibleReleaseIds.slice(7)).toEqual([408, 409]);
+    expect(visibleReleaseIds).toEqual([402, 408, 407, 406, 405, 404, 403, 401, 409]);
+  });
+
+  it('does not derive Wantlist manager signals from Marketplace price state', () => {
+    migrateRadarStorage(db);
+
+    db.prepare(`
+      INSERT INTO releases (user_id, release_id, instance_id, title, artist)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(1, 704, 1, 'Owned Release', 'Artist D');
+
+    db.prepare(`
+      INSERT INTO radar_releases (
+        user_id,
+        release_id,
+        title,
+        artist,
+        date_added,
+        local_priority,
+        local_target_price_eur,
+        source_discogs,
+        source_status,
+        marketplace_status,
+        estimated_price,
+        marketplace_last_unavailable_at,
+        marketplace_available_again_at
+      )
+      VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      1, 701, 'Below Target Price', 'Artist A', '2026-05-01', RADAR_PRIORITY.NORMAL, 20, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 18, null, null,
+      1, 702, 'High Priority Priced', 'Artist B', '2026-05-02', RADAR_PRIORITY.HIGH, null, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 24, null, null,
+      1, 703, 'Available Again', 'Artist C', '2026-05-03', RADAR_PRIORITY.NORMAL, null, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 26, '2026-05-08T00:00:00Z', '2026-05-10T00:00:00Z',
+      1, 704, 'Owned Release', 'Artist D', '2026-05-04', RADAR_PRIORITY.NORMAL, null, 1, RADAR_SOURCE_STATUS.ACTIVE, MARKETPLACE_STATUS.PRICED, 28, null, null,
+    );
+
+    const snapshot = getRadarSnapshot(db, 1);
+
+    expect(snapshot.items.map((item) => [item.release_id, item.opportunity.reasons])).toEqual([
+      [702, []],
+      [704, []],
+      [703, []],
+      [701, []],
+    ]);
+    expect(snapshot.items.find((item) => item.release_id === 704)?.opportunity).toMatchObject({
+      default_visible: true,
+      is_in_collection: true,
+      collection_match: {
+        primary_release_id: 1,
+        copy_count: 1,
+      },
+    });
   });
 
   it('exposes user-scoped collection match targets and copy counts for no match, one copy, and multiple copies', () => {

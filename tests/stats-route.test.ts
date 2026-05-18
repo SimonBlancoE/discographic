@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import type { Server } from 'http';
-import { RADAR_OPPORTUNITY_REASON } from '../shared/contracts/radar.js';
+import { RADAR_PRIORITY } from '../shared/contracts/radar.js';
 
 const getSettingForUser = vi.hoisted(() => vi.fn());
 const getRadarForUser = vi.hoisted(() => vi.fn());
@@ -54,29 +54,32 @@ describe('stats route', () => {
       items: [
         {
           opportunity: {
-            reasons: [RADAR_OPPORTUNITY_REASON.BELOW_TARGET],
+            reasons: [],
             default_visible: true,
             is_in_collection: false,
           },
-        },
-        {
-          opportunity: {
-            reasons: [
-              RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE,
-              RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
-            ],
-            default_visible: true,
-            is_in_collection: true,
+          local: {
+            priority: RADAR_PRIORITY.NORMAL,
           },
         },
         {
           opportunity: {
-            reasons: [
-              RADAR_OPPORTUNITY_REASON.BELOW_TARGET,
-              RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION,
-            ],
+            reasons: [],
+            default_visible: true,
+            is_in_collection: true,
+          },
+          local: {
+            priority: RADAR_PRIORITY.HIGH,
+          },
+        },
+        {
+          opportunity: {
+            reasons: [],
             default_visible: false,
             is_in_collection: true,
+          },
+          local: {
+            priority: RADAR_PRIORITY.HIGH,
           },
         },
         {
@@ -84,6 +87,9 @@ describe('stats route', () => {
             reasons: [],
             default_visible: true,
             is_in_collection: false,
+          },
+          local: {
+            priority: RADAR_PRIORITY.NORMAL,
           },
         },
       ],
@@ -159,7 +165,7 @@ describe('stats route', () => {
     await expect(response.json()).resolves.toMatchObject({
       radar: {
         totalWanted: 4,
-        activeOpportunities: 2,
+        activeOpportunities: 3,
         belowTarget: 1,
         alreadyOwned: 1,
       },

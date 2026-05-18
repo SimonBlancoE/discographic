@@ -2,7 +2,6 @@ import type Database from 'better-sqlite3';
 import {
   MARKETPLACE_STATUS,
   normalizeRadarResponse,
-  RADAR_OPPORTUNITY_REASON,
   RADAR_MINIMUM_CONDITION,
   RADAR_PRIORITY,
   RADAR_SOURCE_ORIGIN,
@@ -79,8 +78,7 @@ type CollectionMatchRow = RadarCollectionMatch & {
 
 const RADAR_TABLE = 'radar_releases';
 const HIDDEN_OR_INACTIVE_SORT_BUCKET = 99;
-const INCOMPLETE_MARKETPLACE_SORT_BUCKET = 4;
-const DEFAULT_SORT_BUCKET = 5;
+const DEFAULT_SORT_BUCKET = 0;
 
 const RADAR_BASE_COLUMN_DEFINITIONS: RadarColumnDefinition[] = [
   { name: 'id', sqlType: 'INTEGER PRIMARY KEY AUTOINCREMENT' },
@@ -126,13 +124,6 @@ const RADAR_SELECT_COLUMNS = RADAR_COLUMN_DEFINITIONS
   .map(({ name }) => name)
   .join(',\n      ');
 
-const OPPORTUNITY_REASON_SORT_BUCKETS: Array<{ reason: RadarOpportunityReason; bucket: number }> = [
-  { reason: RADAR_OPPORTUNITY_REASON.BELOW_TARGET, bucket: 0 },
-  { reason: RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE, bucket: 1 },
-  { reason: RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN, bucket: 2 },
-  { reason: RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION, bucket: 3 },
-];
-
 function hasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
   return db
     .prepare<[], TableColumn>(`PRAGMA table_info(${tableName})`)
@@ -176,47 +167,11 @@ function deriveSourceOrigin(sourceDiscogs: number | null, sourceFile: number | n
   return RADAR_SOURCE_ORIGIN.NONE;
 }
 
-function hasAvailableMarketplacePrice(row: RadarRow): boolean {
-  return row.marketplace_status === MARKETPLACE_STATUS.PRICED
-    && Number.isFinite(row.estimated_price)
-    && (row.estimated_price ?? 0) > 0;
-}
-
-function isBelowTarget(row: RadarRow): boolean {
-  return hasAvailableMarketplacePrice(row)
-    && Number.isFinite(row.local_target_price_eur)
-    && row.local_target_price_eur != null
-    && row.estimated_price != null
-    && row.estimated_price < row.local_target_price_eur;
-}
-
-function isAvailableAgain(row: RadarRow): boolean {
-  return hasAvailableMarketplacePrice(row) && typeof row.marketplace_available_again_at === 'string';
-}
-
 function getOpportunityReasons(
-  row: RadarRow,
-  isInCollection: boolean,
+  _row: RadarRow,
+  _isInCollection: boolean,
 ): RadarOpportunityReason[] {
-  const reasons: RadarOpportunityReason[] = [];
-
-  if (isBelowTarget(row)) {
-    reasons.push(RADAR_OPPORTUNITY_REASON.BELOW_TARGET);
-  }
-
-  if (row.local_priority === RADAR_PRIORITY.HIGH && hasAvailableMarketplacePrice(row)) {
-    reasons.push(RADAR_OPPORTUNITY_REASON.HIGH_PRIORITY_AVAILABLE);
-  }
-
-  if (isAvailableAgain(row)) {
-    reasons.push(RADAR_OPPORTUNITY_REASON.AVAILABLE_AGAIN);
-  }
-
-  if (isInCollection) {
-    reasons.push(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION);
-  }
-
-  return reasons;
+  return [];
 }
 
 function isDefaultVisible(row: RadarRow): boolean {
@@ -225,34 +180,9 @@ function isDefaultVisible(row: RadarRow): boolean {
     && row.source_status !== RADAR_SOURCE_STATUS.MISSING;
 }
 
-function hasIncompleteMarketplaceStatus(row: RadarRow): boolean {
-  return row.marketplace_status === MARKETPLACE_STATUS.PENDING
-    || row.marketplace_status === MARKETPLACE_STATUS.FAILED
-    || row.marketplace_status === MARKETPLACE_STATUS.UNAVAILABLE;
-}
-
-function getOpportunityReasonSortBucket(reasons: RadarOpportunityReason[]): number | null {
-  for (const { reason, bucket } of OPPORTUNITY_REASON_SORT_BUCKETS) {
-    if (reasons.includes(reason)) {
-      return bucket;
-    }
-  }
-
-  return null;
-}
-
-function getSortBucket(row: RadarRow, reasons: RadarOpportunityReason[], defaultVisible: boolean): number {
+function getSortBucket(_row: RadarRow, _reasons: RadarOpportunityReason[], defaultVisible: boolean): number {
   if (!defaultVisible) {
     return HIDDEN_OR_INACTIVE_SORT_BUCKET;
-  }
-
-  const reasonBucket = getOpportunityReasonSortBucket(reasons);
-  if (reasonBucket != null) {
-    return reasonBucket;
-  }
-
-  if (hasIncompleteMarketplaceStatus(row)) {
-    return INCOMPLETE_MARKETPLACE_SORT_BUCKET;
   }
 
   return DEFAULT_SORT_BUCKET;
