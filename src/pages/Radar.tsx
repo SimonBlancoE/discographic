@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  RADAR_OPPORTUNITY_REASON,
   RADAR_PRIORITY,
   RADAR_SOURCE_STATUS,
   normalizeRadarResponse,
@@ -11,7 +10,6 @@ import {
   type RadarSyncResult,
   type RadarUpdateRunStatus,
 } from '../../shared/contracts/radar.js';
-import { MARKETPLACE_STATUS, type MarketplaceStatus } from '../../shared/contracts/marketplace.js';
 import RadarWantlistImportPanel from '../components/RadarWantlistImportPanel';
 import { useAuth } from '../lib/AuthContext';
 import { getErrorMessage } from '../lib/errors';
@@ -19,17 +17,14 @@ import { formatCurrency, formatDate } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { api } from '../lib/api';
 import {
-  getOrderedRadarOpportunityReasons,
   getRadarCollectionMatchLabelKey,
   getRadarStateLabelKeys,
-  type RadarStateLabelKey,
 } from '../lib/radarPresentation';
 import type { Translate } from '../lib/types';
 
 const UPDATE_STATUS_CARDS = [
   { labelKey: 'radar.updateCurrent', valueKey: 'current' },
   { labelKey: 'radar.updateTotal', valueKey: 'total' },
-  { labelKey: 'radar.updatePending', valueKey: 'pending' },
 ] as const;
 
 const RADAR_WANTLIST_IMPORT_SECTION_ID = 'radar-wantlist-fallback';
@@ -37,57 +32,36 @@ const RADAR_WANTLIST_IMPORT_SECTION_ID = 'radar-wantlist-fallback';
 type RadarFilterId =
   | 'all'
   | 'active'
-  | 'opportunities'
-  | 'below_target'
   | 'high_priority'
   | 'in_collection'
-  | 'attention'
-  | 'priced'
   | 'hidden'
   | 'resolved'
-  | 'missing_from_source'
-  | 'pending'
-  | 'failed'
-  | 'unavailable';
+  | 'missing_from_source';
 
 type RadarPrimaryMetricId = Extract<
   RadarFilterId,
-  'opportunities' | 'below_target' | 'high_priority' | 'in_collection' | 'attention'
+  'all' | 'high_priority' | 'in_collection' | 'hidden' | 'missing_from_source'
 >;
 
 type RadarStatusFilterId = Exclude<RadarFilterId, RadarPrimaryMetricId>;
 
 const RADAR_PRIMARY_METRICS = [
-  { id: 'opportunities', labelKey: 'radar.filter.opportunities' },
-  { id: 'below_target', labelKey: 'radar.filter.belowTarget' },
+  { id: 'all', labelKey: 'radar.summary.active' },
   { id: 'high_priority', labelKey: 'radar.filter.highPriority' },
   { id: 'in_collection', labelKey: 'radar.filter.inCollection' },
-  { id: 'attention', labelKey: 'radar.filter.attention' },
+  { id: 'hidden', labelKey: 'radar.summary.hidden' },
+  { id: 'missing_from_source', labelKey: 'radar.summary.missingFromSource' },
 ] as const satisfies readonly {
   id: RadarPrimaryMetricId;
   labelKey: string;
 }[];
 
 const RADAR_STATUS_FILTERS = [
-  { id: 'all', labelKey: 'radar.summary.total' },
-  { id: 'active', labelKey: 'radar.summary.active' },
-  { id: 'priced', labelKey: 'radar.summary.priced' },
-  { id: 'pending', labelKey: 'radar.summary.pending' },
-  { id: 'failed', labelKey: 'radar.summary.failed' },
-  { id: 'unavailable', labelKey: 'radar.summary.unavailable' },
-  { id: 'hidden', labelKey: 'radar.summary.hidden' },
   { id: 'resolved', labelKey: 'radar.summary.resolved' },
-  { id: 'missing_from_source', labelKey: 'radar.summary.missingFromSource' },
 ] as const satisfies readonly {
   id: RadarStatusFilterId;
   labelKey: string;
 }[];
-
-const RADAR_MARKETPLACE_STATE_LABEL_KEYS: Partial<Record<MarketplaceStatus, RadarStateLabelKey>> = {
-  [MARKETPLACE_STATUS.PENDING]: 'radar.state.pending',
-  [MARKETPLACE_STATUS.UNAVAILABLE]: 'radar.state.unavailable',
-  [MARKETPLACE_STATUS.FAILED]: 'radar.state.failed',
-};
 
 const RADAR_RELEASE_FIELD_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.2em] text-slate-500';
 const RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS = 'mt-1 font-semibold text-white';
@@ -169,12 +143,6 @@ function renderRadarGettingStarted({
   );
 }
 
-function hasRadarAttentionIssue(item: RadarRelease): boolean {
-  return item.marketplace.status === MARKETPLACE_STATUS.PENDING
-    || item.marketplace.status === MARKETPLACE_STATUS.FAILED
-    || item.marketplace.status === MARKETPLACE_STATUS.UNAVAILABLE;
-}
-
 function isActiveRadarItem(item: RadarRelease): boolean {
   return !item.local.hidden
     && !item.local.resolved
@@ -187,33 +155,16 @@ function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolea
       return isActiveRadarItem(item);
     case 'active':
       return isActiveRadarItem(item);
-    case 'opportunities':
-      return isActiveRadarItem(item) && item.opportunity.reasons.length > 0;
-    case 'below_target':
-      return isActiveRadarItem(item) && item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET);
     case 'high_priority':
       return isActiveRadarItem(item) && item.local.priority === RADAR_PRIORITY.HIGH;
     case 'in_collection':
-      return isActiveRadarItem(item) && (
-        item.opportunity.is_in_collection
-        || item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION)
-      );
-    case 'attention':
-      return isActiveRadarItem(item) && hasRadarAttentionIssue(item);
-    case 'priced':
-      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.PRICED;
+      return isActiveRadarItem(item) && item.opportunity.is_in_collection;
     case 'hidden':
       return item.local.hidden;
     case 'resolved':
       return item.local.resolved;
     case 'missing_from_source':
       return item.source.status === RADAR_SOURCE_STATUS.MISSING;
-    case 'pending':
-      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.PENDING;
-    case 'failed':
-      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.FAILED;
-    case 'unavailable':
-      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.UNAVAILABLE;
   }
 }
 
@@ -227,11 +178,11 @@ function getRadarFilterCount(items: RadarRelease[], filterId: RadarFilterId): nu
 
 function getRadarPrimaryMetricCounts(items: RadarRelease[]): Record<RadarPrimaryMetricId, number> {
   const counts: Record<RadarPrimaryMetricId, number> = {
-    opportunities: 0,
-    below_target: 0,
+    all: 0,
     high_priority: 0,
     in_collection: 0,
-    attention: 0,
+    hidden: 0,
+    missing_from_source: 0,
   };
 
   for (const item of items) {
@@ -322,22 +273,17 @@ function RadarFilterPanel({
   );
 }
 
-function getRadarCurrentPrice(item: RadarRelease, t: Translate): string {
-  const displayCurrency = item.display_currency || 'EUR';
-
-  if (item.marketplace.status === MARKETPLACE_STATUS.PRICED && item.marketplace.estimated_price != null) {
-    return formatCurrency(item.marketplace.estimated_price, displayCurrency);
-  }
-
-  const stateLabelKey = RADAR_MARKETPLACE_STATE_LABEL_KEYS[item.marketplace.status];
-  return stateLabelKey ? t(stateLabelKey) : '-';
-}
-
 type RadarReleaseField = {
   labelKey: string;
   value: string;
   valueClassName: string;
 };
+
+function getRadarMinimumCondition(item: RadarRelease, t: Translate): string {
+  return item.local.minimum_condition
+    ? t(`radar.minimumCondition.${item.local.minimum_condition}`)
+    : t('radar.minimumCondition.none');
+}
 
 function getRadarReleaseFields(item: RadarRelease, t: Translate): RadarReleaseField[] {
   const displayCurrency = item.display_currency || 'EUR';
@@ -346,11 +292,6 @@ function getRadarReleaseFields(item: RadarRelease, t: Translate): RadarReleaseFi
     : formatCurrency(item.local.target_price, displayCurrency);
 
   return [
-    {
-      labelKey: 'radar.currentPrice',
-      value: getRadarCurrentPrice(item, t),
-      valueClassName: RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS,
-    },
     {
       labelKey: 'radar.targetPrice',
       value: targetPrice,
@@ -362,13 +303,13 @@ function getRadarReleaseFields(item: RadarRelease, t: Translate): RadarReleaseFi
       valueClassName: RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS,
     },
     {
-      labelKey: 'radar.wantlistDate',
-      value: formatDate(item.date_added),
+      labelKey: 'radar.minimumCondition',
+      value: getRadarMinimumCondition(item, t),
       valueClassName: RADAR_RELEASE_FIELD_VALUE_CLASS,
     },
     {
-      labelKey: 'radar.lastPriceReview',
-      value: formatDate(item.marketplace.last_checked_at),
+      labelKey: 'radar.wantlistDate',
+      value: formatDate(item.date_added),
       valueClassName: RADAR_RELEASE_FIELD_VALUE_CLASS,
     },
   ];
@@ -385,10 +326,9 @@ function RadarReleaseRow({
 }: RadarReleaseRowProps) {
   const releaseKey = item.id ?? item.release_id ?? 0;
   const detailPath = `/radar/${releaseKey}`;
-  const opportunityReasons = getOrderedRadarOpportunityReasons(item);
   const stateLabelKeys = getRadarStateLabelKeys(item);
   const collectionMatch = item.opportunity.collection_match;
-  const hasLabels = stateLabelKeys.length > 0 || opportunityReasons.length > 0;
+  const hasLabels = stateLabelKeys.length > 0;
   const releaseFields = getRadarReleaseFields(item, t);
 
   return (
@@ -444,14 +384,6 @@ function RadarReleaseRow({
                       className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-950/35 px-3 py-1 text-xs uppercase tracking-[0.18em] text-amber-100"
                     >
                       {t(labelKey)}
-                    </span>
-                  ))}
-                  {opportunityReasons.map((reason) => (
-                    <span
-                      key={reason}
-                      className="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-950/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-100"
-                    >
-                      {t(`radar.opportunity.${reason}`)}
                     </span>
                   ))}
                 </div>

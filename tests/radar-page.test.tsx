@@ -25,20 +25,20 @@ const startRadarUpdateRun = vi.hoisted(() => vi.fn());
 const stopRadarUpdateRun = vi.hoisted(() => vi.fn());
 
 const messages = {
-  'radar.eyebrow': 'Radar',
+  'radar.eyebrow': 'Wantlist',
   'radar.blockedTitle': 'Connect your Discogs account',
-  'radar.blockedBody': 'Radar needs a configured Discogs account before it can show your buying workspace.',
+  'radar.blockedBody': 'Wantlist needs a configured Discogs account before it can show your wanted records.',
   'radar.openSettings': 'Open Settings',
-  'radar.updateAction': 'Update Radar',
+  'radar.updateAction': 'Update Wantlist',
   'radar.importAction': 'Import file',
-  'radar.updating': 'Updating Radar...',
-  'radar.updateError': 'Radar could not start updating: boom',
-  'radar.updateStatusError': 'Radar update status could not be loaded. Try again in a moment.',
+  'radar.updating': 'Updating Wantlist...',
+  'radar.updateError': 'Wantlist could not start updating: boom',
+  'radar.updateStatusError': 'Wantlist update status could not be loaded. Try again in a moment.',
   'radar.syncResultTitle': 'Wantlist synced',
   'radar.syncResultSummary': 'Checked 1 wanted release from Discogs.',
   'radar.syncBreakdown': '1 new · 0 updated · 0 back again · 0 missing now',
-  'radar.loading': 'Loading your Radar workspace...',
-  'radar.loadFailed': 'Radar could not be loaded. Try again in a moment.',
+  'radar.loading': 'Loading your Wantlist...',
+  'radar.loadFailed': 'Wantlist could not be loaded. Try again in a moment.',
   'radar.summary.total': 'Wanted',
   'radar.summary.active': 'Active',
   'radar.summary.hidden': 'Hidden',
@@ -51,8 +51,8 @@ const messages = {
   'radar.filtersTitle': 'Filters',
   'radar.filterCount': 'Showing {count} of {total}',
   'radar.filter.all': 'All wanted releases',
-  'radar.filter.opportunities': 'Active opportunities',
-  'radar.filter.belowTarget': 'Below target',
+  'radar.filter.opportunities': 'Active',
+  'radar.filter.belowTarget': 'High priority',
   'radar.filter.highPriority': 'High priority',
   'radar.filter.inCollection': 'Already in collection',
   'radar.filter.attention': 'Pending / incidents',
@@ -61,11 +61,11 @@ const messages = {
   'radar.filter.failed': 'Update errors',
   'radar.filterEmptyTitle': 'No releases match this filter',
   'radar.filterEmptyBody': 'Try another Radar filter to inspect a different slice of your wanted releases.',
-  'radar.updateTitle': 'Radar update run',
-  'radar.updateBody': 'Refresh Wantlist data first, then check any prices that still need review as one clear workflow.',
+  'radar.updateTitle': 'Wantlist update',
+  'radar.updateBody': 'Refresh Wantlist data from Discogs and keep your local decisions inside Discographic.',
   'radar.updatePhase.idle': 'Ready',
   'radar.updatePhase.syncing': 'Updating Wantlist',
-  'radar.updatePhase.reviewing_prices': 'Reviewing prices',
+  'radar.updatePhase.reviewing_prices': 'Updating Wantlist',
   'radar.updatePhase.completed': 'Completed',
   'radar.updatePhase.completed_with_issues': 'Completed with issues',
   'radar.updatePhase.failed': 'Failed',
@@ -76,12 +76,12 @@ const messages = {
   'radar.updateTotal': 'Total',
   'radar.updatePending': 'Pending',
   'radar.emptyTitle': 'Your Radar is ready',
-  'radar.emptyBody': 'Your list is empty for now. When Wantlist releases arrive, Radar will keep their local decisions and market state here.',
+  'radar.emptyBody': 'Your list is empty for now. When Wantlist releases arrive, Discographic will keep your local decisions here.',
   'radar.gettingStartedTitle': 'Start with your Wantlist',
-  'radar.gettingStartedBody': 'Use Update Radar to pull your Discogs Wantlist and check prices in one run. If Discogs is not available, import a CSV or XLSX fallback instead.',
+  'radar.gettingStartedBody': 'Use Update Wantlist to pull your wanted records from Discogs. If Discogs is not available, import a CSV or XLSX fallback instead.',
   'radar.accountUnavailable': 'Discogs account status could not be loaded. Reload the page or review Settings before opening Radar.',
   'radar.import.title': 'Wantlist fallback import',
-  'radar.import.description': 'Use a CSV or XLSX file as a manual fallback or supplemental Wantlist source before you run a full Radar update.',
+  'radar.import.description': 'Use a CSV or XLSX file as a manual fallback or supplemental Wantlist source.',
   'radar.import.requiredHint': 'Required: release_id. Optional: artist, title, year, notes, date added, target price, minimum condition, priority.',
   'radar.import.upload': 'Upload CSV/XLSX',
   'radar.import.downloadCsvTemplate': 'CSV template',
@@ -99,7 +99,7 @@ const messages = {
   'radar.import.applying': 'Importing preview...',
   'radar.import.applySummary': 'Imported 1 valid rows. Skipped 1 invalid rows.',
   'radar.import.applyBreakdown': '1 new · 0 merged',
-  'radar.import.applyNextStep': 'Radar was updated locally. Review the imported releases below, then use Update Radar when you want to refresh Wantlist data and prices from Discogs.',
+  'radar.import.applyNextStep': 'Wantlist was updated locally. Review the imported releases below, then use Update Wantlist when you want to refresh it from Discogs.',
   'radar.import.applyFailed': 'Radar could not import this preview: boom',
   'radar.openDetail': 'View details',
   'radar.openDiscogs': 'Open on Discogs',
@@ -118,7 +118,7 @@ const messages = {
   'radar.state.resolved': 'Resolved',
   'radar.state.missingFromSource': 'Missing from source',
   'radar.minimumCondition': 'Minimum condition',
-  'radar.minimumCondition.info': 'Saved for future listing filters. Informational only in Radar v1.',
+  'radar.minimumCondition.info': 'Saved as a personal buying preference. It does not create automatic classifications.',
   'radar.minimumCondition.none': 'No preference',
   'radar.minimumCondition.M': 'Mint (M)',
   'radar.minimumCondition.NM': 'Near Mint (NM)',
@@ -336,9 +336,9 @@ describe('Radar page', () => {
       phase: 'idle',
       current: 0,
       total: 0,
-      pending: 2,
+      pending: 0,
       progressPercent: 0,
-      message: 'Radar is ready to update your Wantlist and review prices.',
+      message: 'Wantlist is ready to update from Discogs.',
       startedAt: null,
       finishedAt: null,
       wantlist: {
@@ -359,7 +359,7 @@ describe('Radar page', () => {
       total: 1,
       pending: 0,
       progressPercent: 100,
-      message: 'Radar update completed.',
+      message: 'Wantlist updated. 1 wanted releases refreshed.',
       startedAt: '2026-05-10T12:00:00Z',
       finishedAt: '2026-05-10T12:01:00Z',
       wantlist: {
@@ -477,9 +477,9 @@ describe('Radar page', () => {
       phase: 'stopped',
       current: 1,
       total: 4,
-      pending: 3,
-      progressPercent: 25,
-      message: 'Radar stopped after reviewing 1 releases. 3 still need price review.',
+      pending: 0,
+      progressPercent: 100,
+      message: 'Wantlist update stopped after refreshing 4 releases.',
       startedAt: '2026-05-10T10:00:00.000Z',
       finishedAt: '2026-05-10T10:01:00.000Z',
       wantlist: {
@@ -517,7 +517,7 @@ describe('Radar page', () => {
     expect(getRadarStatus).not.toHaveBeenCalled();
   });
 
-  it('fetches and shows an empty Radar workspace summary when the Discogs account is configured', async () => {
+  it('fetches and shows an empty Wantlist manager summary when the Discogs account is configured', async () => {
     authState.capabilities.canUseRadar = true;
 
     const rendered = await renderRadar();
@@ -526,11 +526,13 @@ describe('Radar page', () => {
     expect(getRadar).toHaveBeenCalledTimes(1);
     expect(getRadarStatus).toHaveBeenCalledTimes(1);
     expect(text).toContain(messages['radar.eyebrow']);
-    expect(text).toContain(messages['radar.summary.total']);
-    expect(text).toContain(messages['radar.summary.pending']);
+    expect(text).toContain(messages['radar.summary.active']);
+    expect(text).toContain(messages['radar.filter.highPriority']);
+    expect(text).toContain(messages['radar.filter.inCollection']);
+    expect(text).toContain(messages['radar.summary.missingFromSource']);
     expect(text).toContain(messages['radar.updateTitle']);
     expect(text).toContain(messages['radar.updateAction']);
-    expect(text).toContain(messages['radar.updatePending']);
+    expect(text).not.toContain(messages['radar.updatePending']);
     expect(text).toContain(messages['radar.import.title']);
     expect(text).toContain(messages['radar.emptyTitle']);
     expect(text).toContain(messages['radar.emptyBody']);
@@ -611,12 +613,12 @@ describe('Radar page', () => {
       );
     getRadarStatus
       .mockResolvedValueOnce({
-        phase: 'reviewing_prices',
+        phase: 'syncing',
         current: 1,
         total: 2,
-        pending: 1,
+        pending: 0,
         progressPercent: 50,
-        message: 'Reviewing Radar prices.',
+        message: 'Updating Wantlist from Discogs...',
         startedAt: '2026-05-10T12:00:00Z',
         finishedAt: null,
         wantlist: {
@@ -629,7 +631,7 @@ describe('Radar page', () => {
         },
         isRunning: true,
         isTerminal: false,
-        canStop: true,
+        canStop: false,
       })
       .mockRejectedValueOnce(new Error('temporary status failure'))
       .mockResolvedValueOnce({
@@ -638,7 +640,7 @@ describe('Radar page', () => {
         total: 2,
         pending: 0,
         progressPercent: 100,
-        message: 'Radar update completed.',
+        message: 'Wantlist updated. 2 wanted releases refreshed.',
         startedAt: '2026-05-10T12:00:00Z',
         finishedAt: '2026-05-10T12:01:00Z',
         wantlist: {
@@ -686,7 +688,7 @@ describe('Radar page', () => {
     }
   });
 
-  it('returns to the full Radar list after a completed update finishes from a filtered view', async () => {
+  it('returns to the full Wantlist after a completed update finishes from a filtered view', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValueOnce(
       createRadarResponse(
@@ -694,7 +696,7 @@ describe('Radar page', () => {
           createRadarRelease({
             id: 31,
             release_id: 931,
-            title: 'Visible Opportunity',
+            title: 'High Priority Want',
             artist: 'Artist Visible',
             local: {
               priority: 'high',
@@ -734,8 +736,8 @@ describe('Radar page', () => {
 
     const rendered = await renderRadar();
 
-    await clickRadarFilter(rendered, 'opportunities');
-    expect(rendered.textContent ?? '').toContain('Visible Opportunity');
+    await clickRadarFilter(rendered, 'high_priority');
+    expect(rendered.textContent ?? '').toContain('High Priority Want');
     expect(rendered.textContent ?? '').not.toContain('Fresh Pending Want');
 
     const updateButton = findButtonByText(rendered, messages['radar.updateAction']);
@@ -753,127 +755,55 @@ describe('Radar page', () => {
     expect(text).not.toContain(messages['radar.filterEmptyTitle']);
   });
 
-  it('shows explicit opportunity reasons and keeps hidden or resolved rows out of the opportunities filter', async () => {
+  it('shows only Wantlist state labels and keeps hidden or resolved rows out of the active filter', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
       items: [
-        {
+        createRadarRelease({
           id: 1,
-          user_id: 1,
           release_id: 401,
-          title: 'Visible Opportunity',
+          title: 'Visible Want',
           artist: 'Artist A',
-          year: 1999,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
           local: {
             priority: 'high',
             target_price: 18,
             target_price_eur: 18,
-            minimum_condition: null,
-            note: '',
-            hidden: false,
-            resolved: false,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
-          },
-          marketplace: {
-            status: 'priced',
-            estimated_price: 16,
-            last_checked_at: '2026-05-10T00:00:00Z',
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
           },
           opportunity: {
             reasons: ['below_target', 'high_priority_available', 'already_in_collection'],
             default_visible: true,
             is_in_collection: true,
           },
-          display_currency: 'EUR',
-        },
-        {
+        }),
+        createRadarRelease({
           id: 2,
-          user_id: 1,
           release_id: 402,
-          title: 'Hidden Opportunity',
+          title: 'Hidden Want',
           artist: 'Artist B',
-          year: 2001,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
           local: {
             priority: 'high',
-            target_price: null,
-            target_price_eur: null,
-            minimum_condition: null,
-            note: '',
             hidden: true,
-            resolved: false,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
-          },
-          marketplace: {
-            status: 'priced',
-            estimated_price: 15,
-            last_checked_at: '2026-05-10T00:00:00Z',
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
           },
           opportunity: {
             reasons: ['high_priority_available'],
             default_visible: false,
             is_in_collection: false,
           },
-          display_currency: 'EUR',
-        },
-        {
+        }),
+        createRadarRelease({
           id: 3,
-          user_id: 1,
           release_id: 403,
-          title: 'Resolved Opportunity',
+          title: 'Resolved Want',
           artist: 'Artist C',
-          year: 2002,
-          cover_url: null,
-          date_added: '2026-05-10T00:00:00Z',
           local: {
-            priority: 'normal',
-            target_price: null,
-            target_price_eur: null,
-            minimum_condition: null,
-            note: '',
-            hidden: false,
             resolved: true,
-          },
-          source: {
-            origin: 'discogs',
-            status: 'active',
-            last_seen_at: '2026-05-10T00:00:00Z',
-          },
-          marketplace: {
-            status: 'priced',
-            estimated_price: 14,
-            last_checked_at: '2026-05-10T00:00:00Z',
-          },
-          timestamps: {
-            created_at: '2026-05-10T00:00:00Z',
-            updated_at: '2026-05-10T00:00:00Z',
           },
           opportunity: {
             reasons: ['available_again'],
             default_visible: false,
             is_in_collection: false,
           },
-          display_currency: 'EUR',
-        },
+        }),
       ],
       summary: {
         total: 3,
@@ -889,16 +819,16 @@ describe('Radar page', () => {
     });
 
     const rendered = await renderRadar();
-    await clickRadarFilter(rendered, 'opportunities');
+    await clickRadarFilter(rendered, 'all');
 
     const text = rendered.textContent ?? '';
 
-    expect(text).toContain('Visible Opportunity');
-    expect(text).toContain(messages['radar.opportunity.below_target']);
-    expect(text).toContain(messages['radar.opportunity.high_priority_available']);
-    expect(text).toContain(messages['radar.opportunity.already_in_collection']);
-    expect(text).not.toContain('Hidden Opportunity');
-    expect(text).not.toContain('Resolved Opportunity');
+    expect(text).toContain('Visible Want');
+    expect(text).not.toContain(messages['radar.opportunity.below_target']);
+    expect(text).not.toContain(messages['radar.opportunity.high_priority_available']);
+    expect(text).not.toContain(messages['radar.opportunity.already_in_collection']);
+    expect(text).not.toContain('Hidden Want');
+    expect(text).not.toContain('Resolved Want');
     expect(text).toContain(messages['radar.summary.hidden']);
     expect(text).toContain(messages['radar.summary.resolved']);
   });
@@ -1001,14 +931,16 @@ describe('Radar page', () => {
     expect(detailLink?.getAttribute('href')).toBe('/radar/22');
     expect(detailLink?.textContent).toContain('Single Match');
     expect(detailLink?.textContent).toContain('Artist B');
-    expect(detailLink?.textContent).toContain(messages['radar.currentPrice']);
+    expect(detailLink?.textContent).toContain(messages['radar.targetPrice']);
     expect(detailLink?.textContent).toContain(messages['radar.priority']);
+    expect(detailLink?.textContent).toContain(messages['radar.minimumCondition']);
+    expect(detailLink?.textContent).toContain(messages['radar.wantlistDate']);
     expect(detailLink?.getAttribute('aria-label')).toContain(messages['radar.openDetail']);
     expect(detailAction).toBeNull();
     expect(rendered.textContent ?? '').not.toContain(messages['radar.openDetail']);
   });
 
-  it('filters Radar rows from the normalized list contract and shows natural state labels', async () => {
+  it('filters Wantlist rows from the normalized list contract and shows natural state labels', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
       items: [
@@ -1132,23 +1064,13 @@ describe('Radar page', () => {
     expect(text()).not.toContain('Pending Hidden');
     expect(text()).not.toContain('Resolved Error');
     expect(text()).not.toContain('No Price');
-    expect(text()).toContain(messages['radar.opportunity.below_target']);
-    expect(text()).toContain(messages['radar.opportunity.high_priority_available']);
-    expect(text()).toContain(messages['radar.opportunity.available_again']);
-    expect(text()).toContain(messages['radar.opportunity.already_in_collection']);
-    expect(text()).toContain(messages['radar.state.pending']);
-    expect(text()).toContain(messages['radar.state.failed']);
+    expect(text()).not.toContain(messages['radar.opportunity.below_target']);
+    expect(text()).not.toContain(messages['radar.opportunity.high_priority_available']);
+    expect(text()).not.toContain(messages['radar.opportunity.available_again']);
+    expect(text()).not.toContain(messages['radar.opportunity.already_in_collection']);
+    expect(text()).not.toContain(messages['radar.state.pending']);
+    expect(text()).not.toContain(messages['radar.state.failed']);
     expect(text()).not.toContain(messages['radar.state.unavailable']);
-
-    await clickRadarFilter(rendered, 'opportunities');
-    expect(text()).toContain('Below Target');
-    expect(text()).toContain('Back Again');
-    expect(text()).not.toContain('Pending Hidden');
-    expect(text()).not.toContain('Resolved Error');
-
-    await clickRadarFilter(rendered, 'below_target');
-    expect(text()).toContain('Below Target');
-    expect(text()).not.toContain('Back Again');
 
     await clickRadarFilter(rendered, 'high_priority');
     expect(text()).toContain('Below Target');
@@ -1157,15 +1079,6 @@ describe('Radar page', () => {
 
     await clickRadarFilter(rendered, 'in_collection');
     expect(text()).toContain('Below Target');
-    expect(text()).not.toContain('Back Again');
-
-    await clickRadarFilter(rendered, 'attention');
-    expect(text()).toContain('Active Pending');
-    expect(text()).toContain('Active Failed');
-    expect(text()).not.toContain('Pending Hidden');
-    expect(text()).not.toContain('Resolved Error');
-    expect(text()).not.toContain('No Price');
-    expect(text()).not.toContain('Below Target');
     expect(text()).not.toContain('Back Again');
 
     await clickRadarFilter(rendered, 'hidden');
@@ -1181,22 +1094,12 @@ describe('Radar page', () => {
 
     await clickRadarFilter(rendered, 'missing_from_source');
     expect(text()).toContain('No Price');
-    expect(text()).toContain(messages['radar.state.unavailable']);
+    expect(text()).not.toContain(messages['radar.state.unavailable']);
     expect(text()).toContain(messages['radar.state.missingFromSource']);
     expect(text()).not.toContain('Below Target');
-
-    await clickRadarFilter(rendered, 'pending');
-    expect(text()).toContain('Active Pending');
-    expect(text()).not.toContain('Pending Hidden');
-    expect(text()).not.toContain('Resolved Error');
-
-    await clickRadarFilter(rendered, 'failed');
-    expect(text()).toContain('Active Failed');
-    expect(text()).not.toContain('Resolved Error');
-    expect(text()).not.toContain('Pending Hidden');
   });
 
-  it('renders operational metric filters in the header and applies the matching list view', async () => {
+  it('renders Wantlist metric filters in the header and applies the matching list view', async () => {
     authState.capabilities.canUseRadar = true;
     getRadar.mockResolvedValue({
       items: [
@@ -1254,19 +1157,28 @@ describe('Radar page', () => {
     const rendered = await renderRadar();
     const text = rendered.textContent ?? '';
 
-    expect(text).toContain(messages['radar.filter.opportunities']);
-    expect(text).toContain(messages['radar.filter.belowTarget']);
     expect(text).toContain(messages['radar.filter.highPriority']);
     expect(text).toContain(messages['radar.filter.inCollection']);
-    expect(text).toContain(messages['radar.filter.attention']);
+    expect(text).not.toContain(messages['radar.filter.attention']);
+    expect(rendered.querySelector('[data-radar-filter="opportunities"]')).toBeNull();
+    expect(rendered.querySelector('[data-radar-filter="below_target"]')).toBeNull();
+    expect(rendered.querySelector('[data-radar-filter="attention"]')).toBeNull();
 
-    await clickRadarFilter(rendered, 'attention');
+    await clickRadarFilter(rendered, 'high_priority');
 
-    const attentionText = rendered.textContent ?? '';
+    const highPriorityText = rendered.textContent ?? '';
 
-    expect(attentionText).toContain('Waiting On Price');
-    expect(attentionText).toContain('Needs Retry');
-    expect(attentionText).not.toContain('Operational Opportunity');
+    expect(highPriorityText).toContain('Operational Opportunity');
+    expect(highPriorityText).not.toContain('Waiting On Price');
+    expect(highPriorityText).not.toContain('Needs Retry');
+
+    await clickRadarFilter(rendered, 'in_collection');
+
+    const collectionText = rendered.textContent ?? '';
+
+    expect(collectionText).toContain('Operational Opportunity');
+    expect(collectionText).not.toContain('Waiting On Price');
+    expect(collectionText).not.toContain('Needs Retry');
   });
 
   it('uses one informative filter panel where every summary category can filter the list', async () => {
@@ -1278,10 +1190,20 @@ describe('Radar page', () => {
           release_id: 701,
           title: 'Active Priced',
           artist: 'Artist Active',
+          local: {
+            priority: 'high',
+          },
           marketplace: {
             status: 'priced',
             estimated_price: 21,
             last_checked_at: RADAR_TEST_TIMESTAMP,
+          },
+          opportunity: {
+            is_in_collection: true,
+            collection_match: {
+              primary_release_id: 701,
+              copy_count: 1,
+            },
           },
         }),
         createRadarRelease({
@@ -1349,28 +1271,30 @@ describe('Radar page', () => {
 
     expect(rendered.querySelectorAll('[data-radar-filter-panel="true"]')).toHaveLength(1);
     expect(filterPanel?.textContent).toContain(messages['radar.filtersTitle']);
-    expect(filterPanel?.querySelector('[data-radar-filter="active"]')?.textContent).toContain(messages['radar.summary.active']);
-    expect(filterPanel?.querySelector('[data-radar-filter="priced"]')?.textContent).toContain(messages['radar.summary.priced']);
-    expect(filterPanel?.querySelector('[data-radar-filter="unavailable"]')?.textContent).toContain(messages['radar.summary.unavailable']);
+    expect(filterPanel?.querySelector('[data-radar-filter="all"]')?.textContent).toContain(messages['radar.summary.active']);
+    expect(filterPanel?.querySelector('[data-radar-filter="high_priority"]')?.textContent).toContain(messages['radar.filter.highPriority']);
+    expect(filterPanel?.querySelector('[data-radar-filter="in_collection"]')?.textContent).toContain(messages['radar.filter.inCollection']);
     expect(filterPanel?.querySelector('[data-radar-filter="hidden"]')?.textContent).toContain(messages['radar.summary.hidden']);
     expect(filterPanel?.querySelector('[data-radar-filter="resolved"]')?.textContent).toContain(messages['radar.summary.resolved']);
     expect(filterPanel?.querySelector('[data-radar-filter="missing_from_source"]')?.textContent).toContain(messages['radar.summary.missingFromSource']);
+    expect(filterPanel?.querySelector('[data-radar-filter="priced"]')).toBeNull();
+    expect(filterPanel?.querySelector('[data-radar-filter="unavailable"]')).toBeNull();
 
-    await clickRadarFilter(rendered, 'active');
+    await clickRadarFilter(rendered, 'all');
     expect(rendered.textContent ?? '').toContain('Active Priced');
     expect(rendered.textContent ?? '').toContain('Active Unavailable');
     expect(rendered.textContent ?? '').not.toContain('Hidden Pending');
     expect(rendered.textContent ?? '').not.toContain('Resolved Failed');
     expect(rendered.textContent ?? '').not.toContain('Unavailable Missing');
 
-    await clickRadarFilter(rendered, 'priced');
+    await clickRadarFilter(rendered, 'high_priority');
     expect(rendered.textContent ?? '').toContain('Active Priced');
     expect(rendered.textContent ?? '').not.toContain('Hidden Pending');
+    expect(rendered.textContent ?? '').not.toContain('Active Unavailable');
 
-    await clickRadarFilter(rendered, 'unavailable');
-    expect(rendered.textContent ?? '').toContain('Active Unavailable');
-    expect(rendered.textContent ?? '').not.toContain('Unavailable Missing');
-    expect(rendered.textContent ?? '').not.toContain('Active Priced');
+    await clickRadarFilter(rendered, 'in_collection');
+    expect(rendered.textContent ?? '').toContain('Active Priced');
+    expect(rendered.textContent ?? '').not.toContain('Active Unavailable');
 
     await clickRadarFilter(rendered, 'hidden');
     expect(rendered.textContent ?? '').toContain('Hidden Pending');
@@ -1383,6 +1307,75 @@ describe('Radar page', () => {
     await clickRadarFilter(rendered, 'missing_from_source');
     expect(rendered.textContent ?? '').toContain('Unavailable Missing');
     expect(rendered.textContent ?? '').not.toContain('Active Priced');
+  });
+
+  it('presents Radar as a Wantlist manager without Marketplace opportunity filters', async () => {
+    authState.capabilities.canUseRadar = true;
+    getRadar.mockResolvedValue(createRadarResponse([
+      createRadarRelease({
+        id: 61,
+        release_id: 901,
+        title: 'Mint Target',
+        artist: 'Artist Planned',
+        local: {
+          priority: 'high',
+          target_price: 20,
+          target_price_eur: 20,
+          minimum_condition: 'M',
+        },
+        marketplace: {
+          status: 'priced',
+          estimated_price: 12,
+          last_checked_at: RADAR_TEST_TIMESTAMP,
+        },
+        opportunity: {
+          reasons: ['below_target', 'high_priority_available'],
+          default_visible: true,
+          is_in_collection: false,
+        },
+      }),
+      createRadarRelease({
+        id: 62,
+        release_id: 902,
+        title: 'Local Copy',
+        artist: 'Artist Owned',
+        opportunity: {
+          reasons: ['already_in_collection'],
+          default_visible: true,
+          is_in_collection: true,
+          collection_match: {
+            primary_release_id: 18,
+            copy_count: 1,
+          },
+        },
+      }),
+    ], { active: 2, priced: 1, pending: 1 }));
+
+    const rendered = await renderRadar();
+    const filterPanel = rendered.querySelector('[data-radar-filter-panel="true"]');
+    const text = rendered.textContent ?? '';
+
+    expect(filterPanel?.querySelector('[data-radar-filter="opportunities"]')).toBeNull();
+    expect(filterPanel?.querySelector('[data-radar-filter="below_target"]')).toBeNull();
+    expect(filterPanel?.querySelector('[data-radar-filter="priced"]')).toBeNull();
+    expect(filterPanel?.querySelector('[data-radar-filter="pending"]')).toBeNull();
+    expect(text).not.toContain(messages['radar.currentPrice']);
+    expect(text).not.toContain(messages['radar.lastPriceReview']);
+    expect(text).not.toContain(messages['radar.opportunity.below_target']);
+    expect(text).not.toContain(messages['radar.opportunity.high_priority_available']);
+    expect(text).toContain(messages['radar.targetPrice']);
+    expect(text).toContain(messages['radar.filter.highPriority']);
+    expect(text).toContain(messages['radar.filter.inCollection']);
+    expect(text).toContain('Mint Target');
+    expect(text).toContain('Local Copy');
+
+    await clickRadarFilter(rendered, 'high_priority');
+    expect(rendered.textContent ?? '').toContain('Mint Target');
+    expect(rendered.textContent ?? '').not.toContain('Local Copy');
+
+    await clickRadarFilter(rendered, 'in_collection');
+    expect(rendered.textContent ?? '').toContain('Local Copy');
+    expect(rendered.textContent ?? '').not.toContain('Mint Target');
   });
 
   it('keeps releases removed from Discogs out of the default Radar list after an update', async () => {
@@ -1598,7 +1591,7 @@ describe('Radar page', () => {
 
     const rendered = await renderRadar();
 
-    await clickRadarFilter(rendered, 'opportunities');
+    await clickRadarFilter(rendered, 'high_priority');
     expect(rendered.textContent ?? '').toContain('Operational Opportunity');
     expect(rendered.textContent ?? '').not.toContain('Computer World');
 
@@ -1614,23 +1607,23 @@ describe('Radar page', () => {
 
     const text = rendered.textContent ?? '';
     const allFilter = rendered.querySelector('button[data-radar-filter="all"]') as HTMLButtonElement | null;
-    const opportunitiesFilter = rendered.querySelector('button[data-radar-filter="opportunities"]') as HTMLButtonElement | null;
+    const highPriorityFilter = rendered.querySelector('button[data-radar-filter="high_priority"]') as HTMLButtonElement | null;
 
     expect(text).toContain(messages['radar.import.applySummary']);
     expect(text).toContain('Computer World');
     expect(allFilter?.className).toContain('bg-brand-400/15');
-    expect(opportunitiesFilter?.className).not.toContain('bg-brand-400/15');
+    expect(highPriorityFilter?.className).not.toContain('bg-brand-400/15');
   });
 
   it('shows stopped Radar update state after a run has been halted', async () => {
     authState.capabilities.canUseRadar = true;
     getRadarStatus.mockResolvedValue({
       phase: 'stopped',
-      current: 1,
+      current: 4,
       total: 4,
-      pending: 3,
-      progressPercent: 25,
-      message: 'Radar stopped after reviewing 1 releases. 3 still need price review.',
+      pending: 0,
+      progressPercent: 100,
+      message: 'Wantlist update stopped after refreshing 4 releases.',
       startedAt: '2026-05-10T10:00:00.000Z',
       finishedAt: '2026-05-10T10:01:00.000Z',
       wantlist: {
@@ -1650,9 +1643,8 @@ describe('Radar page', () => {
 
     expect(text).toContain(messages['radar.updatePhase.stopped']);
     expect(text).toContain(messages['radar.updateAction']);
-    expect(text).toContain('1');
     expect(text).toContain('4');
-    expect(text).toContain('3');
+    expect(text).not.toContain(messages['radar.updatePending']);
   });
 
   it('shows the account-unavailable state before the blocked state when account status cannot be loaded', async () => {
@@ -1718,11 +1710,12 @@ describe('Radar page', () => {
 
     expect(text).toContain('Editable Release');
     expect(text).toContain('Artist C');
-    expect(text).toContain(formatCurrency(24, 'USD'));
+    expect(text).not.toContain(formatCurrency(24, 'USD'));
     expect(text).toContain(formatCurrency(12.5, 'USD'));
     expect(text).toContain(messages['radar.priority.normal']);
+    expect(text).toContain(messages['radar.minimumCondition.VG+']);
     expect(text).toContain(formatDate('2026-05-10T00:00:00Z'));
-    expect(text).toContain(messages['radar.opportunity.high_priority_available']);
+    expect(text).not.toContain(messages['radar.opportunity.high_priority_available']);
     expect(discogsLink?.getAttribute('href')).toBe('https://www.discogs.com/release/303');
     expect(rendered.querySelector('select[name="radar-priority-7"]')).toBeNull();
     expect(rendered.querySelector('input[name="radar-target-price-7"]')).toBeNull();

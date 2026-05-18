@@ -34,12 +34,6 @@ type FakeRadarRow = {
   estimated_price: number | null;
 };
 
-type MarketplaceCheck = {
-  estimatedValue: number | null;
-  marketplaceStatus: string;
-  error: string | null;
-};
-
 type FakeDiscogsClient = {
   getAllWantlist: () => Promise<unknown[]>;
   getMarketplaceStats: (releaseId: number, currency: string) => Promise<null>;
@@ -171,7 +165,48 @@ describe('Radar update run', () => {
     resetRadarRuntimeState(7);
   });
 
-  it('syncs Wantlist data and completes with issues when some Radar prices stay retryable', async () => {
+  it('syncs Wantlist data without reviewing Marketplace prices', async () => {
+    const wantlistRows = [
+      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
+    ];
+    const discogs = createDiscogsClient(wantlistRows);
+
+    syncRadarWantlist.mockImplementation((_db, _userId, syncedRows) => {
+      expect(syncedRows).toEqual(wantlistRows);
+      rows = [
+        createPendingRadarRow(1, 111),
+      ];
+
+      return createWantlistResult({
+        totalFetched: 1,
+        added: 1,
+      });
+    });
+
+    expect(startUpdateRun(discogs)).toBe(true);
+
+    await waitFor(() => getStatus().isTerminal);
+
+    expect(fetchMarketplaceValue).not.toHaveBeenCalled();
+    expect(getPendingRadarEnrichmentRows).not.toHaveBeenCalled();
+    expect(getStatus()).toMatchObject({
+      phase: 'completed',
+      current: 1,
+      total: 1,
+      pending: 0,
+      progressPercent: 100,
+      message: 'Wantlist updated. 1 wanted releases refreshed.',
+      wantlist: {
+        totalFetched: 1,
+        added: 1,
+      },
+    });
+    expect(rows).toEqual([
+      { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
+    ]);
+  });
+
+  it('syncs multiple Wantlist rows without changing pending price state', async () => {
     const wantlistRows = [
       { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
       { id: 222, basic_information: { id: 222, title: 'Wanted B', year: 2002, artists: [{ name: 'Artist B' }] } },
@@ -191,27 +226,16 @@ describe('Radar update run', () => {
       });
     });
 
-    fetchMarketplaceValue
-      .mockResolvedValueOnce({
-        estimatedValue: 19,
-        marketplaceStatus: MARKETPLACE_STATUS.PRICED,
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        estimatedValue: null,
-        marketplaceStatus: MARKETPLACE_STATUS.FAILED,
-        error: 'temporary',
-      });
-
     expect(startUpdateRun(discogs)).toBe(true);
 
     await waitFor(() => getStatus().isTerminal);
 
+    expect(fetchMarketplaceValue).not.toHaveBeenCalled();
     expect(getStatus()).toMatchObject({
-      phase: 'completed_with_issues',
+      phase: 'completed',
       current: 2,
       total: 2,
-      pending: 1,
+      pending: 0,
       progressPercent: 100,
       wantlist: {
         totalFetched: 2,
@@ -226,16 +250,15 @@ describe('Radar update run', () => {
       canStop: false,
     });
     expect(rows).toEqual([
-      { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PRICED, estimated_price: 19 },
-      { id: 2, release_id: 222, marketplace_status: MARKETPLACE_STATUS.FAILED, estimated_price: null },
+      { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
+      { id: 2, release_id: 222, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
     ]);
   });
 
-  it('reports active-run conflicts and exposes reviewing progress before completion', async () => {
-    const firstMarketplaceCheck = createDeferred<MarketplaceCheck>();
-    const discogs = createDiscogsClient([
-      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
-    ]);
+  it('reports active-run conflicts while Wantlist sync is running', async () => {
+    const wantlistSync = createDeferred<unknown[]>();
+    const discogs = createDiscogsClient();
+    discogs.getAllWantlist = vi.fn().mockReturnValue(wantlistSync.promise);
 
     syncRadarWantlist.mockImplementation(() => {
       rows = [
@@ -248,28 +271,24 @@ describe('Radar update run', () => {
       });
     });
 
-    fetchMarketplaceValue.mockReturnValueOnce(firstMarketplaceCheck.promise);
-
     expect(startUpdateRun(discogs)).toBe(true);
 
-    await waitFor(() => getStatus().phase === 'reviewing_prices');
+    await waitFor(() => getStatus().phase === 'syncing');
 
     expect(startUpdateRun(discogs)).toBe(false);
     expect(getStatus()).toMatchObject({
-      phase: 'reviewing_prices',
+      phase: 'syncing',
       current: 0,
-      total: 1,
-      pending: 1,
+      total: 0,
+      pending: 0,
       progressPercent: 0,
       isRunning: true,
-      canStop: true,
+      canStop: false,
     });
 
-    firstMarketplaceCheck.resolve({
-      estimatedValue: 21,
-      marketplaceStatus: MARKETPLACE_STATUS.PRICED,
-      error: null,
-    });
+    wantlistSync.resolve([
+      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
+    ]);
 
     await waitFor(() => getStatus().phase === 'completed');
 
@@ -284,62 +303,48 @@ describe('Radar update run', () => {
     });
   });
 
-  it('stops a long-running price review without pretending the remaining work completed', async () => {
-    const firstMarketplaceCheck = createDeferred<MarketplaceCheck>();
-    const discogs = createDiscogsClient([
-      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
-      { id: 222, basic_information: { id: 222, title: 'Wanted B', year: 2002, artists: [{ name: 'Artist B' }] } },
-    ]);
+  it('records a stopped update if the user cancels while Wantlist sync is in flight', async () => {
+    const wantlistSync = createDeferred<unknown[]>();
+    const discogs = createDiscogsClient();
+    discogs.getAllWantlist = vi.fn().mockReturnValue(wantlistSync.promise);
 
     syncRadarWantlist.mockImplementation(() => {
       rows = [
         createPendingRadarRow(1, 111),
-        createPendingRadarRow(2, 222),
       ];
 
       return createWantlistResult({
-        totalFetched: 2,
-        added: 2,
+        totalFetched: 1,
+        added: 1,
       });
     });
-
-    fetchMarketplaceValue
-      .mockReturnValueOnce(firstMarketplaceCheck.promise)
-      .mockResolvedValueOnce({
-        estimatedValue: 25,
-        marketplaceStatus: MARKETPLACE_STATUS.PRICED,
-        error: null,
-      });
 
     expect(startUpdateRun(discogs)).toBe(true);
 
-    await waitFor(() => getStatus().phase === 'reviewing_prices');
+    await waitFor(() => getStatus().phase === 'syncing');
 
     stopRadarUpdateRun(db as never, 7, 'en');
-    firstMarketplaceCheck.resolve({
-      estimatedValue: 17,
-      marketplaceStatus: MARKETPLACE_STATUS.PRICED,
-      error: null,
-    });
+    wantlistSync.resolve([
+      { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
+    ]);
 
     await waitFor(() => {
       const status = getStatus();
-      return status.phase === 'stopped' && status.current === 1 && status.pending === 1;
+      return status.phase === 'stopped' && status.current === 1 && status.total === 1;
     });
 
     expect(getStatus()).toMatchObject({
       phase: 'stopped',
       current: 1,
-      total: 2,
-      pending: 1,
-      progressPercent: 50,
+      total: 1,
+      pending: 0,
+      progressPercent: 100,
       isRunning: false,
       isTerminal: true,
       canStop: false,
     });
     expect(rows).toEqual([
-      { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PRICED, estimated_price: 17 },
-      { id: 2, release_id: 222, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
+      { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
     ]);
   });
 
@@ -373,14 +378,14 @@ describe('Radar update run', () => {
       { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
     ]);
 
-    await waitFor(() => getStatus().pending === 1);
+    await waitFor(() => getStatus().current === 1);
 
     expect(getStatus()).toMatchObject({
       phase: 'stopped',
-      current: 0,
+      current: 1,
       total: 1,
-      pending: 1,
-      progressPercent: 0,
+      pending: 0,
+      progressPercent: 100,
       isRunning: false,
       canStop: false,
     });
@@ -402,7 +407,7 @@ describe('Radar update run', () => {
       isRunning: false,
       isTerminal: true,
       canStop: false,
-      message: 'Radar could not finish updating. Review your Discogs account or try again in a moment.',
+      message: 'Wantlist could not finish updating. Review your Discogs account or try again in a moment.',
     });
   });
 });

@@ -197,41 +197,6 @@ const RADAR_KEYS = [
 
 const NATURAL_RADAR_LABELS = [
   {
-    key: 'radar.opportunity.below_target',
-    es: 'Por debajo del precio objetivo',
-    en: 'Below target price'
-  },
-  {
-    key: 'radar.opportunity.high_priority_available',
-    es: 'Alta prioridad con copia disponible',
-    en: 'High priority with copy available'
-  },
-  {
-    key: 'radar.opportunity.available_again',
-    es: 'Disponible de nuevo',
-    en: 'Available again'
-  },
-  {
-    key: 'radar.opportunity.already_in_collection',
-    es: 'Ya en tu colección',
-    en: 'Already in your collection'
-  },
-  {
-    key: 'radar.state.pending',
-    es: 'Pendiente de actualizar',
-    en: 'Pending update'
-  },
-  {
-    key: 'radar.state.unavailable',
-    es: 'Sin precio disponible',
-    en: 'No price available'
-  },
-  {
-    key: 'radar.state.failed',
-    es: 'Actualización fallida',
-    en: 'Update failed'
-  },
-  {
     key: 'radar.state.hidden',
     es: 'Oculto',
     en: 'Hidden'
@@ -245,6 +210,79 @@ const NATURAL_RADAR_LABELS = [
     key: 'radar.state.missingFromSource',
     es: 'Fuera de fuente',
     en: 'Missing from source'
+  }
+] as const;
+
+const WANTLIST_MANAGER_COPY = [
+  {
+    key: 'nav.radar',
+    es: 'Wantlist',
+    en: 'Wantlist'
+  },
+  {
+    key: 'radar.eyebrow',
+    es: 'Wantlist',
+    en: 'Wantlist'
+  },
+  {
+    key: 'radar.updateAction',
+    es: 'Actualizar Wantlist',
+    en: 'Update Wantlist'
+  },
+  {
+    key: 'radar.updateBody',
+    es: 'Refresca la Wantlist desde Discogs y conserva tus decisiones locales dentro de Discographic.',
+    en: 'Refresh Wantlist data from Discogs and keep your local decisions inside Discographic.'
+  },
+  {
+    key: 'radar.minimumCondition.info',
+    es: 'Se guarda como preferencia personal de compra. No genera clasificaciones automáticas.',
+    en: 'Saved as a personal buying preference. It does not create automatic classifications.'
+  },
+  {
+    key: 'backend.radar.ready',
+    es: 'Wantlist lista para actualizarse.',
+    en: 'Wantlist is ready to update.'
+  },
+  {
+    key: 'backend.radar.updateReady',
+    es: 'Wantlist lista para actualizarse desde Discogs.',
+    en: 'Wantlist is ready to update from Discogs.'
+  },
+  {
+    key: 'backend.radar.updateSyncing',
+    es: 'Actualizando Wantlist desde Discogs...',
+    en: 'Updating Wantlist from Discogs...'
+  },
+  {
+    key: 'backend.radar.updateCompleted',
+    es: 'Wantlist actualizada. {processed} releases deseados refrescados.',
+    en: 'Wantlist updated. {processed} wanted releases refreshed.'
+  },
+  {
+    key: 'backend.radar.updateFailed',
+    es: 'Wantlist no pudo completar la actualización. Revisa tu cuenta de Discogs o vuelve a intentarlo en un momento.',
+    en: 'Wantlist could not finish updating. Review your Discogs account or try again in a moment.'
+  },
+  {
+    key: 'backend.radar.updateStopped',
+    es: 'Actualización de Wantlist detenida tras refrescar {processed} releases.',
+    en: 'Wantlist update stopped after refreshing {processed} releases.'
+  },
+  {
+    key: 'dashboard.radarTitle',
+    es: 'Wantlist',
+    en: 'Wantlist'
+  },
+  {
+    key: 'dashboard.radar.activeOpportunities',
+    es: 'Activos',
+    en: 'Active'
+  },
+  {
+    key: 'dashboard.radar.belowTarget',
+    es: 'Alta prioridad',
+    en: 'High priority'
   }
 ] as const;
 
@@ -286,26 +324,6 @@ const DASHBOARD_RADAR_KEYS = [
 ];
 
 const PRICE_REVIEW_COPY = [
-  {
-    key: 'radar.enrichTitle',
-    es: 'Revisión de precios de Radar',
-    en: 'Radar price review'
-  },
-  {
-    key: 'radar.enrichBody',
-    es: 'Revisa los precios mínimos por release de tu Wantlist y conserva los estados pendientes, fallidos y sin precio para que los reintentos sigan siendo fieles.',
-    en: 'Review release-level minimum prices for your Wantlist and preserve pending, failed, and no-price states so retries stay truthful.'
-  },
-  {
-    key: 'radar.enrichStart',
-    es: 'Revisar precios',
-    en: 'Review prices'
-  },
-  {
-    key: 'radar.enrichStatusError',
-    es: 'No se pudo cargar el estado de revisión de precios de Radar. Vuelve a intentarlo en un momento.',
-    en: 'Radar price review status could not be loaded. Try again in a moment.'
-  },
   {
     key: 'dashboard.noValues',
     es: 'Aún no hay valores individuales en caché. Aparecerán cuando se revisen los precios de los discos con datos de Discogs.',
@@ -360,61 +378,6 @@ const PRICE_REVIEW_COPY = [
     key: 'backend.sync.enrichDone',
     es: '{processed} discos revisados. Completado.',
     en: '{processed} records reviewed. Completed.'
-  },
-  {
-    key: 'backend.radar.activeEnrich',
-    es: 'Ya hay una revisión de precios de Radar en curso',
-    en: 'A Radar price review is already running'
-  },
-  {
-    key: 'backend.radar.ready',
-    es: 'Radar listo para revisar precios de la Wantlist.',
-    en: 'Radar is ready to review Wantlist prices.'
-  },
-  {
-    key: 'backend.radar.updateReady',
-    es: 'Radar listo para actualizar la Wantlist y revisar precios.',
-    en: 'Radar is ready to update your Wantlist and review prices.'
-  },
-  {
-    key: 'backend.radar.enrichProgress',
-    es: 'Revisando precios de Radar {current}/{total}...',
-    en: 'Reviewing Radar prices {current}/{total}...'
-  },
-  {
-    key: 'backend.radar.enrichRemaining',
-    es: '{processed} releases deseados revisados. {pending} todavía necesitan revisión de precio.',
-    en: '{processed} wanted releases reviewed. {pending} still need price review.'
-  },
-  {
-    key: 'backend.radar.enrichDone',
-    es: '{processed} releases deseados revisados. Completado.',
-    en: '{processed} wanted releases reviewed. Completed.'
-  },
-  {
-    key: 'backend.radar.enrichStopped',
-    es: 'Radar detenido tras revisar {processed} releases. {pending} todavía necesitan revisión de precio.',
-    en: 'Radar stopped after reviewing {processed} releases. {pending} still need price review.'
-  },
-  {
-    key: 'backend.radar.updateCompleted',
-    es: '{processed} releases deseados revisados. Completado.',
-    en: '{processed} wanted releases reviewed. Completed.'
-  },
-  {
-    key: 'backend.radar.updateCompletedWithIssues',
-    es: '{processed} releases deseados revisados. {pending} todavía necesitan revisión de precio.',
-    en: '{processed} wanted releases reviewed. {pending} still need price review.'
-  },
-  {
-    key: 'backend.radar.updateFailed',
-    es: 'Radar no pudo completar la actualización. Revisa tu cuenta de Discogs o vuelve a intentarlo en un momento.',
-    en: 'Radar could not finish updating. Review your Discogs account or try again in a moment.'
-  },
-  {
-    key: 'backend.radar.updateStopped',
-    es: 'Radar detenido tras revisar {processed} releases. {pending} todavía necesitan revisión de precio.',
-    en: 'Radar stopped after reviewing {processed} releases. {pending} still need price review.'
   }
 ] as const;
 
@@ -541,7 +504,14 @@ describe('i18n keys for import/media/client fallbacks', () => {
     }
   });
 
-  it('uses price-review language across Radar, sync, and collection copy', () => {
+  it('uses Wantlist manager copy for Radar-facing labels', () => {
+    for (const { key, es, en } of WANTLIST_MANAGER_COPY) {
+      expect(messages.es[key]).toBe(es);
+      expect(messages.en[key]).toBe(en);
+    }
+  });
+
+  it('uses price-review language for collection price refresh copy', () => {
     for (const { key, es, en } of PRICE_REVIEW_COPY) {
       expect(messages.es[key]).toBe(es);
       expect(messages.en[key]).toBe(en);

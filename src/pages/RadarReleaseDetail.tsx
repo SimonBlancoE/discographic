@@ -14,8 +14,6 @@ import {
   areRadarReleaseDraftsEqual,
   createRadarReleaseDraft,
   createRadarReleasePayload,
-  formatRadarMarketplaceValue,
-  getOrderedRadarOpportunityReasons,
   getRadarCollectionMatchLabelKey,
   getRadarSourceOriginLabelKey,
   getRadarSourceStatusLabelKey,
@@ -274,7 +272,6 @@ function RadarReleaseDetail() {
   const releaseKey = release.id ?? release.release_id ?? 0;
   const displayCurrency = release.display_currency || 'EUR';
   const collectionMatch = release.opportunity.collection_match;
-  const opportunityReasons = getOrderedRadarOpportunityReasons(release);
   const stateLabelKeys = getRadarStateLabelKeys(release);
   const saveStatus = getRadarSaveStatus({ saving, saveFailed, hasUnsavedChanges });
 
@@ -297,14 +294,6 @@ function RadarReleaseDetail() {
                   {t(labelKey)}
                 </span>
               ))}
-              {opportunityReasons.map((reason) => (
-                <span
-                  key={reason}
-                  className="inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-950/40 px-3 py-1 text-xs uppercase tracking-[0.18em] text-emerald-100"
-                >
-                  {t(`radar.opportunity.${reason}`)}
-                </span>
-              ))}
             </div>
           </div>
           <a
@@ -318,11 +307,7 @@ function RadarReleaseDetail() {
           </a>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.detailMarketplacePrice')}</p>
-            <p className="mt-3 text-lg text-white">{formatRadarMarketplaceValue(release)}</p>
-          </article>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
           <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.detailSourceOrigin')}</p>
             <p className="mt-3 text-lg text-white">{t(getRadarSourceOriginLabelKey(release.source.origin))}</p>

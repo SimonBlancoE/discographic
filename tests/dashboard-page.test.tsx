@@ -23,12 +23,12 @@ const dashboardStatsState = vi.hoisted(() => ({
 const toastError = vi.hoisted(() => vi.fn());
 
 const messages = {
-  'dashboard.radarTitle': 'Radar',
-  'dashboard.radarBody': 'Check your current wanted-release health without leaving the Dashboard.',
-  'dashboard.radarOpen': 'Open Radar',
+  'dashboard.radarTitle': 'Wantlist',
+  'dashboard.radarBody': 'Check the current pulse of your Wantlist without moving the full workflow into the Dashboard.',
+  'dashboard.radarOpen': 'Open Wantlist',
   'dashboard.radar.totalWanted': 'Wanted',
-  'dashboard.radar.activeOpportunities': 'Active opportunities',
-  'dashboard.radar.belowTarget': 'Below target',
+  'dashboard.radar.activeOpportunities': 'Active',
+  'dashboard.radar.belowTarget': 'High priority',
   'dashboard.radar.alreadyOwned': 'Already owned',
 } satisfies Record<string, string>;
 
@@ -187,7 +187,7 @@ describe('Dashboard page', () => {
     container = null;
   });
 
-  it('shows a compact Radar opportunity summary with a link to the Radar page', async () => {
+  it('shows a compact Wantlist summary with a link to the Wantlist page', async () => {
     const rendered = await renderDashboard();
     const radarLink = requireElement(rendered.querySelector('a[href="/radar"]'), 'Radar link');
     const radarSection = requireElement(radarLink.closest('section'), 'Radar summary section');

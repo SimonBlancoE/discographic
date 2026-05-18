@@ -6,7 +6,7 @@ import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/
 import { countMeaningfulNoteRows } from '../services/notes.js';
 import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
-import { RADAR_OPPORTUNITY_REASON } from '../../shared/contracts/radar.js';
+import { RADAR_PRIORITY } from '../../shared/contracts/radar.js';
 
 const router = express.Router();
 
@@ -42,16 +42,14 @@ function buildRadarDashboardSummary(radar) {
 
   for (const item of items) {
     const opportunity = item?.opportunity;
+    const local = item?.local;
 
     if (!opportunity?.default_visible) {
       continue;
     }
 
-    if (opportunity.reasons?.length > 0) {
-      summary.activeOpportunities += 1;
-    }
-
-    if (opportunity.reasons?.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET)) {
+    summary.activeOpportunities += 1;
+    if (local?.priority === RADAR_PRIORITY.HIGH) {
       summary.belowTarget += 1;
     }
 
