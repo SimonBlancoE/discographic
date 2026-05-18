@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   RADAR_OPPORTUNITY_REASON,
   RADAR_PRIORITY,
+  RADAR_SOURCE_STATUS,
   normalizeRadarResponse,
   normalizeRadarUpdateRunStatus,
   type RadarRelease,
@@ -35,19 +36,26 @@ const RADAR_WANTLIST_IMPORT_SECTION_ID = 'radar-wantlist-fallback';
 
 type RadarFilterId =
   | 'all'
+  | 'active'
   | 'opportunities'
   | 'below_target'
   | 'high_priority'
   | 'in_collection'
   | 'attention'
-  | 'hidden_resolved'
+  | 'priced'
+  | 'hidden'
+  | 'resolved'
+  | 'missing_from_source'
   | 'pending'
-  | 'failed';
+  | 'failed'
+  | 'unavailable';
 
 type RadarPrimaryMetricId = Extract<
   RadarFilterId,
   'opportunities' | 'below_target' | 'high_priority' | 'in_collection' | 'attention'
 >;
+
+type RadarStatusFilterId = Exclude<RadarFilterId, RadarPrimaryMetricId>;
 
 const RADAR_PRIMARY_METRICS = [
   { id: 'opportunities', labelKey: 'radar.filter.opportunities' },
@@ -60,27 +68,18 @@ const RADAR_PRIMARY_METRICS = [
   labelKey: string;
 }[];
 
-const RADAR_SECONDARY_SUMMARY_CHIPS = [
-  { labelKey: 'radar.summary.total', valueKey: 'total' },
-  { labelKey: 'radar.summary.hidden', valueKey: 'hidden' },
-  { labelKey: 'radar.summary.resolved', valueKey: 'resolved' },
-  { labelKey: 'radar.summary.missingFromSource', valueKey: 'missingFromSource' },
-  { labelKey: 'radar.summary.priced', valueKey: 'priced' },
-  { labelKey: 'radar.summary.pending', valueKey: 'pending' },
-  { labelKey: 'radar.summary.failed', valueKey: 'failed' },
-  { labelKey: 'radar.summary.unavailable', valueKey: 'unavailable' },
+const RADAR_STATUS_FILTERS = [
+  { id: 'all', labelKey: 'radar.summary.total' },
+  { id: 'active', labelKey: 'radar.summary.active' },
+  { id: 'priced', labelKey: 'radar.summary.priced' },
+  { id: 'pending', labelKey: 'radar.summary.pending' },
+  { id: 'failed', labelKey: 'radar.summary.failed' },
+  { id: 'unavailable', labelKey: 'radar.summary.unavailable' },
+  { id: 'hidden', labelKey: 'radar.summary.hidden' },
+  { id: 'resolved', labelKey: 'radar.summary.resolved' },
+  { id: 'missing_from_source', labelKey: 'radar.summary.missingFromSource' },
 ] as const satisfies readonly {
-  labelKey: string;
-  valueKey: keyof RadarResponse['summary'];
-}[];
-
-const RADAR_AUXILIARY_FILTERS = [
-  { id: 'all', labelKey: 'radar.filter.all' },
-  { id: 'hidden_resolved', labelKey: 'radar.filter.hiddenResolved' },
-  { id: 'pending', labelKey: 'radar.filter.pending' },
-  { id: 'failed', labelKey: 'radar.filter.failed' },
-] as const satisfies readonly {
-  id: RadarFilterId;
+  id: RadarStatusFilterId;
   labelKey: string;
 }[];
 
@@ -176,32 +175,54 @@ function hasRadarAttentionIssue(item: RadarRelease): boolean {
     || item.marketplace.status === MARKETPLACE_STATUS.UNAVAILABLE;
 }
 
+function isActiveRadarItem(item: RadarRelease): boolean {
+  return !item.local.hidden
+    && !item.local.resolved
+    && item.source.status !== RADAR_SOURCE_STATUS.MISSING;
+}
+
 function matchesRadarFilter(item: RadarRelease, filterId: RadarFilterId): boolean {
   switch (filterId) {
     case 'all':
-      return true;
+      return isActiveRadarItem(item);
+    case 'active':
+      return isActiveRadarItem(item);
     case 'opportunities':
-      return item.opportunity.default_visible && item.opportunity.reasons.length > 0;
+      return isActiveRadarItem(item) && item.opportunity.reasons.length > 0;
     case 'below_target':
-      return item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET);
+      return isActiveRadarItem(item) && item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.BELOW_TARGET);
     case 'high_priority':
-      return item.local.priority === RADAR_PRIORITY.HIGH;
+      return isActiveRadarItem(item) && item.local.priority === RADAR_PRIORITY.HIGH;
     case 'in_collection':
-      return item.opportunity.is_in_collection
-        || item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION);
+      return isActiveRadarItem(item) && (
+        item.opportunity.is_in_collection
+        || item.opportunity.reasons.includes(RADAR_OPPORTUNITY_REASON.ALREADY_IN_COLLECTION)
+      );
     case 'attention':
-      return hasRadarAttentionIssue(item);
-    case 'hidden_resolved':
-      return item.local.hidden || item.local.resolved;
+      return isActiveRadarItem(item) && hasRadarAttentionIssue(item);
+    case 'priced':
+      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.PRICED;
+    case 'hidden':
+      return item.local.hidden;
+    case 'resolved':
+      return item.local.resolved;
+    case 'missing_from_source':
+      return item.source.status === RADAR_SOURCE_STATUS.MISSING;
     case 'pending':
-      return item.marketplace.status === MARKETPLACE_STATUS.PENDING;
+      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.PENDING;
     case 'failed':
-      return item.marketplace.status === MARKETPLACE_STATUS.FAILED;
+      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.FAILED;
+    case 'unavailable':
+      return isActiveRadarItem(item) && item.marketplace.status === MARKETPLACE_STATUS.UNAVAILABLE;
   }
 }
 
 function getFilteredRadarItems(items: RadarRelease[], filterId: RadarFilterId): RadarRelease[] {
   return items.filter((item) => matchesRadarFilter(item, filterId));
+}
+
+function getRadarFilterCount(items: RadarRelease[], filterId: RadarFilterId): number {
+  return items.reduce((count, item) => count + (matchesRadarFilter(item, filterId) ? 1 : 0), 0);
 }
 
 function getRadarPrimaryMetricCounts(items: RadarRelease[]): Record<RadarPrimaryMetricId, number> {
@@ -224,31 +245,33 @@ function getRadarPrimaryMetricCounts(items: RadarRelease[]): Record<RadarPrimary
   return counts;
 }
 
-type RadarFilterBarProps = {
-  selectedFilter: RadarFilterId;
-  t: Translate;
-  onFilterChange: (filterId: RadarFilterId) => void;
-};
-
-type RadarOperationalHeaderProps = {
+type RadarFilterPanelProps = {
   items: RadarRelease[];
-  summary: RadarResponse['summary'];
   selectedFilter: RadarFilterId;
   t: Translate;
   onFilterChange: (filterId: RadarFilterId) => void;
 };
 
-function RadarOperationalHeader({
+function RadarFilterPanel({
   items,
-  summary,
   selectedFilter,
   t,
   onFilterChange,
-}: RadarOperationalHeaderProps) {
+}: RadarFilterPanelProps) {
   const metricCounts = getRadarPrimaryMetricCounts(items);
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-6">
+    <div data-radar-filter-panel="true" className="rounded-3xl border border-white/10 bg-slate-950/35 p-6">
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.filtersTitle')}</p>
+        <p className="text-sm text-slate-400">
+          {t('radar.filterCount', {
+            count: getRadarFilterCount(items, selectedFilter),
+            total: items.length,
+          })}
+        </p>
+      </div>
+
       <div className="grid gap-3 xl:grid-cols-5">
         {RADAR_PRIMARY_METRICS.map(({ id, labelKey }) => {
           const selected = id === selectedFilter;
@@ -274,49 +297,26 @@ function RadarOperationalHeader({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
-        {RADAR_SECONDARY_SUMMARY_CHIPS.map(({ labelKey, valueKey }) => (
-          <div
-            key={labelKey}
-            className="inline-flex min-w-0 items-center gap-2 rounded-full border border-white/10 bg-slate-950/50 px-3 py-2 text-sm"
-          >
-            <span className="text-slate-400">{t(labelKey)}</span>
-            <span className="font-semibold text-white">{summary[valueKey]}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+        {RADAR_STATUS_FILTERS.map(({ id, labelKey }) => {
+          const selected = id === selectedFilter;
+          const buttonClassName = selected
+            ? 'border-brand-100 bg-brand-400/15 text-white'
+            : 'border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/25 hover:text-white';
 
-function RadarFilterBar({
-  selectedFilter,
-  t,
-  onFilterChange,
-}: RadarFilterBarProps) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.filtersTitle')}</p>
-        <div className="flex flex-wrap gap-2">
-          {RADAR_AUXILIARY_FILTERS.map(({ id, labelKey }) => {
-            const selected = id === selectedFilter;
-            const buttonClassName = selected
-              ? 'border-brand-100 bg-brand-400/15 text-white'
-              : 'border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/25 hover:text-white';
-
-            return (
-              <button
-                key={id}
-                type="button"
-                data-radar-filter={id}
-                onClick={() => onFilterChange(id)}
-                className={`rounded-full border px-4 py-2 text-sm transition ${buttonClassName}`}
-              >
-                {t(labelKey)}
-              </button>
-            );
-          })}
-        </div>
+          return (
+            <button
+              key={id}
+              type="button"
+              data-radar-filter={id}
+              aria-pressed={selected}
+              onClick={() => onFilterChange(id)}
+              className={`inline-flex min-w-0 items-center gap-2 rounded-full border px-3 py-2 text-sm transition ${buttonClassName}`}
+            >
+              <span>{t(labelKey)}</span>
+              <span className="font-semibold text-white">{getRadarFilterCount(items, id)}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -791,9 +791,8 @@ function Radar() {
         })
         : null}
 
-      <RadarOperationalHeader
+      <RadarFilterPanel
         items={radar.items}
-        summary={radar.summary}
         selectedFilter={selectedFilter}
         t={t}
         onFilterChange={setSelectedFilter}
@@ -850,8 +849,6 @@ function Radar() {
           </div>
         ) : null}
       </div>
-
-      <RadarFilterBar selectedFilter={selectedFilter} t={t} onFilterChange={setSelectedFilter} />
 
       {renderRadarContent({
         items: filteredItems,

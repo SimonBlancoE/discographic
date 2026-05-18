@@ -120,6 +120,7 @@ const RADAR_KEYS = [
   'radar.summary.failed',
   'radar.summary.unavailable',
   'radar.filtersTitle',
+  'radar.filterCount',
   'radar.filter.all',
   'radar.filter.opportunities',
   'radar.filter.belowTarget',
