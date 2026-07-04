@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import CollectionTable, { type SortOrder, type TableSortColumn } from '../components/CollectionTable';
 import ColumnToggle from '../components/ColumnToggle';
 import ExportButton from '../components/ExportButton';
@@ -352,6 +352,12 @@ function Collection() {
           </label>
           <ColumnToggle visibleColumns={visibleColumns} onToggle={handleColumnToggle} />
           <ExportButton filters={{ ...filters, currency: displayCurrency }} disabled={!discogsConfigured} />
+          <Link
+            to={`/collection/print?${searchParams.toString()}`}
+            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition"
+          >
+            {t('collection.printCatalog') || 'Imprimir catálogo'}
+          </Link>
         </div>
       </section>
 
