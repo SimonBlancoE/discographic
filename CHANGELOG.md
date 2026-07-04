@@ -7,6 +7,20 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.3.4] - 2026-07-04
+
+Release de mantenimiento y robustez que corrige fallos funcionales y optimiza la exportación de la colección.
+
+### Corregido
+
+- **Tolerancia a fallos en tipos de cambio (ECB)** - la aplicación ahora recurre a tasas estáticas por defecto en lugar de arrojar un error HTTP 500 cuando el API del ECB está offline.
+- **Tolerancia en detalles de lanzamiento (Discogs)** - los errores del API de Discogs al recuperar detalles ya no tiran la página de detalles; el sistema vuelve de forma segura a los datos locales.
+- **Caché de portadas en CollectionTable** - la tabla de colección ahora utiliza el endpoint proxy local de portadas en lugar de hotlinking remoto.
+- **Optimización de rendimiento en exportación** - las conversiones de divisas se realizan de forma síncrona en lote, eliminando miles de promesas asíncronas redundantes.
+- **Condición de carrera en importación** - se previene un TypeError si un release es eliminado de forma concurrente durante la aplicación del import.
+
+[0.3.4]: https://github.com/SimonBlancoE/discographic/compare/v0.3.3...v0.3.4
+
 ## [0.3.3] - 2026-05-10
 
 Release de limpieza de documentacion y metadata.

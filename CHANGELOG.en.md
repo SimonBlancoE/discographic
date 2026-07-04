@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.3.4] - 2026-07-04
+
+Maintenance and robustness release fixing functional bugs and optimizing collection exports.
+
+### Fixed
+
+- **ECB Exchange Rates Outages** - the application now falls back to static default rates instead of throwing an HTTP 500 error when the ECB API is offline.
+- **Discogs details page tolerance** - errors from Discogs API when retrieving details no longer crash the details page; the system falls back safely to local database entries.
+- **Cover Cache in CollectionTable** - the collection table now uses the local cover proxy endpoint instead of remote hotlinking.
+- **Performance optimization in export** - currency conversions are performed synchronously in batch, eliminating thousands of redundant async promises.
+- **Race condition in imports** - resolves a potential TypeError if a release is deleted concurrently during the import workflow.
+
+[0.3.4]: https://github.com/SimonBlancoE/discographic/compare/v0.3.3...v0.3.4
+
 ## [0.3.3] - 2026-05-10
 
 Documentation and metadata cleanup release.
