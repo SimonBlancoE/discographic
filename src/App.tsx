@@ -7,6 +7,7 @@ import VinylBadge from './components/VinylBadge';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Collection = lazy(() => import('./pages/Collection'));
+const PrintCatalog = lazy(() => import('./pages/PrintCatalog'));
 const Radar = lazy(() => import('./pages/Radar'));
 const RadarReleaseDetail = lazy(() => import('./pages/RadarReleaseDetail'));
 const CollectionWall = lazy(() => import('./pages/CollectionWall'));
@@ -67,6 +68,7 @@ function AppLayoutFrame() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/collection" element={<Collection />} />
+              <Route path="/collection/print" element={<PrintCatalog />} />
               <Route path="/radar" element={<Radar />} />
               <Route path="/radar/:id" element={<RadarReleaseDetail />} />
               <Route path="/wall" element={<CollectionWall />} />
