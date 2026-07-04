@@ -395,14 +395,15 @@ router.post('/apply', async (req, res) => {
     // Apply to local DB immediately
     const applyTx = db.transaction(() => {
       for (const change of changes) {
+        const release = db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId);
+        if (!release) continue;
+
         if (change.ratingChanged) {
           db.prepare('UPDATE releases SET rating = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
             .run(change.newRating, change.dbId, userId);
         }
         if (change.notesChanged) {
-          const current = parseStoredNotes(
-            db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId)?.notes
-          );
+          const current = parseStoredNotes(release.notes);
           const fieldId = resolveNoteFieldId(current);
           const updated = replaceNoteText(current, change.newNotes, fieldId);
 
