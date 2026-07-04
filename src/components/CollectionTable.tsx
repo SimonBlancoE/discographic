@@ -85,22 +85,25 @@ function MarketplaceValue({ release, currency, t }: { release: CollectionRelease
 const RENDERERS: Record<ColumnId, Renderer> = {
   cover: {
     header: (t) => t('collection.cover'),
-    cell: (release, { t }) => (
-      <Link to={`/release/${release.id}`} className="cover-peek-trigger relative block h-16 w-16 overflow-visible rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/70">
-        <span className="block h-16 w-16 overflow-hidden rounded-2xl bg-slate-900/80 shadow-[0_12px_30px_rgba(2,6,23,0.35)]">
-          {release.cover_url ? (
-            <img src={release.cover_url} alt={`${release.title}`} className="h-full w-full object-cover transition duration-300 hover:scale-105" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-2xl">💿</div>
-          )}
-        </span>
-        {release.cover_url ? (
-          <span className="cover-peek absolute left-20 top-1/2 z-20 hidden w-40 -translate-y-1/2 rounded-[28px] border border-white/10 bg-slate-950/90 p-2 shadow-[0_24px_60px_rgba(2,6,23,0.48)] backdrop-blur-xl lg:block">
-             <img src={release.cover_url} alt={t('collection.coverExpanded', { title: release.title })} className="aspect-square w-full rounded-[20px] object-cover" />
+    cell: (release, { t }) => {
+      const localCoverUrl = release.id ? `/api/media/cover/${release.id}?variant=wall` : release.cover_url;
+      return (
+        <Link to={`/release/${release.id}`} className="cover-peek-trigger relative block h-16 w-16 overflow-visible rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/70">
+          <span className="block h-16 w-16 overflow-hidden rounded-2xl bg-slate-900/80 shadow-[0_12px_30px_rgba(2,6,23,0.35)]">
+            {localCoverUrl ? (
+              <img src={localCoverUrl} alt={`${release.title}`} className="h-full w-full object-cover transition duration-300 hover:scale-105" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-2xl">💿</div>
+            )}
           </span>
-        ) : null}
-      </Link>
-    ),
+          {localCoverUrl ? (
+            <span className="cover-peek absolute left-20 top-1/2 z-20 hidden w-40 -translate-y-1/2 rounded-[28px] border border-white/10 bg-slate-950/90 p-2 shadow-[0_24px_60px_rgba(2,6,23,0.48)] backdrop-blur-xl lg:block">
+               <img src={localCoverUrl} alt={t('collection.coverExpanded', { title: release.title })} className="aspect-square w-full rounded-[20px] object-cover" />
+            </span>
+          ) : null}
+        </Link>
+      );
+    },
   },
   artist: {
     header: (t, sortProps) => <SortButton label={t('collection.artist')} column="artist" {...sortProps} />,
