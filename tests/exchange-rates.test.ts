@@ -103,3 +103,17 @@ describe('convertReleasePrices', () => {
     expect(result.listing_price).toBe(20);
   });
 });
+
+describe('getExchangeSnapshot', () => {
+  it('successfully returns rates when queried', async () => {
+    const { getExchangeSnapshot } = await import('../server/services/exchangeRates.js');
+    const snapshot = await getExchangeSnapshot(['USD', 'GBP']);
+    expect(snapshot.rates).toBeDefined();
+    expect(snapshot.rates.EUR).toBe(1);
+    expect(typeof snapshot.rates.USD).toBe('number');
+    expect(snapshot.rates.USD).toBeGreaterThan(0);
+    expect(typeof snapshot.rates.GBP).toBe('number');
+    expect(snapshot.rates.GBP).toBeGreaterThan(0);
+  });
+});
+

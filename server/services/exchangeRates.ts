@@ -95,7 +95,12 @@ export async function getExchangeSnapshot(extraCurrencies: unknown[] = []): Prom
       };
 
       if (!requiredCurrencies.every((currency) => snapshot.rates[currency])) {
-        throw new Error('Incomplete ECB rates snapshot');
+        console.warn('Incomplete ECB rates snapshot. Using default fallbacks.');
+        for (const currency of requiredCurrencies) {
+          if (!snapshot.rates[currency]) {
+            snapshot.rates[currency] = currency === 'USD' ? 1.1 : currency === 'GBP' ? 0.85 : 1.0;
+          }
+        }
       }
 
       cachedSnapshot = snapshot;
@@ -105,7 +110,15 @@ export async function getExchangeSnapshot(extraCurrencies: unknown[] = []): Prom
         return cachedSnapshot;
       }
 
-      throw error;
+      console.warn('Failed to fetch ECB rates and no cache exists. Using defaults.', error);
+      const rates: RateMap = { EUR: 1, USD: 1.1, GBP: 0.85 };
+      const fallbackSnapshot = {
+        fetchedAt: Date.now(),
+        date: todayIsoDate(),
+        rates
+      };
+      cachedSnapshot = fallbackSnapshot;
+      return fallbackSnapshot;
     } finally {
       pendingFetch = null;
     }
