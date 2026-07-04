@@ -74,38 +74,44 @@ async function enrichReleaseIfNeeded(req, release) {
   } catch {
     return convertHydratedRelease(req, release);
   }
-  const detail = await discogs.getRelease(release.release_id);
-  const marketplace = await fetchMarketplaceValue(discogs, release.release_id, DEFAULT_CURRENCY);
 
-  const estimatedValue = marketplace.marketplaceStatus === MARKETPLACE_STATUS.PRICED
-    ? marketplace.estimatedValue
-    : null;
+  try {
+    const detail = await discogs.getRelease(release.release_id);
+    const marketplace = await fetchMarketplaceValue(discogs, release.release_id, DEFAULT_CURRENCY);
 
-  db.prepare(`
-    UPDATE releases
-    SET genres = ?,
-        styles = ?,
-        country = ?,
-        tracklist = ?,
-        estimated_value = ?,
-        marketplace_status = ?,
-        raw_json = ?,
-        synced_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND user_id = ?
-  `).run(
-    stringifyJson(detail.genres || parseJson(release.genres, [])),
-    stringifyJson(detail.styles || []),
-    detail.country || release.country || null,
-    stringifyJson(detail.tracklist || []),
-    estimatedValue,
-    marketplace.marketplaceStatus,
-    JSON.stringify(detail),
-    release.id,
-    req.session.userId
-  );
+    const estimatedValue = marketplace.marketplaceStatus === MARKETPLACE_STATUS.PRICED
+      ? marketplace.estimatedValue
+      : null;
 
-  const fresh = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(release.id, req.session.userId);
-  return convertHydratedRelease(req, fresh, normalizeReleaseDetail);
+    db.prepare(`
+      UPDATE releases
+      SET genres = ?,
+          styles = ?,
+          country = ?,
+          tracklist = ?,
+          estimated_value = ?,
+          marketplace_status = ?,
+          raw_json = ?,
+          synced_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).run(
+      stringifyJson(detail.genres || parseJson(release.genres, [])),
+      stringifyJson(detail.styles || []),
+      detail.country || release.country || null,
+      stringifyJson(detail.tracklist || []),
+      estimatedValue,
+      marketplace.marketplaceStatus,
+      JSON.stringify(detail),
+      release.id,
+      req.session.userId
+    );
+
+    const fresh = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(release.id, req.session.userId);
+    return convertHydratedRelease(req, fresh, normalizeReleaseDetail);
+  } catch (error) {
+    console.error(`[enrich] Failed to fetch release details for release ${release.release_id} from Discogs:`, error.message);
+    return convertHydratedRelease(req, release, normalizeReleaseDetail);
+  }
 }
 
 router.get('/', async (req, res) => {
