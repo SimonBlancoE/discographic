@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Link, NavLink, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './lib/AuthContext';
 import { DashboardStatsProvider, useDashboardStats } from './lib/DashboardStatsContext';
 import { useI18n } from './lib/I18nContext';
@@ -26,6 +26,19 @@ function AppLayoutFrame() {
   const { user, logout } = useAuth();
   const { locale, setLocale, t } = useI18n();
   const { badgeGenres } = useDashboardStats();
+  const location = useLocation();
+
+  if (location.pathname === '/collection/print') {
+    return (
+      <div className="min-h-screen bg-white text-slate-900">
+        <Suspense fallback={<AppLoading />}>
+          <Routes>
+            <Route path="/collection/print" element={<PrintCatalog />} />
+          </Routes>
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-app text-slate-100">
@@ -68,7 +81,6 @@ function AppLayoutFrame() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/collection" element={<Collection />} />
-              <Route path="/collection/print" element={<PrintCatalog />} />
               <Route path="/radar" element={<Radar />} />
               <Route path="/radar/:id" element={<RadarReleaseDetail />} />
               <Route path="/wall" element={<CollectionWall />} />

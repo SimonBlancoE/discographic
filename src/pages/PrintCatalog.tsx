@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useI18n } from '../lib/I18nContext';
+import { useToast } from '../lib/ToastContext';
+import { getErrorMessage } from '../lib/errors';
 import type { CollectionRelease } from '../../shared/contracts/release.js';
 
 export default function PrintCatalog() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const toast = useToast();
   const [releases, setReleases] = useState<CollectionRelease[]>([]);
   const [loading, setLoading] = useState(true);
   const [hideAttribution, setHideAttribution] = useState(false);
@@ -29,12 +32,13 @@ export default function PrintCatalog() {
         setReleases(response.releases);
       } catch (error) {
         console.error('Failed to load printable catalog:', error);
+        toast.error(t('collection.loadError', { error: getErrorMessage(error, t('client.networkError')) }));
       } finally {
         setLoading(false);
       }
     }
     loadCatalog();
-  }, [searchParams]);
+  }, [searchParams, t, toast]);
 
   // Auto print when loading completes and images are ready
   useEffect(() => {
@@ -65,7 +69,7 @@ export default function PrintCatalog() {
             type="checkbox"
             checked={hideAttribution}
             onChange={(e) => setHideAttribution(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500"
           />
           {t('collection.hideAttribution') || 'Ocultar mención al repositorio'}
         </label>
