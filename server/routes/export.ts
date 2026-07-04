@@ -4,14 +4,14 @@ import { stringify } from 'csv-stringify/sync';
 import * as XLSX from 'xlsx';
 import db, { hydrateRelease } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
-import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
+import { DEFAULT_CURRENCY, convertAmountWithRates, getExchangeSnapshot, normalizeCurrency } from '../services/exchangeRates.js';
 import { buildReleaseFilterWhere } from '../services/releaseFilters.js';
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-async function serializeRelease(release, t, currency) {
+function serializeRelease(release, t, currency, rates) {
   const formats = release.formats.map((format) => format?.name || format).join(', ');
   const labels = release.labels.map((label) => label?.name || label).join(', ');
 
@@ -30,9 +30,9 @@ async function serializeRelease(release, t, currency) {
     [t('export.rating')]: release.rating,
     [t('export.notes')]: release.notes_text,
     [t('export.dateAdded')]: release.date_added,
-    [t('export.minPrice')]: await convertAmount(release.estimated_value, DEFAULT_CURRENCY, currency),
+    [t('export.minPrice')]: convertAmountWithRates(release.estimated_value, DEFAULT_CURRENCY, currency, rates),
     [t('export.listingStatus')]: release.listing_status ?? '',
-    [t('export.listingPrice')]: release.listing_price_eur == null ? '' : await convertAmount(release.listing_price_eur, DEFAULT_CURRENCY, currency),
+    [t('export.listingPrice')]: release.listing_price_eur == null ? '' : convertAmountWithRates(release.listing_price_eur, DEFAULT_CURRENCY, currency, rates),
     [t('export.tracks')]: release.tracklist.map((track) => `${track.position || ''} ${track.title || ''}`.trim()).join(' | ')
   };
 }
@@ -43,7 +43,8 @@ router.get('/', async (req, res) => {
     const currency = normalizeCurrency(req.query.currency || DEFAULT_CURRENCY);
     const { clause, params } = buildReleaseFilterWhere({ userId: req.session.userId, filters: req.query });
     const rows = db.prepare(`SELECT * FROM releases ${clause} ORDER BY artist ASC, title ASC`).all(...params);
-    const payload = await Promise.all(rows.map(hydrateRelease).map((release) => serializeRelease(release, req.t, currency)));
+    const snapshot = await getExchangeSnapshot([currency]);
+    const payload = rows.map(hydrateRelease).map((release) => serializeRelease(release, req.t, currency, snapshot.rates));
 
     if (format === 'xlsx') {
       const sheet = XLSX.utils.json_to_sheet(payload);
