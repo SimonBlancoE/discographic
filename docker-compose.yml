@@ -6,8 +6,11 @@ services:
       - "${HOST_IP:-127.0.0.1}:${PORT:-3800}:3800"
     environment:
       PORT: ${PORT:-3800}
-      SESSION_SECRET: ${SESSION_SECRET:-discographic-dev-secret}
+      # Leave empty to have a random secret generated and kept in the data volume.
+      SESSION_SECRET: ${SESSION_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Defaults to trusting one proxy hop when COOKIE_SECURE=true (Cloudflare Tunnel, reverse proxy).
+      TRUST_PROXY: ${TRUST_PROXY:-}
     volumes:
       - discographic-data:/app/data
     restart: unless-stopped

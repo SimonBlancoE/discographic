@@ -4,8 +4,30 @@ import express from 'express';
 import { normalizeAuthStatus, normalizeUser } from '../../shared/contracts/account.js';
 import { createUser, getUserAuthById, getUserAuthByUsername, getUserCount, getUserById, migrateLegacyDataToUser, updateUserPasswordHash } from '../db.js';
 import { getCurrentUser, requireAuth } from '../middleware/auth.js';
+import { createLoginLimiter } from '../middleware/security.js';
 
 const router = express.Router();
+const loginLimiter = createLoginLimiter();
+// Compared against when the username does not exist, so both paths cost one bcrypt check.
+const DUMMY_HASH = bcrypt.hashSync('discographic-timing-guard', 12);
+
+// A fresh session id on every login prevents session fixation.
+function startSession(req, res, userId, payload) {
+  return req.session.regenerate((regenerateError) => {
+    if (regenerateError) {
+      return res.status(500).json({ error: req.t('backend.auth.session') });
+    }
+
+    req.session.userId = userId;
+    return req.session.save((error) => {
+      if (error) {
+        return res.status(500).json({ error: req.t('backend.auth.session') });
+      }
+
+      return res.json(payload());
+    });
+  });
+}
 
 function sanitizeUser(user) {
   return normalizeUser(user);
@@ -37,41 +59,36 @@ router.post('/bootstrap', async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  // Re-check after the async hash: two concurrent bootstrap requests must not both create an admin.
+  if (getUserCount() > 0) {
+    return res.status(409).json({ error: req.t('backend.auth.initExists') });
+  }
+
   const user = createUser(username, passwordHash, 'admin');
   migrateLegacyDataToUser(user.id);
-  req.session.userId = user.id;
-
-  return req.session.save((error) => {
-    if (error) {
-      return res.status(500).json({ error: req.t('backend.auth.session') });
-    }
-
-    return res.json({ ok: true, user: sanitizeUser(user) });
-  });
+  return startSession(req, res, user.id, () => ({ ok: true, user: sanitizeUser(user) }));
 });
 
 router.post('/login', async (req, res) => {
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
+  const client = req.ip || 'unknown';
+
+  const retryAfter = loginLimiter.retryAfter(client, username);
+  if (retryAfter) {
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: req.t('backend.auth.tooManyAttempts', { minutes: Math.ceil(retryAfter / 60) }) });
+  }
+
   const user = getUserAuthByUsername(username);
-
-  if (!user) {
+  const matches = await bcrypt.compare(password, user?.password_hash || DUMMY_HASH);
+  if (!user || !matches) {
+    loginLimiter.recordFailure(client, username);
     return res.status(401).json({ error: req.t('backend.auth.invalid') });
   }
 
-  const matches = await bcrypt.compare(password, user.password_hash);
-  if (!matches) {
-    return res.status(401).json({ error: req.t('backend.auth.invalid') });
-  }
-
-  req.session.userId = user.id;
-  return req.session.save((error) => {
-    if (error) {
-      return res.status(500).json({ error: req.t('backend.auth.session') });
-    }
-
-    return res.json({ ok: true, user: sanitizeUser(getUserById(user.id)) });
-  });
+  loginLimiter.recordSuccess(client, username);
+  return startSession(req, res, user.id, () => ({ ok: true, user: sanitizeUser(getUserById(user.id)) }));
 });
 
 router.post('/logout', (req, res) => {
