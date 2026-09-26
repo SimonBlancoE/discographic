@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RadarReleaseDetail from '../src/pages/RadarReleaseDetail';
 import type { RadarRelease } from '../shared/contracts/radar.js';
@@ -142,21 +142,21 @@ vi.mock('../src/lib/api', () => ({
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
+let router: ReturnType<typeof createMemoryRouter> | null = null;
 
 async function renderRadarDetail(path = '/radar/22') {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
 
+  // A data router, like production, so useBlocker is available.
+  router = createMemoryRouter([
+    { path: '/radar', element: <div>Radar list</div> },
+    { path: '/radar/:id', element: <RadarReleaseDetail /> },
+  ], { initialEntries: [path] });
+
   await act(async () => {
-    root?.render(
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/radar" element={<div>Radar list</div>} />
-          <Route path="/radar/:id" element={<RadarReleaseDetail />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    root?.render(<RouterProvider router={router!} />);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -237,7 +237,7 @@ describe('Radar release detail page', () => {
 
     expect(getRadarRelease).toHaveBeenCalledWith('22');
     expect(backLink?.getAttribute('href')).toBe('/radar');
-    expect(collectionLink?.getAttribute('href')).toBe('/collection/91');
+    expect(collectionLink?.getAttribute('href')).toBe('/release/91');
     expect(discogsLink?.getAttribute('href')).toBe('https://www.discogs.com/release/622');
     expect(text).toContain('Artist B - Single Match');
     expect(text).toContain('#622');
@@ -470,5 +470,38 @@ describe('Radar release detail page', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(rendered.textContent ?? '').toContain('Do not lose this draft');
+  });
+
+  it('asks before leaving through in-app navigation with unsaved changes', async () => {
+    getRadarRelease.mockResolvedValue(
+      createRadarRelease({ id: 22, release_id: 622, title: 'Single Match', artist: 'Artist B' }),
+    );
+    const confirmSpy = vi.spyOn(window, 'confirm');
+
+    const rendered = await renderRadarDetail();
+    const noteInput = rendered.querySelector('textarea[name="radar-note-22"]') as HTMLTextAreaElement | null;
+
+    await act(async () => {
+      if (noteInput) {
+        noteInput.value = 'Unsaved draft';
+        noteInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    confirmSpy.mockReturnValueOnce(false);
+    await act(async () => {
+      await router?.navigate('/radar');
+    });
+    expect(confirmSpy).toHaveBeenCalledWith(messages['radar.unsavedChangesConfirm']);
+    expect(router?.state.location.pathname).toBe('/radar/22');
+    expect(rendered.textContent ?? '').toContain('Unsaved draft');
+
+    confirmSpy.mockReturnValueOnce(true);
+    await act(async () => {
+      await router?.navigate('/radar');
+    });
+    expect(router?.state.location.pathname).toBe('/radar');
+    expect(rendered.textContent ?? '').toContain('Radar list');
+    confirmSpy.mockRestore();
   });
 });
