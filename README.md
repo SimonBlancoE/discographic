@@ -12,7 +12,7 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/get-docker/)
-[![Node.js](https://img.shields.io/badge/node-22.x-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-24.x-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/database-SQLite-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 <br />
@@ -28,7 +28,7 @@ Sync your Discogs records, explore stats, rate and annotate everything, and expo
 </div>
 
 > [!NOTE]
-> **v0.3.3 is out** - public repository metadata and documentation now point only to GitHub. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
+> **v0.4.0 is out** - redesigned interface, rarity/demand stats, condition grading, Discogs folders, other pressings, Discogs collection value history and a Node 24 / React 19 stack. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
 
 ## What is Discographic?
 
@@ -158,7 +158,7 @@ Your database and cached covers are preserved - they live in a Docker volume sep
 
 ## Local development
 
-If you want to work on the code instead of just running the app, use Node.js 22.x and pnpm:
+If you want to work on the code instead of just running the app, use Node.js 24.x and pnpm:
 
 ```bash
 pnpm install
@@ -184,8 +184,9 @@ Copy `.env.example` to `.env` if you want to override the defaults:
 ```env
 HOST_IP=127.0.0.1                         # Docker bind IP (use your LAN IP to expose it)
 PORT=3800                                 # API port
-SESSION_SECRET=change-this-in-production  # Cookie signing secret
+SESSION_SECRET=                           # Cookie signing secret (empty = random one kept in the data volume)
 COOKIE_SECURE=false                       # Set to true behind HTTPS
+TRUST_PROXY=                              # Proxy hops to trust (defaults to 1 when COOKIE_SECURE=true)
 ```
 
 Discogs credentials are **not** set via environment variables. Each user adds them inside the app.

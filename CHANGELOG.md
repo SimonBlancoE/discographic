@@ -7,6 +7,41 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.4.0] - 2026-09-26
+
+Release con rediseño de la interfaz, nuevas funciones basadas en la API de Discogs, actualización completa del stack y endurecimiento para producción.
+
+### Añadido
+
+- **Rareza y demanda** - datos de comunidad de Discogs (lo tienen / lo quieren / nota media) con rankings de discos más deseados, codiciados y raros.
+- **Estado del disco y de la funda** - filtros por grado, edición desde la ficha y reparto de estados en el panel principal.
+- **Carpetas de Discogs** - filtro por carpeta y traslado de discos entre carpetas.
+- **Otras ediciones** - todas las ediciones del mismo master, marcando las que tienes y las de tu Wantlist.
+- **Valor según Discogs** - mínimo, mediana y máximo de la colección, con histórico guardado en cada sincronización.
+- **Precio sugerido por estado** - precio sugerido por Discogs para cada grado, resaltando el de tu copia (requiere ajustes de vendedor en Discogs).
+- **Rediseño de la interfaz** - navegación lateral y barra inferior en móvil, vista de portadas en la colección, filtros con etiquetas y estado en la URL.
+
+### Cambiado
+
+- **Stack** - Node 24 LTS, React 19, React Router 7, Recharts 3, Express 5, Vite 8, Tailwind CSS 4, TypeScript 7 y better-sqlite3 13.
+- **Radar** - el aviso de cambios sin guardar cubre también el botón Atrás del navegador.
+- **Seguridad** - secreto de sesión aleatorio persistente si no se configura, `TRUST_PROXY` para despliegues detrás de proxy/Cloudflare, límite de intentos de login, regeneración de sesión al iniciar, cabeceras de seguridad y `HEALTHCHECK` en la imagen Docker.
+- **Docker** - los módulos nativos se compilan en la etapa de build; la imagen final solo lleva dependencias de producción.
+
+### Corregido
+
+- Editar notas podía sobrescribir el estado del disco o de la funda en Discogs.
+- Ruta de portadas vulnerable a path traversal.
+- Una respuesta vacía de Discogs podía borrar la colección local.
+- Carreras en la revisión de precios y en el limitador de peticiones a Discogs.
+- `xlsx` actualizado a 0.20.3 (CVE-2023-30533, CVE-2024-22363).
+- `sharp` actualizado a 0.35.4 y `qs` a 6.16.0 por vulnerabilidades conocidas.
+- Exportar a Excel descargaba un CSV y los filtros por formato vaciaban la exportación.
+- Las ediciones que Discogs acepta se guardan aunque falle un paso posterior, y dos ediciones seguidas del mismo disco ya no se pisan.
+- Filtros por género/estilo demasiado amplios, país borrado en cada sincronización, preferencias perdidas al cambiar de cuenta, fórmulas en exportaciones, fechas con desfase horario, enlaces rotos del Radar y catálogo de impresión limitado a 100 discos.
+
+[0.4.0]: https://github.com/SimonBlancoE/discographic/compare/v0.3.4...v0.4.0
+
 ## [0.3.4] - 2026-07-04
 
 Release de mantenimiento y robustez que corrige fallos funcionales y optimiza la exportación de la colección.
