@@ -7,7 +7,6 @@ import { RADAR_PRIORITY } from '../shared/contracts/radar.js';
 const getSettingForUser = vi.hoisted(() => vi.fn());
 const getRadarForUser = vi.hoisted(() => vi.fn());
 const parseJson = vi.hoisted(() => vi.fn());
-const countMeaningfulNoteRows = vi.hoisted(() => vi.fn());
 const convertAmount = vi.hoisted(() => vi.fn());
 const prepare = vi.hoisted(() => vi.fn());
 
@@ -17,11 +16,9 @@ vi.mock('../server/db.js', () => ({
   },
   getSettingForUser,
   getRadarForUser,
+  getCollectionFieldMap: () => ({ notesFieldId: 3, mediaFieldId: 1, sleeveFieldId: 2, mediaOptions: [], sleeveOptions: [] }),
+  getCollectionFolders: () => [],
   parseJson,
-}));
-
-vi.mock('../server/services/notes.js', () => ({
-  countMeaningfulNoteRows,
 }));
 
 vi.mock('../server/services/exchangeRates.js', async () => {
@@ -42,13 +39,11 @@ describe('stats route', () => {
     getSettingForUser.mockReset();
     getRadarForUser.mockReset();
     parseJson.mockReset();
-    countMeaningfulNoteRows.mockReset();
     convertAmount.mockReset();
     prepare.mockReset();
 
     getSettingForUser.mockReturnValue('EUR');
     parseJson.mockImplementation((_value, fallback) => fallback);
-    countMeaningfulNoteRows.mockReturnValue(0);
     convertAmount.mockImplementation(async (value) => value);
     getRadarForUser.mockReturnValue({
       items: [
@@ -108,7 +103,7 @@ describe('stats route', () => {
 
     prepare.mockImplementation((sql: string) => ({
       get: (...args: unknown[]) => {
-        if (sql.includes('COUNT(*) AS count') && sql.includes('FROM releases')) {
+        if (sql.includes('COUNT(*) AS count')) {
           return { count: 0 };
         }
         if (sql.includes('SUM(estimated_value)')) {

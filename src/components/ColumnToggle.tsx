@@ -1,7 +1,8 @@
 import { createPortal } from 'react-dom';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { COLUMNS, MANDATORY, type ColumnId } from '../lib/columns';
 import { useI18n } from '../lib/I18nContext';
+import { usePopover } from '../hooks/usePopover';
+import Icon from './Icon';
 
 function ColumnToggle({
   visibleColumns,
@@ -11,57 +12,20 @@ function ColumnToggle({
   onToggle: (columnId: ColumnId) => void;
 }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  const updatePosition = useCallback(() => {
-    if (!open || !buttonRef.current || !panelRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const panel = panelRef.current;
-    panel.style.top = `${rect.bottom + 8}px`;
-    panel.style.left = `${Math.max(8, rect.right - panel.offsetWidth)}px`;
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    // Position once after render
-    requestAnimationFrame(updatePosition);
-
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target;
-      if (
-        target instanceof Node &&
-        buttonRef.current && !buttonRef.current.contains(target) &&
-        panelRef.current && !panelRef.current.contains(target)
-      ) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener('scroll', updatePosition, true);
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open, updatePosition]);
+  const { open, buttonRef, panelRef, triggerProps } = usePopover();
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="secondary-button"
-      >
+      <button ref={buttonRef} type="button" {...triggerProps} className="secondary-button">
+        <Icon name="layers" size={16} />
         {t('collection.columns')}
       </button>
       {open && createPortal(
         <div
           ref={panelRef}
-          className="fixed z-50 min-w-[200px] rounded-2xl border border-white/10 bg-slate-950/90 p-3 shadow-lg backdrop-blur-xl"
+          role="group"
+          aria-label={t('collection.columns')}
+          className="fixed z-50 min-w-[210px] rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-lg backdrop-blur-xl"
         >
           {COLUMNS.map((col) => {
             const isMandatory = MANDATORY.includes(col.id);

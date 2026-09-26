@@ -58,7 +58,7 @@ function Setup() {
         <div>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('setup.eyebrow')}</p>
-            <select value={locale} onChange={(event) => setLocale(event.target.value)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-none">
+            <select value={locale} onChange={(event) => setLocale(event.target.value)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-hidden">
               <option value="es" className="bg-slate-950">{t('language.es')}</option>
               <option value="en" className="bg-slate-950">{t('language.en')}</option>
             </select>
@@ -69,19 +69,19 @@ function Setup() {
 
         <label className="block space-y-2 text-sm text-slate-300">
           <span>{t('login.username')}</span>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
           <span className="text-xs text-slate-500">{t('setup.usernameHint')}</span>
         </label>
 
         <label className="block space-y-2 text-sm text-slate-300">
           <span>{t('login.password')}</span>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
           <span className="text-xs text-slate-500">{t('setup.passwordHint')}</span>
         </label>
 
         <label className="block space-y-2 text-sm text-slate-300">
           <span>{t('setup.passwordConfirm')}</span>
-          <input type="password" value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input type="password" value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
         </label>
 
         {error && <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>}

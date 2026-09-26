@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import CoverImage from './CoverImage';
+import { Link } from 'react-router';
 import type { ReleaseDetail } from '../../shared/contracts/release.js';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
@@ -84,11 +85,13 @@ function RandomReleaseCard() {
             {release ? (
               <div className="space-y-4">
                 <div className="aspect-square overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/80">
-                  {release.detail_cover_url || release.cover_url ? (
-                    <img src={release.detail_cover_url || release.cover_url || undefined} alt={release.title} className={`h-full w-full object-cover transition duration-500 ${spinning ? 'scale-110 blur-[2px]' : ''}`} />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-6xl">💿</div>
-                  )}
+                  <CoverImage
+                    src={release.cover_url ? release.detail_cover_url : null}
+                    fallbackSrc={release.cover_url}
+                    alt={release.title}
+                    className={`h-full w-full object-cover transition duration-500 ${spinning ? 'scale-110 blur-[2px]' : ''}`}
+                    placeholderClassName="h-full w-full"
+                  />
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.25em] text-brand-200">{t('random.pick')}</p>

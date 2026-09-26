@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Collection from '../src/pages/Collection';
 import type { CollectionPageResponse } from '../src/lib/types';
@@ -95,6 +95,8 @@ function createRelease(overrides: Partial<CollectionRelease>): CollectionRelease
     rating: 0,
     notes: [],
     notes_text: '',
+    media_condition: null,
+    sleeve_condition: null,
     date_added: null,
     estimated_value: null,
     marketplace_status: 'pending',
@@ -103,6 +105,12 @@ function createRelease(overrides: Partial<CollectionRelease>): CollectionRelease
     listing_currency: null,
     listing_price_eur: null,
     folder_id: 0,
+    master_id: null,
+    community_have: null,
+    community_want: null,
+    community_rating: null,
+    community_rating_count: null,
+    num_for_sale: null,
     synced_at: null,
     display_currency: overrides.display_currency ?? null,
     ...overrides,

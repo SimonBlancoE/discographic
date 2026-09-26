@@ -1,9 +1,9 @@
 // @ts-nocheck
 import express from 'express';
-import db, { getRadarForUser, getSettingForUser, parseJson } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
-import { DEFAULT_CURRENCY, convertAmount, normalizeCurrency } from '../services/exchangeRates.js';
-import { countMeaningfulNoteRows } from '../services/notes.js';
+import db, { getCollectionFieldMap, getCollectionFolders, getRadarForUser, getSettingForUser, parseJson } from '../db.js';
+import { DEFAULT_CURRENCY, convertAmount, convertAmountWithRates, getExchangeSnapshot, normalizeCurrency } from '../services/exchangeRates.js';
+import { getCollectionValueHistory, recordCollectionValue } from '../services/collectionValue.js';
+import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { normalizeDashboardStats } from '../../shared/contracts/dashboardStats.js';
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { RADAR_PRIORITY } from '../../shared/contracts/radar.js';
@@ -61,6 +61,93 @@ function buildRadarDashboardSummary(radar) {
   return summary;
 }
 
+const NOTES_ARRAY = "CASE WHEN json_valid(notes) THEN notes ELSE '[]' END";
+const COMMUNITY_FIELDS = 'id, artist, title, year, community_have AS have, community_want AS want, community_rating AS rating';
+
+function countFieldValues(userId, fieldId) {
+  if (!fieldId) {
+    return [];
+  }
+
+  return db.prepare(`
+    SELECT COALESCE(field.value, '') AS name, COUNT(*) AS count
+    FROM releases
+    LEFT JOIN (
+      SELECT releases.id AS release_row, json_extract(entry.value, '$.value') AS value
+      FROM releases, json_each(${NOTES_ARRAY}) AS entry
+      WHERE releases.user_id = ? AND CAST(json_extract(entry.value, '$.field_id') AS INTEGER) = ?
+    ) AS field ON field.release_row = releases.id
+    WHERE releases.user_id = ?
+    GROUP BY name
+  `).all(userId, fieldId, userId);
+}
+
+function buildCommunitySummary(userId) {
+  const covered = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND community_have IS NOT NULL').get(userId).count;
+  const pending = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND community_have IS NULL').get(userId).count;
+
+  return {
+    covered,
+    pending,
+    mostWanted: db.prepare(`
+      SELECT ${COMMUNITY_FIELDS} FROM releases
+      WHERE user_id = ? AND community_want > 0
+      ORDER BY community_want DESC, artist ASC
+      LIMIT 8
+    `).all(userId),
+    rarest: db.prepare(`
+      SELECT ${COMMUNITY_FIELDS} FROM releases
+      WHERE user_id = ? AND community_have > 0
+      ORDER BY community_have ASC, community_want DESC
+      LIMIT 8
+    `).all(userId),
+    // Wanted by more people than own it: the records collectors are hunting.
+    hotRatio: db.prepare(`
+      SELECT ${COMMUNITY_FIELDS} FROM releases
+      WHERE user_id = ? AND community_have > 0 AND community_want >= 5
+      ORDER BY CAST(community_want AS REAL) / community_have DESC, community_want DESC
+      LIMIT 8
+    `).all(userId)
+  };
+}
+
+async function buildCollectionValue(userId, displayCurrency) {
+  const history = getCollectionValueHistory(db, userId);
+  if (!history.length) {
+    return { currency: null, history: [] };
+  }
+
+  const sourceCurrencies = [...new Set(history.map((point) => point.currency).filter(Boolean))];
+  try {
+    const { rates } = await getExchangeSnapshot([...sourceCurrencies, displayCurrency]);
+    const convert = (amount, currency) => convertAmountWithRates(amount, currency || displayCurrency, displayCurrency, rates);
+    return {
+      currency: displayCurrency,
+      history: history.map((point) => ({
+        date: point.date,
+        minimum: convert(point.minimum, point.currency),
+        median: convert(point.median, point.currency),
+        maximum: convert(point.maximum, point.currency)
+      }))
+    };
+  } catch {
+    // No exchange rate for the Discogs currency: show the values as Discogs reported them.
+    return { currency: history[history.length - 1].currency, history };
+  }
+}
+
+router.post('/collection-value', async (req, res) => {
+  try {
+    const snapshot = recordCollectionValue(db, req.session.userId, await getDiscogsClientForUser(req).getCollectionValue());
+    if (!snapshot) {
+      return res.status(502).json({ error: req.t('backend.stats.collectionValueUnavailable') });
+    }
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(502).json({ error: error.message });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const userId = req.session.userId;
@@ -68,13 +155,17 @@ router.get('/', async (req, res) => {
     const radar = getRadarForUser(userId);
     const totalRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ?').get(userId).count;
     const ratedRecords = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND rating > 0').get(userId).count;
-    const notesRecords = countMeaningfulNoteRows(
-      db.prepare(`
-        SELECT notes
-        FROM releases
-        WHERE user_id = ? AND notes IS NOT NULL AND notes != ''
-      `).all(userId)
-    );
+    const fieldMap = getCollectionFieldMap(userId);
+    // Only the Notes field counts: condition grades live in the same array but are not notes.
+    const notesRecords = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM releases
+      WHERE user_id = ? AND EXISTS (
+        SELECT 1 FROM json_each(${NOTES_ARRAY}) AS entry
+        WHERE CAST(json_extract(entry.value, '$.field_id') AS INTEGER) = ?
+          AND TRIM(COALESCE(json_extract(entry.value, '$.value'), '')) != ''
+      )
+    `).get(userId, fieldMap.notesFieldId).count;
     const pricedRecords = db.prepare(`
       SELECT COUNT(*) AS count
       FROM releases
@@ -142,6 +233,25 @@ router.get('/', async (req, res) => {
       LIMIT 20
     `).all(userId);
 
+    const gradeOrder = (name) => {
+      const index = fieldMap.mediaOptions.indexOf(name);
+      return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    };
+    const conditions = countFieldValues(userId, fieldMap.mediaFieldId)
+      .map((row) => ({ name: row.name || '__ungraded__', count: row.count }))
+      .sort((a, b) => gradeOrder(a.name) - gradeOrder(b.name));
+
+    const folderNames = new Map(getCollectionFolders(userId).map((folder) => [folder.id, folder.name]));
+    const folders = folderNames.size
+      ? db.prepare(`
+          SELECT folder_id AS id, COUNT(*) AS count
+          FROM releases
+          WHERE user_id = ?
+          GROUP BY folder_id
+          ORDER BY count DESC
+        `).all(userId).map((row) => ({ ...row, name: folderNames.get(row.id) || `#${row.id}` }))
+      : [];
+
     const lastSync = db.prepare(`
       SELECT started_at, finished_at, records_synced, status
       FROM sync_log
@@ -173,6 +283,10 @@ router.get('/', async (req, res) => {
       }))),
       artists,
       radar: buildRadarDashboardSummary(radar),
+      conditions,
+      folders,
+      community: buildCommunitySummary(userId),
+      collectionValue: await buildCollectionValue(userId, displayCurrency),
       lastSync,
       displayCurrency
     }));

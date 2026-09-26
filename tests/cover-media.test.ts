@@ -17,3 +17,14 @@ describe('cover media service', () => {
     expect(selectTapeteVariant(500)).toBe('detail');
   });
 });
+
+describe('cover variants', () => {
+  it('only accepts known variant names, since the variant becomes part of a file path', async () => {
+    const { isCoverVariant } = await import('../server/services/coverMedia.js');
+    expect(isCoverVariant('wall')).toBe(true);
+    expect(isCoverVariant('poster')).toBe(true);
+    expect(isCoverVariant('x/../../2/77-wall')).toBe(false);
+    expect(isCoverVariant('constructor')).toBe(false);
+    expect(isCoverVariant(undefined)).toBe(false);
+  });
+});

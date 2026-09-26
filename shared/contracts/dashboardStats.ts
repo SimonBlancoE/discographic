@@ -32,6 +32,38 @@ export type DashboardRadarSummary = {
   belowTarget: number;
   alreadyOwned: number;
 };
+export type CommunityRow = {
+  id: number;
+  artist: string;
+  title: string;
+  year: number | null;
+  have: number;
+  want: number;
+  rating: number | null;
+};
+export type FolderCountRow = {
+  id: number;
+  name: string;
+  count: number;
+};
+export type DashboardCommunity = {
+  covered: number;
+  pending: number;
+  mostWanted: CommunityRow[];
+  rarest: CommunityRow[];
+  hotRatio: CommunityRow[];
+};
+export type CollectionValuePoint = {
+  date: string;
+  minimum: number | null;
+  median: number | null;
+  maximum: number | null;
+};
+export type DashboardCollectionValue = {
+  /** Currency the points are expressed in (the display currency when conversion was possible). */
+  currency: string | null;
+  history: CollectionValuePoint[];
+};
 export type DashboardStats = {
   totals: {
     total_records: number;
@@ -52,6 +84,10 @@ export type DashboardStats = {
   topValue: TopValueRow[];
   artists: ArtistCountRow[];
   radar: DashboardRadarSummary;
+  conditions: NamedCountRow[];
+  folders: FolderCountRow[];
+  community: DashboardCommunity;
+  collectionValue: DashboardCollectionValue;
   lastSync: DashboardLastSync | null;
   displayCurrency: string | null;
 };
@@ -148,6 +184,62 @@ function normalizeTopValueRows(rows: unknown): TopValueRow[] {
     .filter(hasTopValueId);
 }
 
+function normalizeCommunityRows(rows: unknown): CommunityRow[] {
+  return asArray(rows).flatMap((row) => {
+    const source = asRecord(row);
+    const id = asNumber(source?.id, null);
+    if (id == null) {
+      return [];
+    }
+
+    return [{
+      id,
+      artist: asText(source?.artist, '-'),
+      title: asText(source?.title, '-'),
+      year: asNullableNumber(source?.year),
+      have: asNumber(source?.have),
+      want: asNumber(source?.want),
+      rating: asNullableNumber(source?.rating),
+    }];
+  });
+}
+
+function normalizeFolderRows(rows: unknown): FolderCountRow[] {
+  return asArray(rows).flatMap((row) => {
+    const source = asRecord(row);
+    const id = asNumber(source?.id, null);
+    return id == null ? [] : [{ id, name: asText(source?.name, `#${id}`), count: asNumber(source?.count) }];
+  });
+}
+
+function normalizeCommunity(community: unknown): DashboardCommunity {
+  const source = asRecord(community) ?? {};
+  return {
+    covered: asNumber(source.covered),
+    pending: asNumber(source.pending),
+    mostWanted: normalizeCommunityRows(source.mostWanted),
+    rarest: normalizeCommunityRows(source.rarest),
+    hotRatio: normalizeCommunityRows(source.hotRatio),
+  };
+}
+
+function normalizeCollectionValue(value: unknown): DashboardCollectionValue {
+  const source = asRecord(value) ?? {};
+  return {
+    currency: typeof source.currency === 'string' ? source.currency : null,
+    history: asArray(source.history).flatMap((row) => {
+      const point = asRecord(row);
+      const date = asText(point?.date);
+      return date ? [{
+        date,
+        minimum: asNullableNumber(point?.minimum),
+        median: asNullableNumber(point?.median),
+        maximum: asNullableNumber(point?.maximum),
+      }] : [];
+    }),
+  };
+}
+
 function normalizeLastSync(lastSync: unknown): DashboardLastSync | null {
   if (!lastSync || typeof lastSync !== 'object') {
     return null;
@@ -196,6 +288,10 @@ export function normalizeDashboardStats(payload: UnknownRecord = {}): DashboardS
     topValue: normalizeTopValueRows(payload.topValue),
     artists: normalizeArtistRows(payload.artists),
     radar: normalizeRadarSummary(payload.radar),
+    conditions: normalizeNamedCountRows(payload.conditions),
+    folders: normalizeFolderRows(payload.folders),
+    community: normalizeCommunity(payload.community),
+    collectionValue: normalizeCollectionValue(payload.collectionValue),
     lastSync: normalizeLastSync(payload.lastSync),
     displayCurrency: typeof payload.displayCurrency === 'string' ? payload.displayCurrency : null
   };

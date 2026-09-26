@@ -1,8 +1,8 @@
 // @ts-nocheck
 import express from 'express';
 import { normalizeAccountResponse } from '../../shared/contracts/account.js';
-import { COLLECTION_SAVED_VIEWS_KEY } from '../../shared/contracts/collectionViews.js';
 import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
+import { USER_PREFERENCE_KEYS } from '../../shared/contracts/preferences.js';
 import { requireAuth } from '../middleware/auth.js';
 import { normalizeCurrency } from '../../shared/currency.js';
 
@@ -41,14 +41,14 @@ router.put('/', (req, res) => {
     return res.status(400).json({ error: req.t('backend.account.userRequired') });
   }
 
-  if (req.body.currency) {
-    setSettingForUser(req.session.userId, 'currency', normalizeCurrency(req.body.currency));
-  }
-
   const tokenChanged = Boolean(discogsToken) && discogsToken !== currentAccount?.discogs_token;
   const shouldClearLocalData = !currentAccount || currentAccount.discogs_username !== discogsUsername || tokenChanged;
   if (shouldClearLocalData) {
     clearUserCollectionData(req.session.userId);
+  }
+
+  if (req.body.currency) {
+    setSettingForUser(req.session.userId, 'currency', normalizeCurrency(req.body.currency));
   }
 
   const account = upsertDiscogsAccount(req.session.userId, discogsUsername, discogsToken || undefined);
@@ -68,11 +68,7 @@ router.post('/reset', (req, res) => {
 
 // Whitelist of valid preference keys. Add new entries here when introducing
 // new user-facing preferences that should be persisted via the API.
-const ALLOWED_PREFERENCE_KEYS = new Set([
-  COLLECTION_SAVED_VIEWS_KEY,
-  'collection_visible_columns',
-  'currency',
-]);
+const ALLOWED_PREFERENCE_KEYS = new Set<string>(USER_PREFERENCE_KEYS);
 
 router.get('/preferences/:key', (req, res) => {
   if (!ALLOWED_PREFERENCE_KEYS.has(req.params.key)) {

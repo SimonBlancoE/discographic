@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { COLUMNS, DEFAULT_VISIBLE, MANDATORY } from '../src/lib/columns.js';
 
 describe('Column registry', () => {
-  it('has 12 columns defined', () => {
-    expect(COLUMNS).toHaveLength(12);
+  it('has 14 columns defined', () => {
+    expect(COLUMNS).toHaveLength(14);
   });
 
   it('has cover, artist, title as mandatory', () => {
@@ -47,11 +47,11 @@ describe('Column registry', () => {
     }
   });
 
-  it('column order is cover, artist, title, year, genre, format, label, rating, notes, price, listingStatus, listingPrice', () => {
+  it('column order is cover, artist, title, year, genre, format, label, rating, notes, condition, demand, price, listingStatus, listingPrice', () => {
     const order = COLUMNS.map(c => c.id);
     expect(order).toEqual([
       'cover', 'artist', 'title', 'year', 'genre', 'format',
-      'label', 'rating', 'notes', 'price', 'listingStatus', 'listingPrice'
+      'label', 'rating', 'notes', 'condition', 'demand', 'price', 'listingStatus', 'listingPrice'
     ]);
   });
 });

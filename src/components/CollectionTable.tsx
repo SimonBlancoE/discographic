@@ -1,17 +1,19 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getMarketplaceStatusLabelKey, hasPricedMarketplaceValue } from '../../shared/contracts/marketplace.js';
 import type { CollectionRelease } from '../../shared/contracts/release.js';
 import type { Currency } from '../../shared/currency.js';
-import { formatCurrency, joinNames } from '../lib/format';
+import { formatCompactNumber, formatCurrency, joinNames } from '../lib/format';
 import { useI18n } from '../lib/I18nContext';
 import { COLUMNS, type ColumnId } from '../lib/columns';
 import StarRating from './StarRating';
+import CoverImage from './CoverImage';
+import ConditionBadge from './ConditionBadge';
 import type { Translate, UpdateReleasePatch } from '../lib/types';
 
 export type SortOrder = 'asc' | 'desc';
 
-export type TableSortColumn = 'artist' | 'title' | 'year' | 'rating' | 'estimated_value' | 'listing_price_eur';
+export type TableSortColumn = 'artist' | 'title' | 'year' | 'rating' | 'date_added' | 'estimated_value' | 'listing_price_eur' | 'community_want' | 'community_have';
 
 type SortProps = {
   sortBy: TableSortColumn;
@@ -40,12 +42,20 @@ function NotesInput({ value, onCommit }: { value: string; onCommit: (value: stri
   }, [value]);
 
   return (
-    <input
+    // A textarea keeps multi-line Discogs notes intact; an <input> would strip the line breaks.
+    <textarea
+      rows={1}
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => onCommit(draft)}
+      onBlur={() => {
+        // Tabbing through the column must not send one Discogs write per row.
+        if (draft.trim() !== value.trim()) {
+          onCommit(draft);
+        }
+      }}
       placeholder={t('collection.notePlaceholder')}
-      className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-brand-300"
+      aria-label={t('collection.notes')}
+      className="field-input field-sizing-content max-h-28 min-h-0 resize-none py-1.5 leading-snug"
     />
   );
 }
@@ -86,19 +96,15 @@ const RENDERERS: Record<ColumnId, Renderer> = {
   cover: {
     header: (t) => t('collection.cover'),
     cell: (release, { t }) => {
-      const localCoverUrl = release.id ? `/api/media/cover/${release.id}?variant=wall` : release.cover_url;
+      const localCoverUrl = release.id && release.cover_url ? `/api/media/cover/${release.id}?variant=wall` : null;
       return (
-        <Link to={`/release/${release.id}`} className="cover-peek-trigger relative block h-16 w-16 overflow-visible rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/70">
-          <span className="block h-16 w-16 overflow-hidden rounded-2xl bg-slate-900/80 shadow-[0_12px_30px_rgba(2,6,23,0.35)]">
-            {localCoverUrl ? (
-              <img src={localCoverUrl} alt={`${release.title}`} className="h-full w-full object-cover transition duration-300 hover:scale-105" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-2xl">💿</div>
-            )}
+        <Link to={`/release/${release.id}`} aria-label={`${release.artist} – ${release.title}`} className="cover-peek-trigger relative block h-12 w-12 overflow-visible rounded-xl">
+          <span className="block h-12 w-12 overflow-hidden rounded-xl bg-slate-900/80 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+            <CoverImage src={localCoverUrl} fallbackSrc={release.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" placeholderClassName="h-full w-full" />
           </span>
           {localCoverUrl ? (
-            <span className="cover-peek absolute left-20 top-1/2 z-20 hidden w-40 -translate-y-1/2 rounded-[28px] border border-white/10 bg-slate-950/90 p-2 shadow-[0_24px_60px_rgba(2,6,23,0.48)] backdrop-blur-xl lg:block">
-               <img src={localCoverUrl} alt={t('collection.coverExpanded', { title: release.title })} className="aspect-square w-full rounded-[20px] object-cover" />
+            <span className="cover-peek absolute left-16 top-1/2 z-20 hidden w-40 -translate-y-1/2 rounded-[22px] border border-white/10 bg-slate-950/90 p-2 shadow-[0_24px_60px_rgba(2,6,23,0.48)] backdrop-blur-xl lg:block">
+               <img src={localCoverUrl} alt={t('collection.coverExpanded', { title: release.title })} className="aspect-square w-full rounded-[16px] object-cover" />
             </span>
           ) : null}
         </Link>
@@ -108,6 +114,7 @@ const RENDERERS: Record<ColumnId, Renderer> = {
   artist: {
     header: (t, sortProps) => <SortButton label={t('collection.artist')} column="artist" {...sortProps} />,
     cell: (release) => <span className="font-medium text-slate-50">{release.artist}</span>,
+    cellClass: 'min-w-[140px]',
   },
   title: {
     header: (t, sortProps) => <SortButton label={t('collection.titleColumn')} column="title" {...sortProps} />,
@@ -145,6 +152,27 @@ const RENDERERS: Record<ColumnId, Renderer> = {
       <NotesInput value={release.notes_text || ''} onCommit={(notes) => onUpdate(release, { notes })} />
     ),
     cellClass: 'min-w-[220px]',
+  },
+  condition: {
+    header: (t) => t('collection.condition'),
+    cell: (release) => (
+      <div className="flex flex-wrap gap-1">
+        <ConditionBadge value={release.media_condition} kind="media" />
+        {release.sleeve_condition ? <ConditionBadge value={release.sleeve_condition} kind="sleeve" /> : null}
+      </div>
+    ),
+  },
+  demand: {
+    header: (t, sortProps) => <SortButton label={t('collection.demand')} column="community_want" {...sortProps} />,
+    cell: (release, { t }) => release.community_want == null
+      ? <span className="text-slate-500">-</span>
+      : (
+        <span className="whitespace-nowrap text-xs text-slate-300" title={t('release.communityTooltip', { have: release.community_have ?? 0, want: release.community_want })}>
+          <span className="text-brand-200">♥ {formatCompactNumber(release.community_want)}</span>
+          <span className="mx-1 text-slate-600">/</span>
+          {formatCompactNumber(release.community_have)}
+        </span>
+      ),
   },
   price: {
     header: (t, sortProps) => <SortButton label={t('collection.price')} column="estimated_value" {...sortProps} />,
@@ -193,10 +221,10 @@ function CollectionTable({
     <div className="glass-panel overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-900/70 text-slate-300">
+          <thead className="border-b border-white/5 bg-white/2 text-xs uppercase tracking-[0.12em] text-slate-400">
             <tr>
               {activeColumns.map((col) => (
-                <th key={col.id} className="px-4 py-3">
+                <th key={col.id} scope="col" className="whitespace-nowrap px-4 py-3 font-medium">
                   {RENDERERS[col.id].header(t, sortProps)}
                 </th>
               ))}
@@ -204,9 +232,9 @@ function CollectionTable({
           </thead>
           <tbody>
             {releases.map((release) => (
-              <tr key={`${release.id}-${release.instance_id}`} className="border-t border-white/5 align-top text-slate-200 transition hover:bg-white/5">
+              <tr key={`${release.id}-${release.instance_id}`} className="border-t border-white/5 align-middle text-slate-200 transition hover:bg-white/3">
                 {activeColumns.map((col) => (
-                  <td key={col.id} className={`px-4 py-3 ${RENDERERS[col.id].cellClass || ''}`}>
+                  <td key={col.id} className={`px-4 py-2.5 ${RENDERERS[col.id].cellClass || ''}`}>
                     {RENDERERS[col.id].cell(release, { t, onUpdate, currency })}
                   </td>
                 ))}

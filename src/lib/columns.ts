@@ -8,6 +8,8 @@ export type ColumnId =
   | 'label'
   | 'rating'
   | 'notes'
+  | 'condition'
+  | 'demand'
   | 'price'
   | 'listingStatus'
   | 'listingPrice';
@@ -31,6 +33,8 @@ export const COLUMNS: ColumnDefinition[] = [
   { id: 'label',         i18nKey: 'collection.label',          mandatory: false, sortable: false },
   { id: 'rating',        i18nKey: 'collection.rating',         mandatory: false, sortable: true,  sortColumn: 'rating' },
   { id: 'notes',         i18nKey: 'collection.notes',          mandatory: false, sortable: false },
+  { id: 'condition',     i18nKey: 'collection.condition',      mandatory: false, sortable: false },
+  { id: 'demand',        i18nKey: 'collection.demand',         mandatory: false, sortable: true,  sortColumn: 'community_want', defaultHidden: true },
   { id: 'price',         i18nKey: 'collection.price',          mandatory: false, sortable: true,  sortColumn: 'estimated_value' },
   { id: 'listingStatus', i18nKey: 'collection.listingStatus',  mandatory: false, sortable: false, defaultHidden: true },
   { id: 'listingPrice',  i18nKey: 'collection.listingPrice',   mandatory: false, sortable: true,  sortColumn: 'listing_price_eur', defaultHidden: true },
