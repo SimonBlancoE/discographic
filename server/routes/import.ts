@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
-import db, { stringifyJson } from '../db.js';
+import db, { getCollectionFieldMap, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import {
   buildImportFailure,
@@ -13,7 +13,7 @@ import {
   summarizeImportSyncResult,
   summarizeInterruptedImportSync
 } from '../services/importSync.js';
-import { notesToText, parseStoredNotes, replaceNoteText, resolveNoteFieldId } from '../services/notes.js';
+import { getNoteFieldText, notesToText, parseStoredNotes, replaceNoteText } from '../services/notes.js';
 import { translate } from '../../shared/i18n.js';
 import { normalizeImportSyncState } from '../../shared/contracts/syncStatus.js';
 
@@ -144,7 +144,10 @@ function extractChanges(userId, rows, columnMap, t) {
     }
 
     const currentNotes = parseStoredNotes(release.notes);
-    const currentNotesText = notesToText(currentNotes);
+    const currentNotesText = getNoteFieldText(currentNotes, getCollectionFieldMap(userId).notesFieldId);
+    // Exports made before v0.4 joined every field ("VG+ | Generic | note") into the Notes column;
+    // re-importing such a file must not write that joined text into the Discogs Notes field.
+    const legacyJoinedNotes = notesToText(currentNotes);
     const change = {
       dbId: release.id,
       releaseId: release.release_id,
@@ -182,7 +185,7 @@ function extractChanges(userId, rows, columnMap, t) {
       if (mapping.dbField === 'notes') {
         if (rawValue === '' || rawValue === null || rawValue === undefined) continue;
         const text = String(rawValue).trim().slice(0, 500);
-        if (text !== change.currentNotes) {
+        if (text !== change.currentNotes && text !== legacyJoinedNotes) {
           change.newNotes = text;
           change.notesChanged = true;
           change.hasChanges = true;
@@ -256,8 +259,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
       }
 
       if (change.notesChanged) {
-        const currentNotes = parseStoredNotes(release.notes);
-        const notesFieldId = resolveNoteFieldId(currentNotes);
+        const notesFieldId = getCollectionFieldMap(userId).notesFieldId;
 
         try {
           await discogs.updateField({
@@ -404,8 +406,7 @@ router.post('/apply', async (req, res) => {
         }
         if (change.notesChanged) {
           const current = parseStoredNotes(release.notes);
-          const fieldId = resolveNoteFieldId(current);
-          const updated = replaceNoteText(current, change.newNotes, fieldId);
+          const updated = replaceNoteText(current, change.newNotes, getCollectionFieldMap(userId).notesFieldId);
 
           db.prepare('UPDATE releases SET notes = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
             .run(stringifyJson(updated), change.dbId, userId);

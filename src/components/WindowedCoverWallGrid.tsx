@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import CoverImage from './CoverImage';
+import { Link } from 'react-router';
 import type { CSSProperties } from 'react';
 import type { WallRelease } from '../../shared/contracts/release.js';
 import {
@@ -14,17 +15,15 @@ function CoverCard({ release, showTitles, style }: { release: WallRelease; showT
     <Link to={`/release/${release.id}`} className="cover-wall-card group absolute" style={style}>
       <div className="overflow-hidden rounded-[22px] border border-white/10 bg-slate-950/70 shadow-[0_18px_40px_rgba(2,6,23,0.32)]">
         <div className="aspect-square overflow-hidden bg-slate-900/80">
-          {release.wall_cover_url || release.cover_url ? (
-            <img
-              src={release.wall_cover_url || release.cover_url || undefined}
-              alt={release.title}
-              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-              loading="lazy"
-              decoding="async"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-4xl">💿</div>
-          )}
+          <CoverImage
+            src={release.cover_url ? release.wall_cover_url : null}
+            fallbackSrc={release.cover_url}
+            alt={release.title}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            placeholderClassName="h-full w-full"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
         {showTitles ? (
           <div className="space-y-1 px-3 py-3" style={{ height: `${WALL_TITLE_PANEL_HEIGHT}px` }}>

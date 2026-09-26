@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Dashboard from '../src/pages/Dashboard';
 import type { DashboardStats } from '../shared/contracts/dashboardStats.js';
@@ -161,6 +161,10 @@ describe('Dashboard page', () => {
       growth: [{ month: '2026-04', count: 2 }],
       topValue: [],
       artists: [{ artist: 'Basic Channel', count: 2 }],
+      conditions: [],
+      folders: [],
+      community: { covered: 0, pending: 0, mostWanted: [], rarest: [], hotRatio: [] },
+      collectionValue: { currency: null, history: [] },
       radar: {
         totalWanted: 4,
         activeOpportunities: 2,

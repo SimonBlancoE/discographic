@@ -1,3 +1,4 @@
+import type { CollectionFolder } from '../../shared/contracts/collectionFields.js';
 import type { ReactNode } from 'react';
 import type {
   AccountCapabilities,
@@ -112,6 +113,22 @@ export type CollectionFilterOptions = {
   decades: number[];
   formats: string[];
   labels: string[];
+  folders?: CollectionFolder[];
+  conditions?: string[];
+};
+
+export type CollectionMeta = {
+  folders: CollectionFolder[];
+  mediaConditions: string[];
+  sleeveConditions: string[];
+};
+
+export type CommunityRefreshStatus = {
+  status: string;
+  running: boolean;
+  current: number;
+  total: number;
+  pending: number;
 };
 
 export type CollectionPageResponse = {
@@ -184,6 +201,9 @@ export type ImportApplyResponse = {
 export type UpdateReleasePatch = {
   rating?: number;
   notes?: string;
+  media_condition?: string;
+  sleeve_condition?: string;
+  folder_id?: number;
 };
 
 export type SavedCollectionViewDraft = Omit<CollectionSavedView, 'id'> & {

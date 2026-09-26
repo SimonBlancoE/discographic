@@ -80,14 +80,18 @@ export function notesToText(notes: unknown): string {
   return normalizeNotes(notes).map((item) => item?.value).filter(Boolean).join(' | ');
 }
 
-export function resolveNoteFieldId(notes: unknown, fallback: unknown = DEFAULT_NOTES_FIELD_ID): unknown {
-  const normalized = normalizeNotes(notes);
+/**
+ * Returns the text stored in one Discogs collection field (e.g. the Notes textarea).
+ * Other fields such as Media/Sleeve Condition live in the same array and must not leak into it.
+ */
+export function getNoteFieldText(notes: unknown, fieldId: unknown = DEFAULT_NOTES_FIELD_ID): string {
+  return normalizeNotes(notes).find((note) => Number(note.field_id) === Number(fieldId))?.value ?? '';
+}
 
-  if (normalized.some((note) => note.field_id === DEFAULT_NOTES_FIELD_ID)) {
-    return DEFAULT_NOTES_FIELD_ID;
-  }
-
-  return normalized[normalized.length - 1]?.field_id ?? fallback;
+// Always the Notes field: falling back to "the last field present" used to write free text
+// into dropdown fields such as Sleeve Condition when a release had no notes yet.
+export function resolveNoteFieldId(_notes: unknown, fallback: unknown = DEFAULT_NOTES_FIELD_ID): unknown {
+  return fallback;
 }
 
 export function replaceNoteText(
@@ -97,7 +101,7 @@ export function replaceNoteText(
 ): NormalizedNote[] {
   const normalized = normalizeNotes(notes);
   const trimmed = String(nextText || '').trim();
-  const nextNotes = normalized.filter((note) => note.field_id !== fieldId);
+  const nextNotes = normalized.filter((note) => Number(note.field_id) !== Number(fieldId));
 
   if (!trimmed) {
     return nextNotes;

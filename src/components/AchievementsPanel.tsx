@@ -16,7 +16,7 @@ function TierBadge({ achievement }: { achievement: TieredAchievement }) {
         <span>{t('achievements.tiers', { current: tier.unlockedTierCount, total: tier.totalTiers })}</span>
       </div>
       <div className="h-2 rounded-full bg-slate-950/70">
-        <div className="h-full rounded-full bg-gradient-to-r from-brand-400 via-amber-300 to-cyan-300" style={{ width: `${Math.max(8, (tier.unlockedTierCount / tier.totalTiers) * 100)}%`, opacity: achievement.progress ? 1 : 0.18 }} />
+        <div className="h-full rounded-full bg-linear-to-r from-brand-400 via-amber-300 to-cyan-300" style={{ width: `${Math.max(8, (tier.unlockedTierCount / tier.totalTiers) * 100)}%`, opacity: achievement.progress ? 1 : 0.18 }} />
       </div>
       <div className="flex items-center justify-between text-xs text-slate-400">
         <span>{formatNumber(achievement.progress)}</span>

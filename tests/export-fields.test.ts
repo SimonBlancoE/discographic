@@ -124,7 +124,7 @@ describe('Export filtering parity', () => {
   it('includes style in the export WHERE clause', () => {
     const result = buildReleaseFilterWhere({ userId: 7, filters: { style: 'Techno' } });
     expect(result.clause).toContain('styles LIKE ?');
-    expect(result.params).toEqual([7, '%Techno%']);
+    expect(result.params).toEqual([7, '%"Techno"%']);
   });
 
   it('supports style together with the rest of the collection filters', () => {
@@ -140,7 +140,7 @@ describe('Export filtering parity', () => {
       }
     });
 
-    expect(result.clause).toContain('(artist LIKE ? OR title LIKE ?)');
+    expect(result.clause).toContain("(artist LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\')");
     expect(result.clause).toContain('genres LIKE ?');
     expect(result.clause).toContain('styles LIKE ?');
     expect(result.clause).toContain('formats LIKE ?');
@@ -150,12 +150,12 @@ describe('Export filtering parity', () => {
       5,
       '%Jeff%',
       '%Jeff%',
-      '%Electronic%',
-      '%Detroit Techno%',
+      '%"Electronic"%',
+      '%"Detroit Techno"%',
       1990,
       2000,
-      '%Vinyl%',
-      '%Tresor%'
+      '%"name":"Vinyl"%',
+      '%"name":"Tresor"%'
     ]);
   });
 });

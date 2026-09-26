@@ -161,11 +161,11 @@ function AdminPanel() {
                       <form onSubmit={(event) => handleResetPassword(event, user)} className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto] md:items-end">
                         <label className="space-y-1 text-sm text-slate-300">
                           <span>{t('settings.newPassword')}</span>
-                          <input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+                          <input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
                         </label>
                         <label className="space-y-1 text-sm text-slate-300">
                           <span>{t('settings.confirmPassword')}</span>
-                          <input type="password" value={resetPasswordConfirm} onChange={(e) => setResetPasswordConfirm(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+                          <input type="password" value={resetPasswordConfirm} onChange={(e) => setResetPasswordConfirm(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
                         </label>
                         <button type="submit" disabled={resetting} className="primary-button disabled:opacity-60">
                           {resetting ? t('settings.changingPassword') : t('settings.resetPassword')}
@@ -186,11 +186,11 @@ function AdminPanel() {
       <form onSubmit={handleCreate} className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-white/5 p-4 sm:flex-row sm:items-end">
         <label className="flex-1 space-y-1 text-sm text-slate-300">
           <span>{t('settings.newUser')}</span>
-          <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="nombre" className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="nombre" className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
         </label>
         <label className="flex-1 space-y-1 text-sm text-slate-300">
           <span>{t('login.password')}</span>
-          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
         </label>
         <button type="submit" disabled={creating} className="primary-button disabled:opacity-60">
           {creating ? t('settings.creatingUser') : t('settings.createUser')}
@@ -246,17 +246,17 @@ function PasswordPanel() {
 
       <label className="block space-y-2 text-sm text-slate-300">
         <span>{t('settings.currentPassword')}</span>
-        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+        <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
       </label>
 
       <label className="block space-y-2 text-sm text-slate-300">
         <span>{t('settings.newPassword')}</span>
-        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
       </label>
 
       <label className="block space-y-2 text-sm text-slate-300">
         <span>{t('settings.confirmPassword')}</span>
-        <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+        <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t('settings.passwordMin')} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
       </label>
 
       {error && <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>}
@@ -342,7 +342,7 @@ function Settings() {
 
         <label className="block space-y-2 text-sm text-slate-300">
           <span>{t('settings.discogsUser')}</span>
-          <input value={discogsUsername} onChange={(e) => setDiscogsUsername(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input value={discogsUsername} onChange={(e) => setDiscogsUsername(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
         </label>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
@@ -351,7 +351,7 @@ function Settings() {
 
         <label className="block space-y-2 text-sm text-slate-300">
           <span>{tokenConfigured ? t('settings.newTokenOptional') : t('settings.discogsToken')}</span>
-          <input type="password" autoComplete="off" value={newToken} onChange={(e) => setNewToken(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-none focus:border-brand-300" />
+          <input type="password" autoComplete="off" value={newToken} onChange={(e) => setNewToken(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 outline-hidden focus:border-brand-300" />
         </label>
 
         {error && <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>}

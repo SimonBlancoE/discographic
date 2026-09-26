@@ -34,8 +34,10 @@ function getResultBoxClass(tone: string): string {
   }
 }
 
-function ImportButton({ disabled = false }) {
+function ImportButton({ disabled = false, onApplied }: { disabled?: boolean; onApplied?: () => void }) {
   const { t } = useI18n();
+  const onAppliedRef = useRef(onApplied);
+  onAppliedRef.current = onApplied;
   const [phase, setPhase] = useState<ImportPhase>('idle');
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [error, setError] = useState('');
@@ -138,6 +140,8 @@ function ImportButton({ disabled = false }) {
 
     try {
       const result = await api.importApply(preview.previewId);
+      // Confirmed edits are already in the local collection at this point.
+      onAppliedRef.current?.();
       setSyncState(result.syncState || null);
       if (isTerminalImportStatus(result.syncState?.status)) {
         setPhase('result');
@@ -170,14 +174,14 @@ function ImportButton({ disabled = false }) {
       {phase === 'idle' && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <label className={`secondary-button cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+            <label className={`secondary-button cursor-pointer focus-within:ring-2 focus-within:ring-cyan-300 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
               {t('collection.import')}
               <input
                 ref={fileRef}
                 type="file"
                 accept=".xlsx,.csv"
                 onChange={handleFileSelect}
-                className="hidden"
+                className="sr-only"
                 disabled={disabled}
               />
             </label>
@@ -312,7 +316,7 @@ function ImportButton({ disabled = false }) {
           </div>
 
           <div className="h-3 overflow-hidden rounded-full bg-slate-900/80">
-            <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-500" style={{ width: `${syncProgress}%` }} />
+            <div className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400 transition-all duration-500" style={{ width: `${syncProgress}%` }} />
           </div>
 
           <p className="text-sm text-slate-400">

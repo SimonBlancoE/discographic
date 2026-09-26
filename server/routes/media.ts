@@ -1,12 +1,13 @@
 // @ts-nocheck
 import express from 'express';
-import db from '../db.js';
+import db, { getCollectionFieldMap } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   ensureCachedCover,
   fetchRemoteImage,
   generateTapeteImage,
-  isAllowedRemoteImageUrl
+  isAllowedRemoteImageUrl,
+  isCoverVariant
 } from '../services/coverMedia.js';
 import { buildReleaseFilterWhere } from '../services/releaseFilters.js';
 
@@ -32,6 +33,11 @@ router.get('/proxy-image', async (req, res) => {
 });
 
 router.get('/cover/:id', async (req, res) => {
+  const variant = String(req.query.variant || 'wall');
+  if (!isCoverVariant(variant)) {
+    return res.status(400).json({ error: 'Invalid cover variant' });
+  }
+
   const release = db.prepare(`
     SELECT id, cover_url
     FROM releases
@@ -43,7 +49,6 @@ router.get('/cover/:id', async (req, res) => {
   }
 
   try {
-    const variant = String(req.query.variant || 'wall');
     const cachePath = await ensureCachedCover({
       release,
       userId: req.session.userId,
@@ -60,11 +65,13 @@ router.get('/cover/:id', async (req, res) => {
 
 router.get('/tapete', async (req, res) => {
   const userId = req.session.userId;
-  const maxSize = Math.min(10000, Math.max(1000, Number(req.query.maxSize || 7200)));
+  const requestedMaxSize = Number.parseInt(String(req.query.maxSize ?? ''), 10);
+  const maxSize = Math.min(10000, Math.max(1000, Number.isFinite(requestedMaxSize) ? requestedMaxSize : 7200));
   const { clause, params } = buildReleaseFilterWhere({
     userId,
     filters: req.query,
-    baseClauses: ["cover_url IS NOT NULL", "cover_url != ''"]
+    baseClauses: ["cover_url IS NOT NULL", "cover_url != ''"],
+    mediaFieldId: getCollectionFieldMap(userId).mediaFieldId
   });
 
   const releases = db.prepare(`
