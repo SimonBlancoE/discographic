@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { configDefaults, defineConfig } from 'vitest/config';
 import type { Plugin } from 'vite';
@@ -29,7 +30,7 @@ function resolveJsSpecifiersToTsSource(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [resolveJsSpecifiersToTsSource(), react()],
+  plugins: [resolveJsSpecifiersToTsSource(), react(), tailwindcss()],
   test: {
     environment: 'node',
     exclude: [...configDefaults.exclude, '.worktrees/**'],
