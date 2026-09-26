@@ -12,7 +12,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/get-docker/)
-[![Node.js](https://img.shields.io/badge/node-22.x-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-24.x-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/database-SQLite-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 <br />
@@ -28,7 +28,7 @@ Sincroniza tus discos de Discogs, explora estadísticas, puntúa y anota todo, y
 </div>
 
 > [!NOTE]
-> **v0.3.3 disponible** - la metadata publica del repositorio y la documentacion apuntan ahora solo a GitHub. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
+> **v0.4.0 disponible** - interfaz rediseñada, rareza y demanda, estado de los discos, carpetas de Discogs, otras ediciones, histórico del valor según Discogs y stack Node 24 / React 19. Ver [CHANGELOG.md](CHANGELOG.md) para la lista completa.
 
 ## ¿Qué es Discographic?
 
@@ -157,7 +157,7 @@ Tu base de datos y tus portadas cacheadas se conservan - viven en un volumen de 
 
 ## Desarrollo local
 
-Si quieres trabajar en el código en vez de solo ejecutar la aplicación, usa Node.js 22.x y pnpm:
+Si quieres trabajar en el código en vez de solo ejecutar la aplicación, usa Node.js 24.x y pnpm:
 
 ```bash
 pnpm install
@@ -183,8 +183,9 @@ Copia `.env.example` a `.env` si quieres sobrescribir los valores por defecto:
 ```env
 HOST_IP=127.0.0.1                         # IP de bind de Docker (usa tu IP LAN para exponerlo)
 PORT=3800                                 # Puerto de la API
-SESSION_SECRET=change-this-in-production  # Secreto para firmar cookies
+SESSION_SECRET=                           # Secreto para firmar cookies (vacío = uno aleatorio guardado en el volumen de datos)
 COOKIE_SECURE=false                       # Ponlo en true detrás de HTTPS
+TRUST_PROXY=                              # Saltos de proxy de confianza (1 por defecto si COOKIE_SECURE=true)
 ```
 
 Las credenciales de Discogs **no** se configuran con variables de entorno. Cada usuario las añade dentro de la propia app.
