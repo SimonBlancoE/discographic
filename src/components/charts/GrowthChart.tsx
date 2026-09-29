@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { GrowthRow } from '../../../shared/contracts/dashboardStats.js';
 import { useI18n } from '../../lib/I18nContext';
-import { tooltipProps } from './ChartTooltip';
+import { axisProps, CHART_COLORS } from './ChartTooltip';
 import type { Translate } from '../../lib/types';
 
 type GrowthPoint = {
@@ -26,17 +26,11 @@ function CustomTooltip({ active, payload, label, t }: {
   const { total, added } = chartPayload;
 
   return (
-    <div style={{
-      backgroundColor: 'rgba(2, 6, 23, 0.95)',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      borderRadius: '16px',
-      boxShadow: '0 16px 40px rgba(2, 6, 23, 0.5)',
-      padding: '10px 14px',
-    }}>
-      <p style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: 6 }}>{label}</p>
-      <p style={{ color: '#cbd5e1', margin: 0 }}>{t('dashboard.totalRecordsShort')}: <strong style={{ color: '#f1f5f9' }}>{total}</strong> {t('chart.recordsSuffix')}</p>
+    <div className="rounded-[10px] border border-white/10 bg-[#1a1a18] px-3 py-2 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+      <p className="mb-1 font-semibold text-stone-100">{label}</p>
+      <p className="m-0 text-stone-300">{t('dashboard.totalRecordsShort')}: <strong className="text-stone-100">{total}</strong> {t('chart.recordsSuffix')}</p>
       {added > 0 && (
-        <p style={{ color: '#34d399', margin: '4px 0 0', fontWeight: 600 }}>+{added} {t('dashboard.thisMonth')}</p>
+        <p className="mt-1 text-stone-400">+{added} {t('dashboard.thisMonth')}</p>
       )}
     </div>
   );
@@ -53,27 +47,27 @@ function GrowthChart({ data }: { data: GrowthRow[] }) {
   }, [data]);
 
   return (
-    <div className="chart-wrap h-80">
+    <div className="chart-wrap h-64">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={cumulative}>
           <defs>
             <linearGradient id="growthGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#fb7185" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#fb7185" stopOpacity={0.02} />
+              <stop offset="0%" stopColor={CHART_COLORS.mark} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={CHART_COLORS.mark} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="rgba(148, 163, 184, 0.15)" vertical={false} />
-          <XAxis dataKey="month" stroke="#94a3b8" />
-          <YAxis stroke="#94a3b8" />
-          <Tooltip content={({ active, payload, label }) => <CustomTooltip active={active} payload={payload} label={label} t={t} />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
+          <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+          <XAxis dataKey="month" minTickGap={24} {...axisProps} />
+          <YAxis width={40} {...axisProps} />
+          <Tooltip content={({ active, payload, label }) => <CustomTooltip active={active} payload={payload} label={label} t={t} />} cursor={{ stroke: 'rgba(255,248,235,0.15)' }} />
           <Area
             type="monotone"
             dataKey="total"
-            stroke="#fb7185"
-            strokeWidth={3}
+            stroke={CHART_COLORS.mark}
+            strokeWidth={2}
             fill="url(#growthGradient)"
             dot={false}
-            activeDot={{ r: 5, fill: '#fb7185' }}
+            activeDot={{ r: 4, fill: CHART_COLORS.mark }}
           />
         </AreaChart>
       </ResponsiveContainer>

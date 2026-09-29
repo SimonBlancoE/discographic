@@ -63,7 +63,7 @@ const RADAR_STATUS_FILTERS = [
   labelKey: string;
 }[];
 
-const RADAR_RELEASE_FIELD_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.2em] text-slate-500';
+const RADAR_RELEASE_FIELD_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.14em] text-slate-500';
 const RADAR_RELEASE_FIELD_STRONG_VALUE_CLASS = 'mt-1 font-semibold text-white';
 const RADAR_RELEASE_FIELD_VALUE_CLASS = 'mt-1 text-slate-200';
 const UPDATE_POLL_MS = 2000;
@@ -79,7 +79,7 @@ function createEmptyRadarUpdateRunStatus(): RadarUpdateRunStatus {
 function renderWantlistSyncResult(wantlist: RadarSyncResult, t: Translate) {
   return (
     <div className="rounded-3xl border border-emerald-300/20 bg-emerald-950/20 p-5 text-emerald-50">
-      <p className="text-sm uppercase tracking-[0.28em] text-emerald-200">{t('radar.syncResultTitle')}</p>
+      <p className="text-sm uppercase tracking-[0.14em] text-emerald-200">{t('radar.syncResultTitle')}</p>
       <p className="mt-2 text-base">{t('radar.syncResultSummary', { count: wantlist.totalFetched })}</p>
       <p className="mt-2 text-sm text-emerald-100/90">
         {t('radar.syncBreakdown', {
@@ -115,7 +115,7 @@ function renderRadarGettingStarted({
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.28em] text-brand-100">{t('radar.eyebrow')}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-brand-100">{t('radar.eyebrow')}</p>
           <h2 className="font-display text-3xl text-white">{t('radar.gettingStartedTitle')}</h2>
           <p className="max-w-3xl text-sm text-slate-200">{t('radar.gettingStartedBody')}</p>
         </div>
@@ -214,7 +214,7 @@ function RadarFilterPanel({
   return (
     <div data-radar-filter-panel="true" className="rounded-3xl border border-white/10 bg-slate-950/35 p-6">
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.filtersTitle')}</p>
+        <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t('radar.filtersTitle')}</p>
         <p className="text-sm text-slate-400">
           {t('radar.filterCount', {
             count: getRadarFilterCount(items, selectedFilter),
@@ -240,7 +240,7 @@ function RadarFilterPanel({
               onClick={() => onFilterChange(id)}
               className={`min-h-28 rounded-3xl border p-4 text-left transition ${buttonClassName}`}
             >
-              <p className="text-xs uppercase leading-5 tracking-[0.22em] text-slate-400">{t(labelKey)}</p>
+              <p className="text-xs uppercase leading-5 tracking-[0.14em] text-slate-400">{t(labelKey)}</p>
               <p className="mt-4 font-display text-4xl text-white">{metricCounts[id]}</p>
             </button>
           );
@@ -351,7 +351,7 @@ function RadarReleaseRow({
             ) : (
               <div
                 data-radar-cover={String(releaseKey)}
-                className="flex h-20 w-20 flex-none items-end rounded-2xl border border-dashed border-white/10 bg-slate-900/80 p-3 text-[11px] uppercase tracking-[0.22em] text-slate-500 transition group-hover:border-brand-100/40"
+                className="flex h-20 w-20 flex-none items-end rounded-2xl border border-dashed border-white/10 bg-slate-900/80 p-3 text-[11px] uppercase tracking-[0.14em] text-slate-500 transition group-hover:border-brand-100/40"
               >
                 #{item.release_id}
               </div>
@@ -359,7 +359,7 @@ function RadarReleaseRow({
 
             <div className="min-w-0 flex-1 space-y-3">
               <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">#{item.release_id}</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">#{item.release_id}</p>
                 <p className="truncate text-sm text-slate-300">{item.artist}</p>
                 <p className="font-display text-xl leading-tight text-white transition group-hover:text-brand-100">
                   {item.title}
@@ -396,7 +396,7 @@ function RadarReleaseRow({
               <Link
                 to={`/release/${collectionMatch.primary_release_id}`}
                 data-radar-collection={String(releaseKey)}
-                className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
+                className="inline-flex items-center text-sm text-brand-200 no-underline transition hover:text-brand-100"
               >
                 {t(getRadarCollectionMatchLabelKey(collectionMatch.copy_count), {
                   count: collectionMatch.copy_count,
@@ -667,7 +667,7 @@ function Radar() {
   if (!capabilities.canUseRadar) {
     return (
       <section className="glass-panel mx-auto max-w-3xl space-y-5 p-8 text-center">
-        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
+        <p className="text-sm uppercase tracking-[0.14em] text-brand-200">{t('radar.eyebrow')}</p>
         <div className="space-y-3">
           <h2 className="font-display text-4xl text-white">{t('radar.blockedTitle')}</h2>
           <p className="text-base text-slate-300">{t('radar.blockedBody')}</p>
@@ -684,7 +684,7 @@ function Radar() {
   return (
     <section className="glass-panel mx-auto max-w-5xl space-y-6 p-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('radar.eyebrow')}</p>
+        <p className="text-sm uppercase tracking-[0.14em] text-brand-200">{t('radar.eyebrow')}</p>
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -734,7 +734,7 @@ function Radar() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.updateTitle')}</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t('radar.updateTitle')}</p>
               <h2 className="mt-2 font-display text-3xl text-white">{t(`radar.updatePhase.${updateRun.phase}`)}</h2>
             </div>
             <p className="max-w-2xl text-sm text-slate-300">{t('radar.updateBody')}</p>
@@ -757,19 +757,19 @@ function Radar() {
 
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-900/80">
           <div
-            className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400 transition-all duration-500"
+            className="h-full rounded-full bg-brand-400 transition-all duration-500"
             style={{ width: `${updateRun.progressPercent}%` }}
           />
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-4">
           <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.updateStatus')}</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t('radar.updateStatus')}</p>
             <p className="mt-3 font-display text-2xl text-white">{t(`radar.updatePhase.${updateRun.phase}`)}</p>
           </article>
           {UPDATE_STATUS_CARDS.map(({ labelKey, valueKey }) => (
             <article key={labelKey} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t(labelKey)}</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t(labelKey)}</p>
               <p className="mt-3 font-display text-2xl text-white">{updateRun[valueKey]}</p>
             </article>
           ))}

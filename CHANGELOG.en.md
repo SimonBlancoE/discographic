@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
-## [0.4.0] - 2026-09-26
+## [0.4.0] - 2026-09-29
 
 Release with an interface redesign, new Discogs-powered features, a full stack upgrade and production hardening.
 
@@ -20,6 +20,9 @@ Release with an interface redesign, new Discogs-powered features, a full stack u
 - **Value according to Discogs** - collection minimum, median and maximum, with history saved on every sync.
 - **Suggested price by condition** - Discogs suggested price per grade, highlighting your copy (requires Discogs seller settings).
 - **Interface redesign** - sidebar and mobile tab bar, cover grid view, filter chips and collection state in the URL.
+- **Quieter design** - warm palette with a single gold accent, single-hue charts, and a welcome panel with real shortcuts instead of the dashboard carousel.
+- **Narrow screens** - figures and cards adapt to their panel width (container queries), with no overflow from 360 px phones to vertical monitors.
+- **README** - rewritten with fresh English and Spanish screenshots.
 
 ### Changed
 

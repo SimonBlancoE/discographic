@@ -13,7 +13,7 @@ import {
 function CoverCard({ release, showTitles, style }: { release: WallRelease; showTitles: boolean; style: CSSProperties }) {
   return (
     <Link to={`/release/${release.id}`} className="cover-wall-card group absolute" style={style}>
-      <div className="overflow-hidden rounded-[22px] border border-white/10 bg-slate-950/70 shadow-[0_18px_40px_rgba(2,6,23,0.32)]">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70 shadow-[0_18px_40px_rgba(2,6,23,0.32)]">
         <div className="aspect-square overflow-hidden bg-slate-900/80">
           <CoverImage
             src={release.cover_url ? release.wall_cover_url : null}

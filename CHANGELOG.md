@@ -7,7 +7,7 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
-## [0.4.0] - 2026-09-26
+## [0.4.0] - 2026-09-29
 
 Release con rediseño de la interfaz, nuevas funciones basadas en la API de Discogs, actualización completa del stack y endurecimiento para producción.
 
@@ -20,6 +20,9 @@ Release con rediseño de la interfaz, nuevas funciones basadas en la API de Disc
 - **Valor según Discogs** - mínimo, mediana y máximo de la colección, con histórico guardado en cada sincronización.
 - **Precio sugerido por estado** - precio sugerido por Discogs para cada grado, resaltando el de tu copia (requiere ajustes de vendedor en Discogs).
 - **Rediseño de la interfaz** - navegación lateral y barra inferior en móvil, vista de portadas en la colección, filtros con etiquetas y estado en la URL.
+- **Diseño más sobrio** - paleta cálida con un único acento dorado, gráficos de un solo tono, bienvenida con accesos directos en lugar del carrusel del panel principal.
+- **Pantallas estrechas** - las cifras y tarjetas se adaptan al ancho de su panel (container queries), sin desbordes de 360 px a monitores verticales.
+- **README** - reescrito y con capturas nuevas en inglés y español.
 
 ### Cambiado
 

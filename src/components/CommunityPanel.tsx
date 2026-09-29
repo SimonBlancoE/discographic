@@ -130,7 +130,7 @@ function CommunityPanel({ community, onUpdated }: { community: DashboardCommunit
               : t('community.pending', { count: formatNumber(pending), minutes })}
             {running ? (
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10 sm:w-72" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full rounded-full bg-linear-to-r from-brand-400 to-cyan-300 transition-all" style={{ width: `${progress}%` }} />
+                <div className="h-full rounded-full bg-brand-400 transition-all" style={{ width: `${progress}%` }} />
               </div>
             ) : null}
           </div>

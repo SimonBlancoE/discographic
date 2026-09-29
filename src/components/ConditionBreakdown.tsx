@@ -77,7 +77,7 @@ function ConditionBreakdown({ conditions, folders }: { conditions: NamedCountRow
       {folders.length ? (
         <div>
           <h3 className="flex items-center gap-2 font-display text-xl text-white">
-            <Icon name="folder" size={18} className="text-cyan-300" />
+            <Icon name="folder" size={18} className="text-brand-300" />
             {t('folders.title')}
           </h3>
           <p className="mt-1 text-sm text-slate-400">{t('folders.subtitle')}</p>
@@ -86,7 +86,7 @@ function ConditionBreakdown({ conditions, folders }: { conditions: NamedCountRow
               <li key={folder.id}>
                 <Link
                   to={`/collection?${new URLSearchParams({ folder: String(folder.id) }).toString()}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/3 px-3 py-2 text-sm transition hover:border-cyan-300/30 hover:bg-white/6"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/3 px-3 py-2 text-sm transition hover:border-brand-300/30 hover:bg-white/6"
                 >
                   <span className="flex min-w-0 items-center gap-2 text-slate-200">
                     <Icon name="folder" size={14} className="flex-none text-slate-500" />

@@ -11,11 +11,11 @@ describe('buildBadgeGenres', () => {
     expect(result).toEqual([
       {
         name: 'Techno',
-        bg: 'radial-gradient(circle at 30% 30%, #fef3c7, #f59e0b 70%, #78350f)'
+        bg: 'radial-gradient(circle at 35% 35%, #efd9ab, #c9a15c 70%, #7a5a2a)'
       },
       {
         name: 'House',
-        bg: 'linear-gradient(135deg, #67e8f9, #a78bfa)'
+        bg: 'radial-gradient(circle at 35% 35%, #f3eee4, #cfc6b4 70%, #8a806c)'
       }
     ]);
   });

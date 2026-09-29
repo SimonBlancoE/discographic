@@ -439,7 +439,7 @@ function Collection() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/4 px-3 py-2 text-sm text-slate-200">
-            <span className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('collection.currency')}</span>
+            <span className="text-xs uppercase tracking-[0.14em] text-slate-400">{t('collection.currency')}</span>
             <select
               value={displayCurrency}
               onChange={(event) => handleCurrencyChange(event.target.value as Currency)}
@@ -547,7 +547,7 @@ function Collection() {
 
           <section className="glass-panel flex flex-col gap-3 p-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{t('collection.savedViews')}</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t('collection.savedViews')}</p>
               <p className="mt-1 text-sm text-slate-400">{t('collection.savedViewsHint')}</p>
             </div>
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">

@@ -1,7 +1,7 @@
 import { useEffect, type CSSProperties } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-const COLORS = ['#fb7185', '#67e8f9', '#fbbf24', '#34d399', '#f9a8d4'];
+const COLORS = ['#d1a45a', '#ecd7ae', '#f1eee7', '#b98a3e', '#a8a29e'];
 
 function pieceStyle(index: number, reducedMotion: boolean): CSSProperties {
   const rotation = -18 + (index * 7);
@@ -31,7 +31,7 @@ function ConfettiBurst({ label, onDone }: { label: string; onDone: () => void })
 
   return (
     <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
-      <div className="absolute left-1/2 top-20 -translate-x-1/2 rounded-full border border-brand-300/30 bg-slate-950/80 px-4 py-2 text-xs uppercase tracking-[0.3em] text-brand-100 shadow-[0_14px_40px_rgba(2,6,23,0.45)] backdrop-blur-xl">
+      <div className="absolute left-1/2 top-20 -translate-x-1/2 rounded-full border border-brand-300/30 bg-slate-950/80 px-4 py-2 text-xs uppercase tracking-[0.14em] text-brand-100 shadow-[0_14px_40px_rgba(2,6,23,0.45)] backdrop-blur-xl">
         {label}
       </div>
       {Array.from({ length: 22 }).map((_, index) => (

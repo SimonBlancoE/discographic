@@ -31,7 +31,7 @@ function getCollectionLink(item: RadarRelease, collectionMatch: RadarCollectionM
     <Link
       to={`/release/${collectionMatch.primary_release_id}`}
       data-radar-collection={String(item.id ?? item.release_id ?? 0)}
-      className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
+      className="inline-flex items-center text-sm text-brand-200 no-underline transition hover:text-brand-100"
     >
       {t(getRadarCollectionMatchLabelKey(collectionMatch.copy_count), {
         count: collectionMatch.copy_count,
@@ -293,11 +293,11 @@ function RadarReleaseDetail() {
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.detailSourceOrigin')}</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t('radar.detailSourceOrigin')}</p>
             <p className="mt-3 text-lg text-white">{t(getRadarSourceOriginLabelKey(release.source.origin))}</p>
           </article>
           <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{t('radar.detailSourceStatus')}</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">{t('radar.detailSourceStatus')}</p>
             <p className="mt-3 text-lg text-white">{t(getRadarSourceStatusLabelKey(release.source.status))}</p>
           </article>
         </div>
