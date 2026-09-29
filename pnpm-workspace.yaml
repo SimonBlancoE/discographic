@@ -12,3 +12,7 @@ trustPolicy: no-downgrade
 trustPolicyExclude:
   - undici-types
   - semver
+
+# Type packages declare `@types/express: "*"`; keep them on the same major as express itself.
+overrides:
+  '@types/express': ^5.0.6

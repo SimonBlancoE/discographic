@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Radar from '../src/pages/Radar';
 import { formatCurrency, formatDate } from '../src/lib/format.js';
@@ -894,8 +894,8 @@ describe('Radar page', () => {
     const text = rendered.textContent ?? '';
 
     expect(missingLink).toBeNull();
-    expect(singleLink?.getAttribute('href')).toBe('/collection/91');
-    expect(multipleLink?.getAttribute('href')).toBe('/collection/92');
+    expect(singleLink?.getAttribute('href')).toBe('/release/91');
+    expect(multipleLink?.getAttribute('href')).toBe('/release/92');
     expect(text).toContain('View 1 copy in your collection');
     expect(text).toContain('View 3 copies in your collection');
   });

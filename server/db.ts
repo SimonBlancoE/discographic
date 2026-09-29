@@ -2,12 +2,16 @@
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { cleanupStoredNotes, normalizeNotes, notesToText, parseStoredNotes } from './services/notes.js';
+import { cleanupStoredNotes, getNoteFieldText, normalizeNotes, parseStoredNotes } from './services/notes.js';
 import { parseJson, stringifyJson } from './services/jsonStorage.js';
-import { migrateMarketplaceStatus } from './services/dbMigrations.js';
+import { migrateCommunityColumns, migrateMarketplaceStatus } from './services/dbMigrations.js';
+import { normalizeCollectionFieldMap, normalizeCollectionFolders } from '../shared/contracts/collectionFields.js';
 import { resetRadarRuntimeState } from './services/radarRuntimeState.js';
 import { clearRadarRows, getRadarSnapshot, migrateRadarStorage, updateRadarLocalDecision } from './services/radarStorage.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
+import { cancelUserJobs } from './services/userJobs.js';
+import { clearCollectionValueSnapshots, migrateCollectionValueSnapshots } from './services/collectionValue.js';
+import { USER_PREFERENCE_KEYS } from '../shared/contracts/preferences.js';
 
 const { dataDir } = resolveRuntimePaths(import.meta.url);
 
@@ -216,6 +220,8 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_releases_user_listing_price_eur ON releases(user_id, listing_price_eur);
     CREATE INDEX IF NOT EXISTS idx_releases_user_last_seen_sync ON releases(user_id, last_seen_sync_id);
     CREATE INDEX IF NOT EXISTS idx_sync_log_user_started ON sync_log(user_id, started_at);
+    CREATE INDEX IF NOT EXISTS idx_releases_user_master ON releases(user_id, master_id);
+    CREATE INDEX IF NOT EXISTS idx_releases_user_want ON releases(user_id, community_want);
   `);
 }
 
@@ -260,6 +266,8 @@ migrateUsersRole();
 migrateListingColumns();
 migrateLastSeenSyncId();
 migrateMarketplaceStatus(db);
+migrateCommunityColumns(db);
+migrateCollectionValueSnapshots(db);
 migrateRadarStorage(db);
 createIndexes();
 cleanupStoredNotes(db);
@@ -279,8 +287,48 @@ export function hydrateRelease(release) {
   hydrated.notes = normalizeNotes(parseStoredNotes(release.notes));
   hydrated.tracklist = parseJson(release.tracklist, []);
   hydrated.raw_json = release.raw_json ? parseJson(release.raw_json, {}) : null;
-  hydrated.notes_text = notesToText(hydrated.notes);
+  const fieldMap = getCollectionFieldMap(release.user_id);
+  hydrated.notes_text = getNoteFieldText(hydrated.notes, fieldMap.notesFieldId);
+  hydrated.media_condition = fieldMap.mediaFieldId ? getNoteFieldText(hydrated.notes, fieldMap.mediaFieldId) || null : null;
+  hydrated.sleeve_condition = fieldMap.sleeveFieldId ? getNoteFieldText(hydrated.notes, fieldMap.sleeveFieldId) || null : null;
   return hydrated;
+}
+
+const COLLECTION_FIELDS_KEY = 'discogs_collection_fields';
+const COLLECTION_FOLDERS_KEY = 'discogs_collection_folders';
+const fieldMapCache = new Map();
+
+export function getCollectionFieldMap(userId) {
+  if (userId == null) {
+    return normalizeCollectionFieldMap(null);
+  }
+
+  if (!fieldMapCache.has(userId)) {
+    fieldMapCache.set(userId, normalizeCollectionFieldMap(parseJson(getSettingForUser(userId, COLLECTION_FIELDS_KEY), null)));
+  }
+
+  return fieldMapCache.get(userId);
+}
+
+export function setCollectionFieldMap(userId, discogsFieldsPayload) {
+  const map = normalizeCollectionFieldMap(discogsFieldsPayload);
+  setSettingForUser(userId, COLLECTION_FIELDS_KEY, JSON.stringify(map));
+  fieldMapCache.set(userId, map);
+  return map;
+}
+
+export function hasStoredCollectionFieldMap(userId) {
+  return getSettingForUser(userId, COLLECTION_FIELDS_KEY) != null;
+}
+
+export function getCollectionFolders(userId) {
+  return normalizeCollectionFolders(parseJson(getSettingForUser(userId, COLLECTION_FOLDERS_KEY), []));
+}
+
+export function setCollectionFolders(userId, discogsFoldersPayload) {
+  const folders = normalizeCollectionFolders(discogsFoldersPayload);
+  setSettingForUser(userId, COLLECTION_FOLDERS_KEY, JSON.stringify(folders));
+  return folders;
 }
 
 export function getSettingForUser(userId, key, fallback = null) {
@@ -315,6 +363,9 @@ export function listUsers() {
 }
 
 export function deleteUser(id) {
+  cancelUserJobs(id);
+  fieldMapCache.delete(id);
+  clearCollectionValueSnapshots(db, id);
   resetRadarRuntimeState(id);
   db.prepare('DELETE FROM discogs_accounts WHERE user_id = ?').run(id);
   clearRadarRows(db, id);
@@ -365,11 +416,15 @@ export function upsertDiscogsAccount(userId, discogsUsername, discogsToken) {
 }
 
 export function clearUserCollectionData(userId) {
+  cancelUserJobs(userId);
+  fieldMapCache.delete(userId);
+  clearCollectionValueSnapshots(db, userId);
   resetRadarRuntimeState(userId);
   clearRadarRows(db, userId);
   db.prepare('DELETE FROM releases WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM sync_log WHERE user_id = ?').run(userId);
-  db.prepare('DELETE FROM settings WHERE user_id = ?').run(userId);
+  const keep = USER_PREFERENCE_KEYS.map(() => '?').join(', ');
+  db.prepare(`DELETE FROM settings WHERE user_id = ? AND key NOT IN (${keep})`).run(userId, ...USER_PREFERENCE_KEYS);
 }
 
 export function migrateLegacyDataToUser(userId) {

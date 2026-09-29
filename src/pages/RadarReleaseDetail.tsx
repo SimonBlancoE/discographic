@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { Link, UNSAFE_NavigationContext, useBeforeUnload, useParams } from 'react-router-dom';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { Link, useBeforeUnload, useBlocker, useParams } from 'react-router';
 import {
   type RadarCollectionMatch,
   type RadarMinimumCondition,
@@ -29,7 +29,7 @@ function getCollectionLink(item: RadarRelease, collectionMatch: RadarCollectionM
 
   return (
     <Link
-      to={`/collection/${collectionMatch.primary_release_id}`}
+      to={`/release/${collectionMatch.primary_release_id}`}
       data-radar-collection={String(item.id ?? item.release_id ?? 0)}
       className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
     >
@@ -43,14 +43,6 @@ function getCollectionLink(item: RadarRelease, collectionMatch: RadarCollectionM
 type RadarDetailFrameProps = {
   children: ReactNode;
   t: Translate;
-};
-
-type NavigationTransition = {
-  retry: () => void;
-};
-
-type BlockableNavigator = {
-  block?: (blocker: (transition: NavigationTransition) => void) => () => void;
 };
 
 function RadarDetailFrame({ children, t }: RadarDetailFrameProps) {
@@ -106,8 +98,6 @@ function getRadarSaveStatus({ saving, saveFailed, hasUnsavedChanges }: RadarSave
 }
 
 function useUnsavedRadarChangesWarning(hasUnsavedChanges: boolean, confirmMessage: string) {
-  const navigationContext = useContext(UNSAFE_NavigationContext);
-
   const handleBeforeUnload = useCallback((event: BeforeUnloadEvent) => {
     if (!hasUnsavedChanges) {
       return;
@@ -119,28 +109,22 @@ function useUnsavedRadarChangesWarning(hasUnsavedChanges: boolean, confirmMessag
 
   useBeforeUnload(handleBeforeUnload);
 
+  // Covers every in-app navigation: links, the sidebar and the browser Back/Forward buttons.
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => (
+    hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
+  ));
+
   useEffect(() => {
-    if (!hasUnsavedChanges) {
+    if (blocker.state !== 'blocked') {
       return;
     }
 
-    const navigator = navigationContext.navigator as BlockableNavigator;
-
-    if (typeof navigator.block !== 'function') {
-      return;
+    if (window.confirm(confirmMessage)) {
+      blocker.proceed();
+    } else {
+      blocker.reset();
     }
-
-    const unblock = navigator.block((transition) => {
-      if (!window.confirm(confirmMessage)) {
-        return;
-      }
-
-      unblock();
-      transition.retry();
-    });
-
-    return unblock;
-  }, [confirmMessage, hasUnsavedChanges, navigationContext.navigator]);
+  }, [blocker, confirmMessage]);
 }
 
 function RadarReleaseDetail() {

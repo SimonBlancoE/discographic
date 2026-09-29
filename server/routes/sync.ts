@@ -1,6 +1,9 @@
 // @ts-nocheck
 import express from 'express';
-import db, { normalizeNotes, stringifyJson } from '../db.js';
+import db, { normalizeNotes, setCollectionFieldMap, setCollectionFolders, stringifyJson } from '../db.js';
+import { registerUserJobCanceller } from '../services/userJobs.js';
+import { recordCollectionValue } from '../services/collectionValue.js';
+import { buildCommunityUpdate, getCommunityBackfillCount, getCommunityBackfillRows } from '../services/communityStats.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { ensureCachedCover, removeCachedCovers } from '../services/coverMedia.js';
 import { translate } from '../../shared/i18n.js';
@@ -15,6 +18,37 @@ const router = express.Router();
 const PER_PAGE = 100;
 const ENRICH_BATCH_SIZE = 30;
 const syncStates = new Map();
+// One token per running job so a stop + restart cannot leave two loops alive for the same user.
+const syncRuns = new Map();
+const enrichRuns = new Map();
+const communityRuns = new Map();
+
+function startRun(registry, userId) {
+  const run = { stopped: false };
+  registry.set(userId, run);
+  return run;
+}
+
+function stopRun(registry, userId) {
+  const run = registry.get(userId);
+  if (run) {
+    run.stopped = true;
+  }
+  registry.delete(userId);
+}
+
+function finishRun(registry, userId, run) {
+  if (registry.get(userId) === run) {
+    registry.delete(userId);
+  }
+}
+
+registerUserJobCanceller((userId) => {
+  stopRun(syncRuns, userId);
+  stopRun(enrichRuns, userId);
+  stopRun(communityRuns, userId);
+  syncStates.delete(userId);
+});
 
 router.use(requireAuth);
 
@@ -62,6 +96,7 @@ function mapCollectionItem(item) {
     formats: stringifyJson(info.formats || []),
     labels: stringifyJson(info.labels || []),
     country: null,
+    master_id: info.master_id || null,
     cover_url: info.cover_image || info.thumb || null,
     rating: item.rating || 0,
     notes: stringifyJson(normalizeNotes(item.notes)),
@@ -75,8 +110,8 @@ const upsertStmt = db.prepare(`
   INSERT INTO releases (
     user_id, release_id, instance_id, title, artist, year, genres, styles, formats,
     labels, country, cover_url, rating, notes, date_added, estimated_value, marketplace_status, last_seen_sync_id,
-    tracklist, folder_id, raw_json, synced_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    tracklist, folder_id, raw_json, master_id, synced_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   ON CONFLICT(user_id, instance_id) DO UPDATE SET
     release_id = excluded.release_id,
     title = excluded.title,
@@ -86,7 +121,8 @@ const upsertStmt = db.prepare(`
     styles = excluded.styles,
     formats = excluded.formats,
     labels = excluded.labels,
-    country = excluded.country,
+    country = COALESCE(excluded.country, releases.country),
+    master_id = COALESCE(excluded.master_id, releases.master_id),
     cover_url = excluded.cover_url,
     rating = excluded.rating,
     notes = excluded.notes,
@@ -121,13 +157,45 @@ const upsertBatch = db.transaction((userId, syncId, items) => {
       syncId,
       '[]',
       mapped.folder_id,
-      mapped.raw_json
+      mapped.raw_json,
+      mapped.master_id
     );
   }
 });
 
-async function runSync({ userId, logId, discogs, locale }) {
+async function syncCollectionMetadata({ userId, discogs }) {
+  // Field definitions (condition grading, notes) and folders: one request each per sync.
+  const [fields, folders] = await Promise.allSettled([
+    discogs.getCustomFields(),
+    discogs.getCollectionFolders()
+  ]);
+
+  if (fields.status === 'fulfilled' && fields.value) {
+    setCollectionFieldMap(userId, fields.value);
+  } else if (fields.status === 'rejected') {
+    console.log('[sync] collection fields unavailable:', fields.reason?.message);
+  }
+
+  // One valuation snapshot per sync builds the value history chart over time.
+  try {
+    recordCollectionValue(db, userId, await discogs.getCollectionValue());
+  } catch (error) {
+    console.log('[sync] collection value unavailable:', error.message);
+  }
+
+  if (folders.status === 'fulfilled' && folders.value) {
+    setCollectionFolders(userId, folders.value);
+  } else if (folders.status === 'rejected') {
+    console.log('[sync] collection folders unavailable:', folders.reason?.message);
+  }
+}
+
+async function runSync({ userId, logId, discogs, locale, run }) {
   const firstPage = await discogs.getCollection(1, PER_PAGE);
+  if (!firstPage?.pagination) {
+    throw new Error(syncT(locale, 'backend.sync.invalidPayload'));
+  }
+
   const totalPages = firstPage?.pagination?.pages || 0;
   const totalItems = firstPage?.pagination?.items || 0;
 
@@ -143,7 +211,15 @@ async function runSync({ userId, logId, discogs, locale }) {
 
   for (let page = 1; page <= totalPages; page += 1) {
     const payload = page === 1 ? firstPage : await discogs.getCollection(page, PER_PAGE);
-    const releases = payload.releases || [];
+    if (run.stopped) {
+      return;
+    }
+
+    if (!Array.isArray(payload?.releases)) {
+      throw new Error(syncT(locale, 'backend.sync.invalidPayload'));
+    }
+
+    const releases = payload.releases;
 
     if (releases.length > 0) {
       upsertBatch(userId, logId, releases);
@@ -156,14 +232,32 @@ async function runSync({ userId, logId, discogs, locale }) {
     });
   }
 
-  // Reconciliation assumes this is a successful full collection sync.
-  // If sync is ever made partial/incremental in the future, do not prune
-  // unseen rows here unless the run can still prove complete coverage.
-  const removedReleaseIds = pruneUnseenReleases(db, userId, logId);
+  await syncCollectionMetadata({ userId, discogs });
+  if (run.stopped) {
+    return;
+  }
+
+  // Reconciliation assumes this is a successful full collection sync. Items that shift across
+  // page boundaries while the collection changes on Discogs can be missed, so only prune when
+  // every item Discogs reported was actually seen.
+  // Distinct instances seen, not rows fetched: a removal plus an addition during the sync can shift
+  // pages so one item is fetched twice and another never, while the row count still matches.
+  const seenInstances = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND last_seen_sync_id = ?')
+    .get(userId, logId).count;
+  const completeCoverage = seenInstances >= totalItems;
+  const removedReleaseIds = completeCoverage ? pruneUnseenReleases(db, userId, logId) : [];
+  if (!completeCoverage) {
+    console.log(`[sync] incomplete coverage (${seenInstances}/${totalItems}); skipping prune`);
+  }
   if (removedReleaseIds.length) {
     await removeCachedCovers({ userId, releaseIds: removedReleaseIds }).catch((error) => {
       console.log('[sync] cache cleanup failed:', error.message);
     });
+  }
+
+  // A run cancelled by an account reset must not report into the state of whatever runs next.
+  if (run.stopped) {
+    return;
   }
 
   db.prepare(`
@@ -200,6 +294,10 @@ async function runSync({ userId, logId, discogs, locale }) {
     }
   });
 
+  if (run.stopped) {
+    return;
+  }
+
   await syncInventory({ userId, discogs }).catch((error) => {
     console.log('[sync] inventory sync failed:', error.message);
     setSyncState(userId, {
@@ -209,6 +307,10 @@ async function runSync({ userId, logId, discogs, locale }) {
       }
     });
   });
+
+  if (run.stopped) {
+    return;
+  }
 
   warmupThumbnails(userId).catch((error) => {
     setSyncState(userId, {
@@ -224,9 +326,6 @@ async function runSync({ userId, logId, discogs, locale }) {
 
 async function syncInventory({ userId, discogs }) {
   try {
-    // Clear existing listing data — items may have been delisted
-    db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE user_id = ?').run(userId);
-
     // Fetch all pages of the user's inventory
     const firstPage = await discogs.getInventory(1, 100);
     const totalPages = firstPage?.pagination?.pages || 0;
@@ -237,7 +336,11 @@ async function syncInventory({ userId, discogs }) {
       allListings.push(...(payload?.listings || []));
     }
 
-    if (!allListings.length) return;
+    const clearListings = db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE user_id = ?');
+    if (!allListings.length) {
+      clearListings.run(userId);
+      return;
+    }
 
     const exchangeSnapshot = await getExchangeSnapshot(
       allListings.map((listing) => listing.price?.currency).filter(Boolean)
@@ -251,7 +354,7 @@ async function syncInventory({ userId, discogs }) {
 
       const originalCurrency = (listing.price?.currency || DEFAULT_CURRENCY).toUpperCase();
       const originalPrice = listing.price?.value != null ? Number(listing.price.value) : null;
-      const priceEur = originalPrice == null
+      const priceEur = originalPrice == null || !exchangeSnapshot.rates?.[originalCurrency]
         ? null
         : convertAmountWithRates(originalPrice, originalCurrency, DEFAULT_CURRENCY, exchangeSnapshot.rates);
 
@@ -277,7 +380,9 @@ async function syncInventory({ userId, discogs }) {
 
     // Update releases that match
     const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ?, listing_currency = ?, listing_price_eur = ? WHERE user_id = ? AND release_id = ?');
+    // Listings are replaced atomically so a failed fetch never leaves the collection looking delisted.
     const updateTx = db.transaction(() => {
+      clearListings.run(userId);
       for (const [releaseId, listing] of listingMap) {
         updateStmt.run(listing.status, listing.price, listing.currency, listing.priceEur, userId, releaseId);
       }
@@ -362,15 +467,24 @@ async function warmupThumbnails(userId) {
   }
 }
 
-const enrichRunning = new Set();
+const updateEnrichedRelease = db.prepare(`
+  UPDATE releases
+  SET estimated_value = ?,
+      marketplace_status = ?,
+      country = COALESCE(?, country),
+      tracklist = CASE WHEN tracklist IS NULL OR tracklist = '[]' THEN ? ELSE tracklist END,
+      master_id = COALESCE(?, master_id),
+      community_have = ?,
+      community_want = ?,
+      community_rating = ?,
+      community_rating_count = ?,
+      num_for_sale = ?,
+      synced_at = CURRENT_TIMESTAMP
+  WHERE id = ? AND user_id = ?
+`);
 
-async function runEnrichAll({ userId, discogs }) {
+async function runEnrichAll({ userId, discogs, run }) {
   const { locale = 'es' } = getSyncState(userId);
-  if (enrichRunning.has(userId)) {
-    return;
-  }
-
-  enrichRunning.add(userId);
 
   try {
     const pendingRows = getPendingEnrichmentRows(db, userId);
@@ -388,10 +502,10 @@ async function runEnrichAll({ userId, discogs }) {
       enrichment: { status: 'running', pending: totalPending, current: 0, total: totalPending, message: syncT(locale, 'backend.sync.enrichProgress', { current: 0, total: totalPending }) }
     });
 
-    for (let offset = 0; offset < pendingRows.length && enrichRunning.has(userId); offset += ENRICH_BATCH_SIZE) {
+    for (let offset = 0; offset < pendingRows.length && !run.stopped; offset += ENRICH_BATCH_SIZE) {
       const rows = pendingRows.slice(offset, offset + ENRICH_BATCH_SIZE);
       for (const row of rows) {
-        if (!enrichRunning.has(userId)) break;
+        if (run.stopped) break;
 
         try {
           const detail = await discogs.getRelease(row.release_id);
@@ -401,19 +515,18 @@ async function runEnrichAll({ userId, discogs }) {
             ? marketplace.estimatedValue
             : null;
 
-          db.prepare(`
-            UPDATE releases
-            SET estimated_value = ?,
-                marketplace_status = ?,
-                country = COALESCE(?, country),
-                tracklist = CASE WHEN tracklist IS NULL OR tracklist = '[]' THEN ? ELSE tracklist END,
-                synced_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND user_id = ?
-          `).run(
+          const community = buildCommunityUpdate(detail);
+          updateEnrichedRelease.run(
             estimatedValue,
             marketplace.marketplaceStatus,
-            detail.country || null,
-            stringifyJson(detail.tracklist || []),
+            detail?.country || null,
+            stringifyJson(detail?.tracklist || []),
+            community.master_id,
+            community.community_have,
+            community.community_want,
+            community.community_rating,
+            community.community_rating_count,
+            community.num_for_sale,
             row.id,
             userId
           );
@@ -435,6 +548,11 @@ async function runEnrichAll({ userId, discogs }) {
       }
     }
 
+    // A newer run owns the status once this one has been stopped and replaced.
+    if (enrichRuns.has(userId) && enrichRuns.get(userId) !== run) {
+      return;
+    }
+
     const finalPending = getPendingEnrichmentCount(db, userId);
 
     setSyncState(userId, {
@@ -454,7 +572,67 @@ async function runEnrichAll({ userId, discogs }) {
       enrichment: { status: 'failed', pending: 0, current: 0, total: 0, message: error.message }
     });
   } finally {
-    enrichRunning.delete(userId);
+    finishRun(enrichRuns, userId, run);
+  }
+}
+
+const updateCommunity = db.prepare(`
+  UPDATE releases
+  SET master_id = COALESCE(?, master_id),
+      community_have = ?,
+      community_want = ?,
+      community_rating = ?,
+      community_rating_count = ?,
+      num_for_sale = ?,
+      country = COALESCE(?, country)
+  WHERE id = ? AND user_id = ?
+`);
+
+function getCommunityState(userId) {
+  return getSyncState(userId).community || { status: 'idle', current: 0, total: 0 };
+}
+
+async function runCommunityRefresh({ userId, discogs, run }) {
+  const rows = getCommunityBackfillRows(db, userId);
+  let processed = 0;
+  setSyncState(userId, { community: { status: 'running', current: 0, total: rows.length } });
+
+  try {
+    for (const row of rows) {
+      if (run.stopped) break;
+
+      try {
+        const detail = await discogs.getRelease(row.release_id);
+        const community = buildCommunityUpdate(detail);
+        updateCommunity.run(
+          community.master_id,
+          // 0 marks "fetched, nobody has it" so the row leaves the backfill queue.
+          community.community_have ?? 0,
+          community.community_want ?? 0,
+          community.community_rating,
+          community.community_rating_count,
+          community.num_for_sale,
+          detail?.country || null,
+          row.id,
+          userId
+        );
+      } catch (error) {
+        console.log('[community] error:', row.release_id, error.message);
+      }
+
+      processed += 1;
+      setSyncState(userId, { community: { status: 'running', current: processed, total: rows.length } });
+    }
+
+    if (communityRuns.has(userId) && communityRuns.get(userId) !== run) {
+      return;
+    }
+
+    setSyncState(userId, { community: { status: 'completed', current: processed, total: rows.length } });
+  } catch (error) {
+    setSyncState(userId, { community: { status: 'failed', current: processed, total: rows.length, message: error.message } });
+  } finally {
+    finishRun(communityRuns, userId, run);
   }
 }
 
@@ -490,7 +668,8 @@ router.post('/', async (req, res) => {
 
     res.json({ ok: true });
 
-    runSync({ userId, logId, discogs, locale: req.locale }).catch((error) => {
+    const run = startRun(syncRuns, userId);
+    runSync({ userId, logId, discogs, locale: req.locale, run }).catch((error) => {
       db.prepare(`
         UPDATE sync_log
         SET finished_at = CURRENT_TIMESTAMP,
@@ -504,6 +683,8 @@ router.post('/', async (req, res) => {
         message: error.message,
         finishedAt: new Date().toISOString()
       });
+    }).finally(() => {
+      finishRun(syncRuns, userId, run);
     });
   } catch (error) {
     return res.status(400).json({ error: error.message });
@@ -513,15 +694,16 @@ router.post('/', async (req, res) => {
 router.post('/enrich', async (req, res) => {
   const userId = req.session.userId;
 
-  if (enrichRunning.has(userId)) {
+  if (enrichRuns.has(userId)) {
     return res.status(409).json({ error: req.t('backend.sync.activeEnrich') });
   }
 
   try {
     const discogs = getDiscogsClientForUser(req);
+    const run = startRun(enrichRuns, userId);
     res.json({ ok: true });
 
-    runEnrichAll({ userId, discogs }).catch((error) => {
+    runEnrichAll({ userId, discogs, run }).catch((error) => {
       console.log('[enrich] background error:', error.message);
     });
   } catch (error) {
@@ -530,7 +712,40 @@ router.post('/enrich', async (req, res) => {
 });
 
 router.post('/enrich/stop', (req, res) => {
-  enrichRunning.delete(req.session.userId);
+  stopRun(enrichRuns, req.session.userId);
+  res.json({ ok: true });
+});
+
+router.get('/community', (req, res) => {
+  const userId = req.session.userId;
+  res.json({
+    ...getCommunityState(userId),
+    running: communityRuns.has(userId),
+    pending: getCommunityBackfillCount(db, userId)
+  });
+});
+
+router.post('/community', (req, res) => {
+  const userId = req.session.userId;
+  if (communityRuns.has(userId)) {
+    return res.status(409).json({ error: req.t('backend.sync.activeCommunity') });
+  }
+
+  try {
+    const discogs = getDiscogsClientForUser(req);
+    const run = startRun(communityRuns, userId);
+    res.json({ ok: true });
+
+    runCommunityRefresh({ userId, discogs, run }).catch((error) => {
+      console.log('[community] background error:', error.message);
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/community/stop', (req, res) => {
+  stopRun(communityRuns, req.session.userId);
   res.json({ ok: true });
 });
 

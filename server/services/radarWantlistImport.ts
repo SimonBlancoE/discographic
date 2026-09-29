@@ -186,7 +186,13 @@ function parseRadarWantlistDateValue(value: unknown): string | null {
     return textValue.slice(0, 10);
   }
 
-  return toIsoDateString(new Date(textValue));
+  // Free-form dates such as "05/10/2026" parse as local midnight; keep the local calendar day
+  // instead of converting to UTC, which shifts the date back on servers east of UTC.
+  const parsed = new Date(textValue);
+  const year = String(parsed.getFullYear()).padStart(4, '0');
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function parseRadarWantlistRows(sheet: XLSX.WorkSheet): RawRow[] {

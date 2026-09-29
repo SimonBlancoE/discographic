@@ -16,16 +16,26 @@ import radarRouter from './routes/radar.js';
 import statsRouter from './routes/stats.js';
 import syncRouter from './routes/sync.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
+import { resolveSessionSecret, resolveTrustProxy, securityHeaders } from './middleware/security.js';
 import { resolveLocale, translate } from '../shared/i18n.js';
 
-const { distDir } = resolveRuntimePaths(import.meta.url);
+const { dataDir, distDir } = resolveRuntimePaths(import.meta.url);
 const app = express();
 const port = Number(process.env.PORT || 3800);
 const SqliteStore = connectSqlite3(session);
 const cookieSecure = process.env.COOKIE_SECURE === 'true';
 
+app.disable('x-powered-by');
+app.set('trust proxy', resolveTrustProxy(process.env, cookieSecure));
+app.use(securityHeaders);
+
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
+// Express 5 leaves req.body undefined when no parser ran (e.g. body-less POSTs); routes read fields from it.
+app.use((req, res, next) => {
+  req.body ??= {};
+  next();
+});
 app.use((req, res, next) => {
   req.locale = resolveLocale(req.query?.locale || req.headers['accept-language']);
   req.t = (key, vars) => translate(req.locale, key, vars);
@@ -35,7 +45,7 @@ app.use((req, res, next) => {
 app.use(
   session({
     name: 'discographic.sid',
-    secret: process.env.SESSION_SECRET || 'discographic-dev-secret',
+    secret: resolveSessionSecret(dataDir),
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -71,7 +81,8 @@ app.use('/api/media', mediaRouter);
 
 if (existsSync(distDir)) {
   app.use(express.static(distDir));
-  app.get('*', (req, res) => {
+  // Express 5 (path-to-regexp v8) requires named wildcards.
+  app.get('/{*splat}', (req, res) => {
     res.sendFile(join(distDir, 'index.html'));
   });
 }

@@ -4,7 +4,9 @@ export const COLLECTION_FILTER_KEYS = Object.freeze([
   'style',
   'decade',
   'format',
-  'label'
+  'label',
+  'folder',
+  'condition'
 ]) as readonly [
   'search',
   'genre',
@@ -12,7 +14,12 @@ export const COLLECTION_FILTER_KEYS = Object.freeze([
   'decade',
   'format',
   'label',
+  'folder',
+  'condition',
 ];
+
+/** Condition filter value that selects releases whose media condition has not been graded. */
+export const UNGRADED_CONDITION = '__ungraded__';
 
 export type CollectionFilterKey = (typeof COLLECTION_FILTER_KEYS)[number];
 export type CollectionFilters = Record<CollectionFilterKey, string>;

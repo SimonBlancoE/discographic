@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import CoverImage from './CoverImage';
 import FilterPanel from './FilterPanel';
 import WindowedCoverWallGrid from './WindowedCoverWallGrid';
 import { downloadNodeAsJpeg } from '../lib/exportImage';
@@ -78,7 +79,8 @@ function CoverWall({ releases, filters: availableFilters }: { releases: WallRele
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(url);
+      // Firefox/Safari can abort large blob downloads if the URL is revoked in the same tick.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       toast.success(t('wall.tapeteDownloaded'));
     } catch (error) {
       toast.error(t('wall.tapeteError', { error: getErrorMessage(error, t('client.tapeteError')) }));
@@ -111,7 +113,7 @@ function CoverWall({ releases, filters: availableFilters }: { releases: WallRele
           </label>
           <label className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
             <span>{t('wall.quality')}</span>
-            <select value={exportQuality} onChange={(event) => setExportQuality(event.target.value as ExportQuality)} className="bg-transparent outline-none">
+            <select value={exportQuality} onChange={(event) => setExportQuality(event.target.value as ExportQuality)} className="bg-transparent outline-hidden">
               {Object.entries(QUALITY_PRESETS).map(([key, preset]) => (
                  <option key={key} value={key} className="bg-slate-950 text-slate-100">{t(preset.labelKey)}</option>
                ))}
@@ -120,7 +122,7 @@ function CoverWall({ releases, filters: availableFilters }: { releases: WallRele
           <button type="button" onClick={handleExport} disabled={exporting} className="primary-button disabled:opacity-60">
              {exporting ? t('wall.exporting') : t('wall.exportJpg')}
            </button>
-          <button type="button" onClick={handleTapete} disabled={tapeteGenerating} className="primary-button bg-gradient-to-r from-amber-500 to-brand-400 disabled:opacity-60">
+          <button type="button" onClick={handleTapete} disabled={tapeteGenerating} className="primary-button bg-linear-to-r from-amber-500 to-brand-400 disabled:opacity-60">
             {tapeteGenerating ? t('wall.generating') : t('wall.seamless')}
           </button>
         </div>
@@ -142,7 +144,7 @@ function CoverWall({ releases, filters: availableFilters }: { releases: WallRele
       <div className="glass-panel p-4">
         <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
           <span>{t('wall.search')}</span>
-          <input value={filters.search} onChange={(event) => handleFilterChange('search', event.target.value)} placeholder={t('wall.searchArtistTitle')} className="w-full bg-transparent outline-none placeholder:text-slate-500" />
+          <input value={filters.search} onChange={(event) => handleFilterChange('search', event.target.value)} placeholder={t('wall.searchArtistTitle')} className="w-full bg-transparent outline-hidden placeholder:text-slate-500" />
         </label>
       </div>
 
@@ -171,17 +173,14 @@ function CoverWall({ releases, filters: availableFilters }: { releases: WallRele
               {exportReleases.map((release) => (
                 <div key={release.id} className="overflow-hidden rounded-[18px] border border-white/10 bg-slate-950/70">
                   <div className="aspect-square overflow-hidden bg-slate-900/80">
-                    {release.poster_cover_url || release.wall_cover_url || release.cover_url ? (
-                      <img
-                        src={release.poster_cover_url || release.wall_cover_url || release.cover_url || undefined}
-                        alt={release.title}
-                        className="h-full w-full object-cover"
-                        loading="eager"
-                        decoding="async"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-3xl">💿</div>
-                    )}
+                    <CoverImage
+                      src={release.cover_url ? release.poster_cover_url : null}
+                      alt={release.title}
+                      className="h-full w-full object-cover"
+                      placeholderClassName="h-full w-full"
+                      loading="eager"
+                      decoding="async"
+                    />
                   </div>
                 </div>
               ))}
@@ -191,7 +190,7 @@ function CoverWall({ releases, filters: availableFilters }: { releases: WallRele
       ) : null}
 
       {tapeteGenerating ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs">
           <div className="glass-panel mx-4 max-w-lg space-y-5 p-8 text-center">
             <div className="mx-auto h-20 w-20 animate-spin rounded-full border-4 border-white/10 border-t-brand-400" />
             <div>

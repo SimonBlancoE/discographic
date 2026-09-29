@@ -34,12 +34,16 @@ import {
   type SyncStatusState,
 } from '../../shared/contracts/syncStatus.js';
 import type { Currency } from '../../shared/currency.js';
+import type { MasterVersionsResponse } from '../../shared/contracts/masterVersions.js';
+import type { PriceSuggestionsResponse } from '../../shared/contracts/priceSuggestions.js';
 import type { CollectionFilters } from '../../shared/collectionFilters.js';
 import type {
   AccountUpdateResponse,
   ApiError,
   AuthMutationResponse,
   CollectionFilterOptions,
+  CollectionMeta,
+  CommunityRefreshStatus,
   CollectionPageResponse,
   ImportApplyResponse,
   ImportPreviewResponse,
@@ -229,6 +233,13 @@ export const api = {
       filters: response.filters,
     };
   },
+  getCollectionMeta: (): Promise<CollectionMeta> => request('/collection/meta'),
+  getReleaseVersions: (id: string | number): Promise<MasterVersionsResponse> => request(`/collection/${id}/versions`),
+  getPriceSuggestions: (id: string | number): Promise<PriceSuggestionsResponse> => request(`/collection/${id}/price-suggestions`),
+  refreshCollectionValue: (): Promise<MessageResponse> => request('/stats/collection-value', { method: 'POST' }),
+  getCommunityStatus: (): Promise<CommunityRefreshStatus> => request('/sync/community'),
+  startCommunityRefresh: (): Promise<MessageResponse> => request('/sync/community', { method: 'POST' }),
+  stopCommunityRefresh: (): Promise<MessageResponse> => request('/sync/community/stop', { method: 'POST' }),
   getRandomRelease: async (): Promise<ReleaseDetail> => normalizeRandomRelease(await request('/collection/random')),
   getRelease: async (id: string | number): Promise<ReleaseDetail> => normalizeReleaseDetail(await request(`/collection/${id}`)),
   updateRelease: async (id: string | number, payload: UpdateReleasePatch): Promise<ReleaseDetail> => normalizeReleaseDetail(await request(`/collection/${id}`, {
@@ -279,9 +290,9 @@ export const api = {
     }
     return response.blob();
   },
-  exportCollection: (format: 'csv' | 'xlsx', params: Record<string, string | number> = {}) => {
+  exportCollection: (type: 'csv' | 'xlsx', params: Record<string, string | number> = {}) => {
     const locale = getLocaleHeader();
-    const query = toQueryString({ format, locale, ...params });
+    const query = toQueryString({ ...params, type, locale });
     window.open(`${API_BASE}/export?${query}`, '_blank', 'noopener');
   }
 };

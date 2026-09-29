@@ -45,8 +45,8 @@ async function ensureDir(path: string): Promise<void> {
   }
 }
 
-function getVariantConfig(variant: string): (typeof COVER_VARIANTS)[CoverVariant] {
-  return COVER_VARIANTS[variant as CoverVariant] || COVER_VARIANTS.wall;
+export function isCoverVariant(variant: unknown): variant is CoverVariant {
+  return typeof variant === 'string' && Object.hasOwn(COVER_VARIANTS, variant);
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {
@@ -90,7 +90,12 @@ export async function ensureCachedCover({
   variant: string;
   t?: Translate | null;
 }): Promise<string> {
-  const variantConfig = getVariantConfig(variant);
+  // The variant ends up in a file path, so only known variant names are accepted.
+  if (!isCoverVariant(variant)) {
+    throw new Error(`Unknown cover variant: ${variant}`);
+  }
+
+  const variantConfig = COVER_VARIANTS[variant];
   const userDir = getUserCoverDir(userId);
   await ensureDir(userDir);
 

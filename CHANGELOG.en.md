@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.4.0] - 2026-09-26
+
+Release with an interface redesign, new Discogs-powered features, a full stack upgrade and production hardening.
+
+### Added
+
+- **Rarity & demand** - Discogs community data (have / want / average rating) with most wanted, coveted and rarest rankings.
+- **Media and sleeve condition** - grade filters, editing from the release page and a condition breakdown on the dashboard.
+- **Discogs folders** - folder filter and moving records between folders.
+- **Other pressings** - every version of the same master, flagging the ones you own and the ones in your Wantlist.
+- **Value according to Discogs** - collection minimum, median and maximum, with history saved on every sync.
+- **Suggested price by condition** - Discogs suggested price per grade, highlighting your copy (requires Discogs seller settings).
+- **Interface redesign** - sidebar and mobile tab bar, cover grid view, filter chips and collection state in the URL.
+
+### Changed
+
+- **Stack** - Node 24 LTS, React 19, React Router 7, Recharts 3, Express 5, Vite 8, Tailwind CSS 4, TypeScript 7 and better-sqlite3 13.
+- **Radar** - the unsaved-changes warning now also covers the browser Back button.
+- **Security** - persistent random session secret when none is configured, `TRUST_PROXY` for proxy/Cloudflare deployments, login attempt limiting, session regeneration on login, security headers and a Docker `HEALTHCHECK`.
+- **Docker** - native modules are compiled in the build stage; the runtime image only ships production dependencies.
+
+### Fixed
+
+- Editing notes could overwrite media or sleeve condition on Discogs.
+- Cover route vulnerable to path traversal.
+- An empty Discogs response could wipe the local collection.
+- Races in the price review and in the Discogs request limiter.
+- `xlsx` upgraded to 0.20.3 (CVE-2023-30533, CVE-2024-22363).
+- `sharp` upgraded to 0.35.4 and `qs` to 6.16.0 for known vulnerabilities.
+- Excel export downloaded a CSV, and format filters emptied the export.
+- Edits Discogs accepts are kept even if a later step fails, and two quick edits to the same release no longer overwrite each other.
+- Overly broad genre/style filters, country wiped on every sync, preferences lost on account change, formulas in exports, time-zone-shifted dates, broken Radar links and the print catalog capped at 100 records.
+
+[0.4.0]: https://github.com/SimonBlancoE/discographic/compare/v0.3.4...v0.4.0
+
 ## [0.3.4] - 2026-07-04
 
 Maintenance and robustness release fixing functional bugs and optimizing collection exports.

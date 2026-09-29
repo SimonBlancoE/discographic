@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   RADAR_PRIORITY,
   RADAR_SOURCE_STATUS,
@@ -339,7 +339,7 @@ function RadarReleaseRow({
             to={detailPath}
             data-radar-detail={String(releaseKey)}
             aria-label={`${t('radar.openDetail')}: ${item.artist} - ${item.title}`}
-            className="group -m-3 flex w-full min-w-0 gap-4 rounded-2xl border border-transparent p-3 text-inherit no-underline transition hover:border-brand-200/30 hover:bg-white/5 focus-visible:border-brand-100 focus-visible:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-100/40"
+            className="group -m-3 flex w-full min-w-0 gap-4 rounded-2xl border border-transparent p-3 text-inherit no-underline transition hover:border-brand-200/30 hover:bg-white/5 focus-visible:border-brand-100 focus-visible:bg-white/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-100/40"
           >
             {item.cover_url ? (
               <img
@@ -394,7 +394,7 @@ function RadarReleaseRow({
           {collectionMatch?.primary_release_id != null ? (
             <div className="pt-1 sm:pl-24">
               <Link
-                to={`/collection/${collectionMatch.primary_release_id}`}
+                to={`/release/${collectionMatch.primary_release_id}`}
                 data-radar-collection={String(releaseKey)}
                 className="inline-flex items-center text-sm text-cyan-200 no-underline transition hover:text-cyan-100"
               >
@@ -757,7 +757,7 @@ function Radar() {
 
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-900/80">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-500"
+            className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400 transition-all duration-500"
             style={{ width: `${updateRun.progressPercent}%` }}
           />
         </div>
