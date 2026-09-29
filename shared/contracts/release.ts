@@ -31,6 +31,8 @@ export type CollectionRelease = {
   rating: number;
   notes: UnknownArray;
   notes_text: string;
+  media_condition: string | null;
+  sleeve_condition: string | null;
   date_added: string | null;
   estimated_value: number | null;
   marketplace_status: MarketplaceStatus;
@@ -39,6 +41,12 @@ export type CollectionRelease = {
   listing_currency: string | null;
   listing_price_eur: number | null;
   folder_id: number;
+  master_id: number | null;
+  community_have: number | null;
+  community_want: number | null;
+  community_rating: number | null;
+  community_rating_count: number | null;
+  num_for_sale: number | null;
   synced_at: string | null;
   display_currency: string | null;
 };
@@ -190,6 +198,8 @@ export function normalizeCollectionRelease(release: unknown = {}): CollectionRel
     rating: asNumber(source.rating, 0) ?? 0,
     notes: asArray(source.notes),
     notes_text: asText(source.notes_text),
+    media_condition: asNullableText(source.media_condition),
+    sleeve_condition: asNullableText(source.sleeve_condition),
     date_added: asNullableText(source.date_added),
     estimated_value: asNumber(source.estimated_value),
     marketplace_status: asMarketplaceStatus(source.marketplace_status),
@@ -198,6 +208,12 @@ export function normalizeCollectionRelease(release: unknown = {}): CollectionRel
     listing_currency: asNullableText(source.listing_currency),
     listing_price_eur: asNumber(source.listing_price_eur),
     folder_id: asNumber(source.folder_id, 0) ?? 0,
+    master_id: asNumber(source.master_id),
+    community_have: asNumber(source.community_have),
+    community_want: asNumber(source.community_want),
+    community_rating: asNumber(source.community_rating),
+    community_rating_count: asNumber(source.community_rating_count),
+    num_for_sale: asNumber(source.num_for_sale),
     synced_at: asNullableText(source.synced_at),
     display_currency: asNullableText(source.display_currency)
   };

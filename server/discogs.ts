@@ -139,6 +139,35 @@ class DiscogsClient {
   getCustomFields() {
     return this.request(`/users/${this.username}/collection/fields`);
   }
+
+  // Suggested prices per condition grade; requires the user to have completed Discogs seller settings
+  // https://www.discogs.com/developers/#page:marketplace,header:marketplace-price-suggestions
+  getPriceSuggestions(releaseId) {
+    return this.request(`/marketplace/price_suggestions/${releaseId}`);
+  }
+
+  getCollectionFolders() {
+    return this.request(`/users/${this.username}/collection/folders`);
+  }
+
+  // Moving an instance: POST to its current folder with the destination folder_id
+  // https://www.discogs.com/developers/#page:user-collection,header:user-collection-change-rating-of-release
+  moveToFolder({ folderId, releaseId, instanceId, targetFolderId }) {
+    return this.request(
+      `/users/${this.username}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_id: targetFolderId })
+      }
+    );
+  }
+
+  // Every pressing/edition that belongs to one master release
+  // https://www.discogs.com/developers/#page:database,header:database-master-release-versions
+  getMasterVersions(masterId, page = 1, perPage = 100) {
+    return this.request(`/masters/${masterId}/versions?page=${page}&per_page=${perPage}&sort=released&sort_order=asc`);
+  }
 }
 
 export function createDiscogsClient(config) {

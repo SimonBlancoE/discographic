@@ -28,6 +28,10 @@ describe('dashboard stats contract', () => {
         belowTarget: 0,
         alreadyOwned: 0,
       },
+      conditions: [],
+      folders: [],
+      community: { covered: 0, pending: 0, mostWanted: [], rarest: [], hotRatio: [] },
+      collectionValue: { currency: null, history: [] },
       lastSync: null,
       displayCurrency: null
     });

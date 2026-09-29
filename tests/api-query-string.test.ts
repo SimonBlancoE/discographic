@@ -28,4 +28,18 @@ describe('api query string serialization', () => {
     expect(params.get('style')).toBe('false');
     expect(params.get('format')).toBe('Vinyl');
   });
+
+  it('keeps the export file type separate from the collection format filter', () => {
+    const openMock = vi.fn();
+    vi.stubGlobal('window', { open: openMock, localStorage: { getItem: () => 'es' }, navigator: { language: 'es' } });
+
+    api.exportCollection('xlsx', { format: '', search: 'Opeth' });
+    api.exportCollection('csv', { format: 'Vinyl' });
+
+    const [xlsxUrl, csvUrl] = openMock.mock.calls.map(([url]) => new URL(String(url), 'https://discographic.test').searchParams);
+    expect(xlsxUrl.get('type')).toBe('xlsx');
+    expect(xlsxUrl.get('format')).toBe('');
+    expect(csvUrl.get('type')).toBe('csv');
+    expect(csvUrl.get('format')).toBe('Vinyl');
+  });
 });

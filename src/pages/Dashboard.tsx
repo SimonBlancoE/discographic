@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import type { DashboardRadarSummary, DashboardStats, NamedCountRow } from '../../shared/contracts/dashboardStats.js';
 import ConfettiBurst from '../components/ConfettiBurst';
 import AchievementsPanel from '../components/AchievementsPanel';
 import HeroCarousel from '../components/HeroCarousel';
 import { DashboardSkeleton } from '../components/LoadingSkeletons';
 import RandomReleaseCard from '../components/RandomReleaseCard';
+import CommunityPanel from '../components/CommunityPanel';
+import ConditionBreakdown from '../components/ConditionBreakdown';
+import CollectionValuePanel from '../components/CollectionValuePanel';
 import StylesChart from '../components/charts/StylesChart';
 import DecadeChart from '../components/charts/DecadeChart';
 import FormatChart from '../components/charts/FormatChart';
@@ -102,7 +105,7 @@ function StatCard({
 
   return (
     <div className="glass-panel stat-card relative overflow-hidden p-5">
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent}`} />
+      <div className={`absolute inset-x-0 top-0 h-1 bg-linear-to-r ${accent}`} />
       <div className="relative z-10 flex h-full flex-col justify-between gap-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -158,7 +161,7 @@ function CoverageMetric({ label, value, total, tone, helper }: {
         <span className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.25em] ${tone}`}>{value}/{total}</span>
       </div>
       <div className="mt-4 h-2 rounded-full bg-slate-950/75">
-        <div className="h-full rounded-full bg-gradient-to-r from-brand-400 via-amber-300 to-cyan-300" style={{ width: `${Math.max(percent, value ? 10 : 0)}%` }} />
+        <div className="h-full rounded-full bg-linear-to-r from-brand-400 via-amber-300 to-cyan-300" style={{ width: `${Math.max(percent, value ? 10 : 0)}%` }} />
       </div>
       <p className="mt-3 text-sm text-slate-400">{helper(remaining)}</p>
     </div>
@@ -227,7 +230,7 @@ function RadarSummaryPanel({ radar }: { radar: DashboardRadarSummary }) {
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {RADAR_SUMMARY_METRICS.map(({ labelKey, valueKey, accent }) => (
           <div key={labelKey} className="relative overflow-hidden rounded-[24px] border border-white/5 bg-slate-950/45 p-4">
-            <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${accent}`} />
+            <div className={`absolute inset-x-0 top-0 h-px bg-linear-to-r ${accent}`} />
             <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{t(labelKey)}</p>
             <p className="mt-3 font-display text-3xl text-white">{formatNumber(radar[valueKey])}</p>
           </div>
@@ -372,7 +375,8 @@ function Dashboard() {
     );
   }
 
-  if (loading) {
+  // Background refreshes (after a sync or price review) keep the current dashboard on screen.
+  if (loading && !stats) {
     return <DashboardSkeleton />;
   }
 
@@ -384,7 +388,7 @@ function Dashboard() {
     <div className="space-y-6">
       {milestoneLabel ? <ConfettiBurst label={milestoneLabel} onDone={() => setMilestoneLabel('')} /> : null}
 
-      <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+      <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr] [&>*]:min-w-0">
         <HeroPanel stats={stats} />
 
         <SyncButton onSyncComplete={() => { void refresh(); }} disabled={!discogsConfigured} />
@@ -397,6 +401,12 @@ function Dashboard() {
       <RadarSummaryPanel radar={stats.radar} />
 
       <CoveragePanel totals={stats.totals} />
+
+      <CollectionValuePanel value={stats.collectionValue} onUpdated={() => { void refresh(); }} />
+
+      <CommunityPanel community={stats.community} onUpdated={() => { void refresh(); }} />
+
+      <ConditionBreakdown conditions={stats.conditions} folders={stats.folders} />
 
       <section className="grid gap-6 xl:grid-cols-2">
         <ChartCard title={t('dashboard.genres')} description={t('dashboard.genresDesc')} hint={t('dashboard.tapHint')}><GenreChart data={stats.genres} onSelect={(value) => openCollectionFilter('genre', value)} /></ChartCard>
@@ -454,15 +464,15 @@ function Dashboard() {
         <div className="glass-panel p-5">
           <h3 className="font-display text-xl text-slate-50">{t('dashboard.artistLeaderboard')}</h3>
           <p className="mb-4 text-sm text-slate-400">{t('dashboard.artistLeaderboardDesc')}</p>
-          <div className="space-y-3">
-            {stats.artists.map((artist, index) => (
+          <div className="space-y-1.5">
+            {stats.artists.slice(0, 10).map((artist, index) => (
               <Link
                 key={artist.artist}
                 to={`/collection?${new URLSearchParams({ search: artist.artist }).toString()}`}
-                className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 px-4 py-3 transition hover:border-brand-300/40 hover:bg-white/10"
+                className="flex items-center justify-between rounded-xl border border-white/5 bg-white/3 px-3 py-2 transition hover:border-brand-300/40 hover:bg-white/[0.07]"
               >
                 <div className="flex items-center gap-3 transition hover:text-brand-200">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500/20 text-brand-100">{index + 1}</span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-500/20 text-xs text-brand-100">{index + 1}</span>
                   <span className="font-medium text-slate-100">{artist.artist}</span>
                 </div>
                 <span className="text-sm text-slate-400">{t('dashboard.records', { count: formatNumber(artist.count) })}</span>

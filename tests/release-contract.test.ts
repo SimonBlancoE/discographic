@@ -59,6 +59,8 @@ describe('release contract', () => {
       rating: 4,
       notes: [{ field_id: 1, value: 'First press' }],
       notes_text: 'First press',
+      media_condition: null,
+      sleeve_condition: null,
       date_added: '2026-04-01',
       estimated_value: 28.5,
       marketplace_status: MARKETPLACE_STATUS.PRICED,
@@ -67,6 +69,12 @@ describe('release contract', () => {
       listing_currency: 'USD',
       listing_price_eur: 32.1,
       folder_id: 2,
+      master_id: null,
+      community_have: null,
+      community_want: null,
+      community_rating: null,
+      community_rating_count: null,
+      num_for_sale: null,
       synced_at: '2026-04-02T10:00:00.000Z',
       display_currency: 'USD'
     });

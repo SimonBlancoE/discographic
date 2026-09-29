@@ -1,6 +1,16 @@
 import { useI18n } from '../lib/I18nContext';
-import type { CollectionFilters } from '../../shared/collectionFilters.js';
+import { UNGRADED_CONDITION, type CollectionFilters } from '../../shared/collectionFilters.js';
 import type { CollectionFilterOptions, FilterKey } from '../lib/types';
+
+type FilterItem = {
+  key: FilterKey;
+  label: string;
+  options: Array<{ value: string; label: string }>;
+};
+
+function toOptions(values: Array<string | number>, format: (value: string) => string = (value) => value) {
+  return values.map((value) => ({ value: String(value), label: format(String(value)) }));
+}
 
 function FilterPanel({
   filters,
@@ -15,13 +25,32 @@ function FilterPanel({
 }) {
   const { t } = useI18n();
 
-  const items = [
-    { key: 'genre', label: t('collection.genre'), values: options.genres || [] },
-    { key: 'style', label: t('collection.style'), values: options.styles || [] },
-    { key: 'decade', label: t('collection.decade'), values: options.decades || [] },
-    { key: 'format', label: t('collection.format'), values: options.formats || [] },
-    { key: 'label', label: t('collection.label'), values: options.labels || [] }
-  ] as const;
+  const items: FilterItem[] = [
+    { key: 'genre', label: t('collection.genre'), options: toOptions(options.genres || []) },
+    { key: 'style', label: t('collection.style'), options: toOptions(options.styles || []) },
+    { key: 'decade', label: t('collection.decade'), options: toOptions(options.decades || [], (value) => `${value}s`) },
+    { key: 'format', label: t('collection.format'), options: toOptions(options.formats || []) },
+    { key: 'label', label: t('collection.label'), options: toOptions(options.labels || []) },
+  ];
+
+  if (options.folders?.length) {
+    items.push({
+      key: 'folder',
+      label: t('collection.folder'),
+      options: options.folders.map((folder) => ({ value: String(folder.id), label: `${folder.name} (${folder.count})` })),
+    });
+  }
+
+  if (options.conditions) {
+    items.push({
+      key: 'condition',
+      label: t('collection.condition'),
+      options: [
+        ...toOptions(options.conditions),
+        { value: UNGRADED_CONDITION, label: t('condition.ungraded') },
+      ],
+    });
+  }
 
   return (
     <div className="glass-panel flex flex-col gap-4 p-4">
@@ -35,19 +64,19 @@ function FilterPanel({
         </button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {items.map((item) => (
-          <label key={item.key} className="flex flex-col gap-2 text-sm text-slate-300">
+          <label key={item.key} className="flex flex-col gap-1.5 text-xs uppercase tracking-[0.14em] text-slate-400">
             <span>{item.label}</span>
             <select
               value={filters[item.key] || ''}
               onChange={(event) => onChange(item.key, event.target.value)}
-              className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 outline-none transition focus:border-brand-300"
+              className={`field-input normal-case tracking-normal ${filters[item.key] ? 'border-brand-300/50' : ''}`}
             >
-              <option value="">{t('collection.all')}</option>
-              {item.values.map((value: string | number) => (
-                <option key={value} value={value}>
-                  {item.key === 'decade' ? `${value}s` : value}
+              <option value="" className="bg-slate-950">{t('collection.all')}</option>
+              {item.options.map((option) => (
+                <option key={option.value} value={option.value} className="bg-slate-950">
+                  {option.label}
                 </option>
               ))}
             </select>

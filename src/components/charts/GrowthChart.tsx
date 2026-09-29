@@ -5,22 +5,20 @@ import { useI18n } from '../../lib/I18nContext';
 import { tooltipProps } from './ChartTooltip';
 import type { Translate } from '../../lib/types';
 
-type GrowthTooltipPayload = {
-  payload?: {
-    total: number;
-    added: number;
-  };
+type GrowthPoint = {
+  total: number;
+  added: number;
 };
 
 function CustomTooltip({ active, payload, label, t }: {
   active?: boolean;
-  payload?: GrowthTooltipPayload[];
-  label?: string;
+  payload?: ReadonlyArray<{ payload?: unknown }>;
+  label?: string | number;
   t: Translate;
 }) {
   if (!active || !payload?.length) return null;
 
-  const chartPayload = payload[0]?.payload;
+  const chartPayload = payload[0]?.payload as GrowthPoint | undefined;
   if (!chartPayload) {
     return null;
   }
@@ -67,7 +65,7 @@ function GrowthChart({ data }: { data: GrowthRow[] }) {
           <CartesianGrid stroke="rgba(148, 163, 184, 0.15)" vertical={false} />
           <XAxis dataKey="month" stroke="#94a3b8" />
           <YAxis stroke="#94a3b8" />
-          <Tooltip content={(props) => <CustomTooltip {...props} t={t} />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
+          <Tooltip content={({ active, payload, label }) => <CustomTooltip active={active} payload={payload} label={label} t={t} />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
           <Area
             type="monotone"
             dataKey="total"

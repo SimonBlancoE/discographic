@@ -18,21 +18,29 @@ function purgeExpiredTimestamps(timestamps: number[], now: number): void {
 
 export function createDiscogsRateLimiter(): () => Promise<void> {
   const timestamps: number[] = [];
+  // Waiters are chained so concurrent jobs cannot all wake up and claim the same free slot.
+  let queue: Promise<void> = Promise.resolve();
 
-  return async function waitTurn(): Promise<void> {
-    const now = Date.now();
-    purgeExpiredTimestamps(timestamps, now);
+  async function claimSlot(): Promise<void> {
+    for (;;) {
+      const now = Date.now();
+      purgeExpiredTimestamps(timestamps, now);
 
-    if (timestamps.length >= SAFE_RPM) {
-      const oldest = timestamps[0];
-      const waitMs = WINDOW_MS - (now - oldest) + 200; // +200ms safety margin
+      if (timestamps.length < SAFE_RPM) {
+        timestamps.push(now);
+        return;
+      }
+
+      const waitMs = WINDOW_MS - (now - timestamps[0]) + 200; // +200ms safety margin
       console.log(`[rate-limit] cuota llena, esperando ${(waitMs / 1000).toFixed(1)}s`);
       await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
-
-      purgeExpiredTimestamps(timestamps, Date.now());
     }
+  }
 
-    timestamps.push(Date.now());
+  return function waitTurn(): Promise<void> {
+    const turn = queue.then(claimSlot);
+    queue = turn.catch(() => {});
+    return turn;
   };
 }
 

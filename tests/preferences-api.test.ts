@@ -114,7 +114,9 @@ describe('Preferences storage (settings table)', () => {
           style: '',
           decade: '1970s',
           format: 'Vinyl',
-          label: ''
+          label: '',
+          folder: '',
+          condition: ''
         }
       }
     ]);
@@ -127,7 +129,9 @@ describe('Preferences storage (settings table)', () => {
           style: 'Ambient',
           decade: '',
           format: '',
-          label: ''
+          label: '',
+          folder: '',
+          condition: ''
         }
       }
     ]);

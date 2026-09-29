@@ -7,12 +7,18 @@ import {
 } from '../../shared/currency.js';
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+// Snapshots built from fallback rates are retried soon instead of being trusted for hours.
+const DEGRADED_CACHE_TTL_MS = 5 * 60 * 1000;
+// Approximate rates for the supported display currencies, used only when the ECB is unreachable
+// so the UI keeps rendering. Other currencies are left missing rather than guessed.
+const DISPLAY_FALLBACK_RATES: RateMap = { USD: 1.1, GBP: 0.85 };
 
 type RateMap = Record<string, number | null | undefined>;
 type ExchangeSnapshot = {
   fetchedAt: number;
   date: string;
   rates: RateMap;
+  degraded?: boolean;
 };
 type ReleasePriceFields = {
   estimated_value?: unknown;
@@ -61,17 +67,22 @@ function getRequiredCurrencies(extraCurrencies: unknown[]): string[] {
 export async function getExchangeSnapshot(extraCurrencies: unknown[] = []): Promise<ExchangeSnapshot> {
   const requiredCurrencies = getRequiredCurrencies(extraCurrencies);
   const snapshot = cachedSnapshot;
+  const hasRequiredRates = (candidate: ExchangeSnapshot) => requiredCurrencies.every((currency) => candidate.rates[currency]);
 
   if (
     snapshot &&
-    Date.now() - snapshot.fetchedAt < CACHE_TTL_MS &&
-    requiredCurrencies.every((currency) => snapshot.rates[currency])
+    Date.now() - snapshot.fetchedAt < (snapshot.degraded ? DEGRADED_CACHE_TTL_MS : CACHE_TTL_MS) &&
+    hasRequiredRates(snapshot)
   ) {
     return snapshot;
   }
 
   if (pendingFetch) {
-    return pendingFetch;
+    // A fetch already in flight may have been started for a different currency set.
+    const inFlight = await pendingFetch;
+    if (hasRequiredRates(inFlight)) {
+      return inFlight;
+    }
   }
 
   pendingFetch = (async () => {
@@ -88,17 +99,18 @@ export async function getExchangeSnapshot(extraCurrencies: unknown[] = []): Prom
         rates[currency] = rate;
       }
 
-      const snapshot = {
+      const snapshot: ExchangeSnapshot = {
         fetchedAt: Date.now(),
         date: todayIsoDate(),
         rates
       };
 
       if (!requiredCurrencies.every((currency) => snapshot.rates[currency])) {
-        console.warn('Incomplete ECB rates snapshot. Using default fallbacks.');
+        console.warn('Incomplete ECB rates snapshot. Using display fallbacks where available.');
+        snapshot.degraded = true;
         for (const currency of requiredCurrencies) {
           if (!snapshot.rates[currency]) {
-            snapshot.rates[currency] = currency === 'USD' ? 1.1 : currency === 'GBP' ? 0.85 : 1.0;
+            snapshot.rates[currency] = DISPLAY_FALLBACK_RATES[currency] ?? null;
           }
         }
       }
@@ -111,11 +123,12 @@ export async function getExchangeSnapshot(extraCurrencies: unknown[] = []): Prom
       }
 
       console.warn('Failed to fetch ECB rates and no cache exists. Using defaults.', error);
-      const rates: RateMap = { EUR: 1, USD: 1.1, GBP: 0.85 };
+      const rates: RateMap = { EUR: 1, ...DISPLAY_FALLBACK_RATES };
       const fallbackSnapshot = {
         fetchedAt: Date.now(),
         date: todayIsoDate(),
-        rates
+        rates,
+        degraded: true
       };
       cachedSnapshot = fallbackSnapshot;
       return fallbackSnapshot;

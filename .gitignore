@@ -8,6 +8,7 @@ data/covers/
 *.log
 .playwright-cli/
 data/backups/
+data/.session-secret
 
 enhancements/
 

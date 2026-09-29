@@ -98,7 +98,8 @@ function downloadBlob(blob: Blob, filename: string): void {
   try {
     triggerDownload(url, filename);
   } finally {
-    URL.revokeObjectURL(url);
+    // Firefox/Safari can abort blob downloads if the URL is revoked in the same tick.
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 }
 

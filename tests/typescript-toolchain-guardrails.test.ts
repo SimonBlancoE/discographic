@@ -22,10 +22,6 @@ type Tsconfig = {
   include?: string[];
 };
 
-type PostcssConfig = {
-  plugins: Record<string, unknown>;
-};
-
 const disallowedJavaScriptSourcePathspecs = ['*.js', '*.jsx', '*.mjs', '*.cjs'];
 const projectRoot = new URL('../', import.meta.url);
 const projectFile = (relativePath: string): URL => new URL(relativePath, projectRoot);
@@ -44,13 +40,13 @@ const getTrackedJavaScriptSources = (): string[] =>
 const packageJson = readJson<PackageJson>('package.json');
 
 describe('TypeScript migration toolchain guardrails', () => {
-  it('declares pnpm, Node 22, and runtime-matched type packages as the supported toolchain', () => {
+  it('declares pnpm, Node 24 LTS, and runtime-matched type packages as the supported toolchain', () => {
     expect(packageJson.packageManager).toBe('pnpm@10.22.0');
     expect(fileExists('pnpm-lock.yaml')).toBe(true);
     expect(fileExists('package-lock.json')).toBe(false);
     expect(fileExists('.node-version')).toBe(true);
-    expect(readText('.node-version').trim()).toMatch(/^22\./);
-    expect(packageJson.engines.node).toBe('>=22 <23');
+    expect(readText('.node-version').trim()).toMatch(/^24\./);
+    expect(packageJson.engines.node).toBe('>=24 <25');
 
     const pnpmWorkspace = readText('pnpm-workspace.yaml');
     expect(pnpmWorkspace).toContain('onlyBuiltDependencies:');
@@ -66,10 +62,10 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(pnpmWorkspace).toContain('semver');
     expect(pnpmWorkspace).not.toContain('trustPolicy: off');
 
-    expect(packageJson.dependencies.express).toMatch(/^\^4\./);
-    expect(packageJson.devDependencies['@types/express']).toMatch(/^\^4\./);
-    expect(packageJson.devDependencies['@types/node']).toMatch(/^\^22\./);
-    expect(packageJson.devDependencies.vite).toMatch(/^\^6\./);
+    expect(packageJson.dependencies.express).toMatch(/^\^5\./);
+    expect(packageJson.devDependencies['@types/express']).toMatch(/^\^5\./);
+    expect(packageJson.devDependencies['@types/node']).toMatch(/^\^24\./);
+    expect(packageJson.devDependencies.vite).toMatch(/^\^8\./);
     expect(packageJson.devDependencies.vitest).toMatch(/^\^4\./);
   });
 
@@ -86,7 +82,6 @@ describe('TypeScript migration toolchain guardrails', () => {
       skipLibCheck: false,
       noEmit: true,
     });
-    expect(tsconfig.include).toContain('tailwind.config.ts');
     expect(tsconfig.include).toContain('scripts/**/*.ts');
     expect(tsconfig.include).toContain('tests/**/*.tsx');
     expect(serverTsconfig.extends).toBe('./tsconfig.json');
@@ -119,20 +114,13 @@ describe('TypeScript migration toolchain guardrails', () => {
   });
 
   it('enforces zero tracked JavaScript source files, including tool config', () => {
-    expect(fileExists('.postcssrc.json')).toBe(true);
-    expect(fileExists('tailwind.config.ts')).toBe(true);
+    // Tailwind v4 is configured in CSS (@theme) and wired through the Vite plugin: no JS/PostCSS config.
+    expect(fileExists('.postcssrc.json')).toBe(false);
     expect(fileExists('postcss.config.js')).toBe(false);
+    expect(fileExists('tailwind.config.ts')).toBe(false);
     expect(fileExists('tailwind.config.js')).toBe(false);
-
-    const postcssConfig = readJson<PostcssConfig>('.postcssrc.json');
-    expect(postcssConfig.plugins).toEqual({
-      tailwindcss: {},
-      autoprefixer: {},
-    });
-
-    const tailwindConfig = readText('tailwind.config.ts');
-    expect(tailwindConfig).toContain('./src/**/*.{ts,tsx}');
-    expect(tailwindConfig).not.toContain('{js,ts,jsx,tsx}');
+    expect(readText('vite.config.ts')).toContain('@tailwindcss/vite');
+    expect(readText('src/index.css')).toContain("@import 'tailwindcss';");
 
     expect(getTrackedJavaScriptSources()).toEqual([]);
   });
@@ -178,8 +166,9 @@ describe('TypeScript migration toolchain guardrails', () => {
 
     expect(dockerfile).toContain('COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./');
     expect(dockerfile).toContain('RUN pnpm install --frozen-lockfile');
-    expect(dockerfile).toContain('RUN pnpm install --prod --frozen-lockfile');
-    expect(dockerfile).toContain('RUN pnpm run build');
+    // Native modules are compiled once in the build stage; the runtime copies pruned production deps.
+    expect(dockerfile).toContain('RUN pnpm run build && pnpm prune --prod');
+    expect(dockerfile).toContain('COPY --from=build /app/node_modules ./node_modules');
     expect(dockerfile).toContain('COPY --from=build /app/dist ./dist');
     expect(dockerfile).toContain('CMD ["pnpm", "run", "start"]');
     expect(dockerfile).not.toMatch(/^RUN npm\b/m);

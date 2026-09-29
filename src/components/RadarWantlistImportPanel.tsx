@@ -124,7 +124,7 @@ function PreviewRowsTable({ rows, t }: { rows: PreviewRow[]; t: Translate }) {
           data-radar-import-preview-table="true"
           className="max-h-72 overflow-x-auto overflow-y-auto"
         >
-          <table className="min-w-[40rem] w-full text-left text-sm">
+          <table className="min-w-160 w-full text-left text-sm">
             <thead className="sticky top-0 bg-slate-950/95 text-slate-400">
               <tr>
                 <th className="px-4 py-3">release_id</th>
@@ -278,7 +278,7 @@ function RadarWantlistImportPanel({
       className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/30 p-6"
     >
       <div className="space-y-2">
-        <h2 ref={headingRef} tabIndex={-1} className="font-display text-3xl text-white outline-none">
+        <h2 ref={headingRef} tabIndex={-1} className="font-display text-3xl text-white outline-hidden">
           {t('radar.import.title')}
         </h2>
         <p className="max-w-3xl text-sm text-slate-300">{t('radar.import.description')}</p>
@@ -286,14 +286,14 @@ function RadarWantlistImportPanel({
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <label className={`secondary-button ${isBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+        <label className={`secondary-button focus-within:ring-2 focus-within:ring-cyan-300 ${isBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
           {t('radar.import.upload')}
           <input
             type="file"
             accept=".csv,.xlsx"
             onChange={handleFileSelect}
             disabled={isBusy}
-            className="hidden"
+            className="sr-only"
           />
         </label>
         <button

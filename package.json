@@ -1,6 +1,6 @@
 {
   "name": "discographic",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "type": "module",
   "packageManager": "pnpm@10.22.0",
   "description": "Self-hosted Discogs collection manager for vinyl collectors",
@@ -20,7 +20,7 @@
     "self-hosted"
   ],
   "engines": {
-    "node": ">=22 <23"
+    "node": ">=24 <25"
   },
   "scripts": {
     "dev": "vite",
@@ -44,39 +44,38 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^13.0.3",
     "better-sqlite3-session-store": "^0.1.0",
-    "csv-stringify": "^6.5.0",
+    "csv-stringify": "^6.9.0",
     "ecb-exchange-rates-ts": "^0.1.13",
-    "express": "^4.19.2",
+    "express": "^5.2.1",
     "express-session": "^1.19.0",
     "html-to-image": "^1.11.13",
-    "multer": "^2.1.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.23.0",
-    "recharts": "^2.12.0",
-    "sharp": "^0.34.5",
-    "xlsx": "^0.18.5"
+    "multer": "^2.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^7.18.4",
+    "recharts": "^3.10.1",
+    "sharp": "^0.35.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "0.5.10",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/express": "^4.17.21",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/express": "^5.0.6",
     "@types/express-session": "^1.19.0",
     "@types/lodash": "^4.17.24",
-    "@types/multer": "^2.1.0",
-    "@types/node": "^22.19.17",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.0",
-    "autoprefixer": "^10.4.19",
-    "jsdom": "^24.1.3",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.3",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.3",
-    "vite": "^6.0.0",
-    "vitest": "^4.1.2"
+    "@types/multer": "^2.2.0",
+    "@types/node": "^24.13.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^4.1.6"
   }
 }
