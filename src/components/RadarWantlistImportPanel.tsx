@@ -58,7 +58,7 @@ function ColumnChipList({
 }) {
   return (
     <div className="space-y-2">
-      <h4 className="text-sm uppercase tracking-[0.25em] text-slate-400">{title}</h4>
+      <h4 className="text-sm uppercase tracking-[0.14em] text-slate-400">{title}</h4>
       <div className="flex flex-wrap gap-2">
         {items.length > 0 ? items.map((item) => (
           <span key={item.key} className={`rounded-full border px-3 py-1 text-sm ${chipClassName}`}>
@@ -118,7 +118,7 @@ function PreviewErrors({ errors, t }: { errors: PreviewError[]; t: Translate }) 
 function PreviewRowsTable({ rows, t }: { rows: PreviewRow[]; t: Translate }) {
   return (
     <div className="space-y-3">
-      <h4 className="text-sm uppercase tracking-[0.25em] text-slate-400">{t('radar.import.previewRows')}</h4>
+      <h4 className="text-sm uppercase tracking-[0.14em] text-slate-400">{t('radar.import.previewRows')}</h4>
       <div className="overflow-hidden rounded-2xl border border-white/5">
         <div
           data-radar-import-preview-table="true"
@@ -286,7 +286,7 @@ function RadarWantlistImportPanel({
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <label className={`secondary-button focus-within:ring-2 focus-within:ring-cyan-300 ${isBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+        <label className={`secondary-button focus-within:ring-2 focus-within:ring-brand-300 ${isBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
           {t('radar.import.upload')}
           <input
             type="file"

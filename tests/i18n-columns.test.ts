@@ -288,29 +288,13 @@ const WANTLIST_MANAGER_COPY = [
 
 const VISUAL_I18N_KEYS = [
   'app.badgeLabel',
-  'dashboard.feature.previous',
-  'dashboard.feature.next',
-  'dashboard.feature.goTo',
-  'dashboard.feature.charts.kicker',
-  'dashboard.feature.charts.title',
-  'dashboard.feature.charts.sub',
-  'dashboard.feature.charts.where',
-  'dashboard.feature.random.kicker',
-  'dashboard.feature.random.title',
-  'dashboard.feature.random.sub',
-  'dashboard.feature.random.where',
-  'dashboard.feature.curate.kicker',
-  'dashboard.feature.curate.title',
-  'dashboard.feature.curate.sub',
-  'dashboard.feature.curate.where',
-  'dashboard.feature.wall.kicker',
-  'dashboard.feature.wall.title',
-  'dashboard.feature.wall.sub',
-  'dashboard.feature.wall.where',
-  'dashboard.feature.export.kicker',
-  'dashboard.feature.export.title',
-  'dashboard.feature.export.sub',
-  'dashboard.feature.export.where'
+  'dashboard.greetingMorning',
+  'dashboard.greetingAfternoon',
+  'dashboard.greetingEvening',
+  'dashboard.welcomeHeadline',
+  'dashboard.welcomeSummary',
+  'dashboard.exploreCollection',
+  'dashboard.openWall',
 ];
 
 const DASHBOARD_RADAR_KEYS = [

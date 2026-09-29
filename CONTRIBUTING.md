@@ -26,3 +26,33 @@ Normalize and validate data at the first untrusted boundary, then keep the inter
 - Use `pnpm run test:upgrade-smoke:docker` for the final migration verification in a Docker-capable environment; it clears the skip flag and treats Docker as mandatory, including a reachable Docker daemon.
 - Set `DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true` only when you need to force the non-Docker path even on a machine that has Docker.
 - The JavaScript scan is expected to pass once the tracked source tree is TypeScript-only; treat any reported project-owned `.js`, `.jsx`, `.mjs`, or `.cjs` file as a regression.
+
+## Documentation
+
+- `README.md` is the canonical README. Mirror any content change in `README.es.md` within the same PR.
+- README screenshots live in `docs/screenshots/` (`name.webp` in English, `name.es.webp` in Spanish).
+
+## Manual test instance
+
+A throwaway, in-memory instance for QA. It does not keep any data.
+
+```bash
+pnpm run test:instance:start -- --host 127.0.0.1 --port 3801
+```
+
+It comes with two users: `admin-demo` / `demo12345` (admin) and `user-demo` / `demo12345`. Destroy it with:
+
+```bash
+pnpm run test:instance:stop -- --host 127.0.0.1 --port 3801
+```
+
+## Radar v1 guardrails
+
+Radar (the Wantlist manager) is a local workspace, not a Marketplace automation layer.
+
+- It uses release-level Marketplace stats and local decisions only.
+- It does not implement seller recommendations, combined purchasing, shipping logic, listing-level availability, exact condition filtering, scheduled jobs, automatic alerts, price history, or complex scoring.
+- It does not write Radar decisions, notes, or Wantlist membership back to Discogs.
+- Minimum condition is stored as a future-facing preference and is informational only.
+- The older "Wantlist Price Alerts" direction is superseded by the Radar v1 PRD unless it is explicitly revived in a later plan.
+

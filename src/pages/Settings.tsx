@@ -329,7 +329,7 @@ function Settings() {
   return (
     <div className="space-y-6">
       <section className="glass-panel p-6">
-        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('nav.settings')}</p>
+        <p className="text-sm uppercase tracking-[0.14em] text-brand-200">{t('nav.settings')}</p>
         <h2 className="mt-2 font-display text-4xl text-white">{t('settings.title')}</h2>
         <p className="mt-2 text-sm text-slate-400">{t('settings.subtitle')}</p>
       </section>

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router';
 import type { DashboardRadarSummary, DashboardStats, NamedCountRow } from '../../shared/contracts/dashboardStats.js';
 import ConfettiBurst from '../components/ConfettiBurst';
 import AchievementsPanel from '../components/AchievementsPanel';
-import HeroCarousel from '../components/HeroCarousel';
 import { DashboardSkeleton } from '../components/LoadingSkeletons';
 import RandomReleaseCard from '../components/RandomReleaseCard';
 import CommunityPanel from '../components/CommunityPanel';
@@ -28,22 +27,18 @@ const RADAR_SUMMARY_METRICS = [
   {
     labelKey: 'dashboard.radar.totalWanted',
     valueKey: 'totalWanted',
-    accent: 'from-cyan-300/40 via-cyan-300/10 to-transparent'
   },
   {
     labelKey: 'dashboard.radar.activeOpportunities',
     valueKey: 'activeOpportunities',
-    accent: 'from-emerald-300/40 via-emerald-300/10 to-transparent'
   },
   {
     labelKey: 'dashboard.radar.belowTarget',
     valueKey: 'belowTarget',
-    accent: 'from-amber-300/40 via-amber-300/10 to-transparent'
   },
   {
     labelKey: 'dashboard.radar.alreadyOwned',
     valueKey: 'alreadyOwned',
-    accent: 'from-rose-300/40 via-rose-300/10 to-transparent'
   },
 ] as const;
 
@@ -58,67 +53,72 @@ function ratio(value: number, total: number): number {
   return Math.round((value / total) * 100);
 }
 
-function HeroPanel({ stats }: { stats: DashboardStats }) {
+function greetingKey(date = new Date()): string {
+  const hour = date.getHours();
+  if (hour < 6) return 'dashboard.greetingEvening';
+  if (hour < 13) return 'dashboard.greetingMorning';
+  if (hour < 21) return 'dashboard.greetingAfternoon';
+  return 'dashboard.greetingEvening';
+}
+
+/** A calm welcome: who you are, what the collection looks like, and two real destinations. */
+function WelcomePanel({ stats }: { stats: DashboardStats }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const decades = stats.decades.map((row) => row.name);
+  const topGenre = stats.genres[0]?.name;
+  const covers = stats.topValue.slice(0, 3);
 
   return (
-    <div className="hero-panel">
-      <span className="hero-orb hero-orb--cyan" />
-      <span className="hero-orb hero-orb--rose" />
-      <div className="relative z-10 flex h-full flex-col justify-between gap-8">
-        <div>
-          <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('dashboard.heroEyebrow')}</p>
-          <HeroCarousel />
+    <section className="glass-panel @container relative overflow-hidden" aria-labelledby="welcome-title">
+      <div className="grid items-center gap-6 p-6 sm:p-8 @[40rem]:grid-cols-[minmax(0,1fr)_14rem]">
+      <div className="min-w-0">
+        <p className="text-sm text-slate-400">
+          {t(greetingKey(), { name: user?.username || '' })}
+        </p>
+        <h2 id="welcome-title" className="mt-2 font-display text-3xl font-semibold leading-tight text-white sm:text-4xl">
+          {t('dashboard.welcomeHeadline', { count: formatNumber(stats.totals.total_records || 0) })}
+        </h2>
+        {topGenre && decades.length ? (
+          <p className="mt-3 text-base text-slate-300">
+            {t('dashboard.welcomeSummary', { genre: topGenre, from: decades[0], to: decades[decades.length - 1] })}
+          </p>
+        ) : null}
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Link to="/collection" className="primary-button">{t('dashboard.exploreCollection')}</Link>
+          <Link to="/wall" className="secondary-button">{t('dashboard.openWall')}</Link>
         </div>
-
-        <div className="flex flex-wrap gap-3 text-sm text-slate-300">
-          <span className="hero-chip rounded-full border border-white/10 bg-white/5 px-4 py-2">
-            {t('dashboard.lastSync', { date: formatDate(stats.lastSync?.finished_at) })}
-          </span>
-          <span className="hero-chip rounded-full border border-white/10 bg-white/5 px-4 py-2">
-            {t('dashboard.syncedRecords', { count: formatNumber(stats.lastSync?.records_synced || 0) })}
-          </span>
-          <span className="hero-chip rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-cyan-100">
-            {t('dashboard.mappedStyles', { count: formatNumber(stats.styles.length) })}
-          </span>
-        </div>
+        <p className="mt-5 text-xs text-slate-500">
+          {t('dashboard.lastSync', { date: formatDate(stats.lastSync?.finished_at) })}
+        </p>
       </div>
-    </div>
+
+      {covers.length === 3 ? (
+        // Its own grid column, so it can never sit on top of the headline; hidden when the panel is narrow.
+        <div className="pointer-events-none relative hidden h-40 w-56 justify-self-end @[40rem]:block" aria-hidden="true">
+          {covers.map((release, index) => (
+            <img
+              key={release.id}
+              src={`/api/media/cover/${release.id}?variant=wall`}
+              alt=""
+              className="absolute top-0 h-40 w-40 rounded-md object-cover shadow-[0_16px_32px_rgba(0,0,0,0.5)]"
+              style={{ right: `${index * 28}px`, transform: `rotate(${(index - 1) * 4}deg)`, zIndex: 3 - index, filter: index ? 'brightness(0.7)' : undefined }}
+              onError={(event) => { event.currentTarget.style.display = 'none'; }}
+            />
+          ))}
+        </div>
+      ) : null}
+      </div>
+    </section>
   );
 }
 
-function StatCard({
-  label,
-  displayValue,
-  accent,
-  meta,
-  eyebrow,
-  description,
-}: {
-  label: string;
-  displayValue: string;
-  accent: string;
-  meta?: string;
-  eyebrow?: string;
-  description: string;
-}) {
-
+function StatCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="glass-panel stat-card relative overflow-hidden p-5">
-      <div className={`absolute inset-x-0 top-0 h-1 bg-linear-to-r ${accent}`} />
-      <div className="relative z-10 flex h-full flex-col justify-between gap-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-slate-400">{label}</p>
-            <p className="mt-4 font-display text-4xl text-slate-50">{displayValue}</p>
-          </div>
-          {meta ? <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.24em] text-slate-300">{meta}</span> : null}
-        </div>
-        <div className="rounded-[24px] border border-white/5 bg-slate-950/35 px-4 py-3">
-          {eyebrow ? <p className="text-xs uppercase tracking-[0.25em] text-brand-200/80">{eyebrow}</p> : null}
-          <p className="mt-1 text-sm text-slate-400">{description}</p>
-        </div>
-      </div>
+    <div className="glass-panel stat-card @container min-w-0 p-4 sm:p-5">
+      <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{label}</p>
+      <p className="mt-2 truncate font-display text-2xl text-white @[14rem]:text-3xl" title={value}>{value}</p>
+      {detail ? <p className="mt-1 truncate text-sm text-slate-400" title={detail}>{detail}</p> : null}
     </div>
   );
 }
@@ -130,38 +130,37 @@ function ChartCard({ title, description, hint, children }: {
   children: ReactNode;
 }) {
   return (
-    <section className="glass-panel p-5">
+    <section className="glass-panel min-w-0 p-5">
       <div className="mb-4">
         <h3 className="font-display text-xl text-slate-50">{title}</h3>
         <p className="mt-1 text-sm text-slate-400">{description}</p>
-        {hint ? <p className="mt-2 text-xs uppercase tracking-[0.25em] text-brand-200/80">{hint}</p> : null}
+        {hint ? <p className="mt-2 text-xs text-slate-500">{hint}</p> : null}
       </div>
       {children}
     </section>
   );
 }
 
-function CoverageMetric({ label, value, total, tone, helper }: {
+function CoverageMetric({ label, value, total, helper }: {
   label: string;
   value: number;
   total: number;
-  tone: string;
   helper: (remaining: number) => string;
 }) {
   const percent = ratio(value, total);
   const remaining = Math.max(total - value, 0);
 
   return (
-    <div className="rounded-[26px] border border-white/5 bg-white/5 p-4">
+    <div className="min-w-0 rounded-xl border border-white/5 bg-black/20 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{label}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{label}</p>
           <p className="mt-3 font-display text-3xl text-white">{percent}%</p>
         </div>
-        <span className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.25em] ${tone}`}>{value}/{total}</span>
+        <span className="text-xs tabular-nums text-slate-500">{value}/{total}</span>
       </div>
-      <div className="mt-4 h-2 rounded-full bg-slate-950/75">
-        <div className="h-full rounded-full bg-linear-to-r from-brand-400 via-amber-300 to-cyan-300" style={{ width: `${Math.max(percent, value ? 10 : 0)}%` }} />
+      <div className="mt-4 h-1.5 rounded-full bg-white/5">
+        <div className="h-full rounded-full bg-brand-400" style={{ width: `${Math.max(percent, value ? 10 : 0)}%` }} />
       </div>
       <p className="mt-3 text-sm text-slate-400">{helper(remaining)}</p>
     </div>
@@ -188,19 +187,19 @@ function CoveragePanel({ totals }: { totals: DashboardStats['totals'] }) {
             {t('dashboard.coverageSubtitle')}
           </p>
         </div>
-        <div className="rounded-[30px] border border-white/8 bg-slate-950/45 px-5 py-4">
-          <p className="text-xs uppercase tracking-[0.25em] text-brand-200/80">{t('dashboard.readiness')}</p>
+        <div className="rounded-xl border border-white/5 bg-black/20 px-5 py-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{t('dashboard.readiness')}</p>
           <div className="mt-3 flex items-end gap-3">
-            <span className="font-display text-5xl text-white">{readiness}%</span>
+            <span className="font-display text-4xl text-white">{readiness}%</span>
             <span className="pb-2 text-sm text-slate-400">{t('dashboard.readinessBody')}</span>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <CoverageMetric label={t('collection.rating')} value={rated} total={total} tone="bg-rose-400/15 text-rose-100" helper={(remaining) => remaining > 0 ? t('dashboard.ratingsMissing', { count: formatNumber(remaining) }) : t('dashboard.ratingsDone')} />
-        <CoverageMetric label={t('collection.notes')} value={notes} total={total} tone="bg-cyan-400/15 text-cyan-100" helper={(remaining) => remaining > 0 ? t('dashboard.notesMissing', { count: formatNumber(remaining) }) : t('dashboard.notesDone')} />
-        <CoverageMetric label={t('collection.price')} value={priced} total={total} tone="bg-amber-300/15 text-amber-100" helper={(remaining) => remaining > 0 ? t('dashboard.pricesMissing', {
+      <div className="grid gap-4 lg:grid-cols-3">
+        <CoverageMetric label={t('collection.rating')} value={rated} total={total} helper={(remaining) => remaining > 0 ? t('dashboard.ratingsMissing', { count: formatNumber(remaining) }) : t('dashboard.ratingsDone')} />
+        <CoverageMetric label={t('collection.notes')} value={notes} total={total} helper={(remaining) => remaining > 0 ? t('dashboard.notesMissing', { count: formatNumber(remaining) }) : t('dashboard.notesDone')} />
+        <CoverageMetric label={t('collection.price')} value={priced} total={total} helper={(remaining) => remaining > 0 ? t('dashboard.pricesMissing', {
           count: formatNumber(remaining),
           pending: formatNumber(pendingValues),
           failed: formatNumber(failedValues),
@@ -218,20 +217,19 @@ function RadarSummaryPanel({ radar }: { radar: DashboardRadarSummary }) {
     <section className="glass-panel overflow-hidden p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-brand-200/80">{t('dashboard.radarTitle')}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{t('dashboard.radarTitle')}</p>
           <h3 className="mt-2 font-display text-2xl text-white">{t('nav.radar')}</h3>
           <p className="mt-2 max-w-2xl text-sm text-slate-400">{t('dashboard.radarBody')}</p>
         </div>
-        <Link to="/radar" className="inline-flex items-center rounded-full border border-brand-300/30 bg-brand-400/10 px-4 py-2 text-sm text-brand-100 transition hover:border-brand-200/60 hover:text-white">
+        <Link to="/radar" className="secondary-button self-start">
           {t('dashboard.radarOpen')}
         </Link>
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {RADAR_SUMMARY_METRICS.map(({ labelKey, valueKey, accent }) => (
-          <div key={labelKey} className="relative overflow-hidden rounded-[24px] border border-white/5 bg-slate-950/45 p-4">
-            <div className={`absolute inset-x-0 top-0 h-px bg-linear-to-r ${accent}`} />
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{t(labelKey)}</p>
+        {RADAR_SUMMARY_METRICS.map(({ labelKey, valueKey }) => (
+          <div key={labelKey} className="min-w-0 rounded-xl border border-white/5 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{t(labelKey)}</p>
             <p className="mt-3 font-display text-3xl text-white">{formatNumber(radar[valueKey])}</p>
           </div>
         ))}
@@ -314,36 +312,24 @@ function Dashboard() {
     return [
       {
         label: t('dashboard.totalRecords'),
-        displayValue: formatNumber(stats.totals.total_records || 0),
-        accent: 'from-brand-400 to-brand-200',
-        meta: t('dashboard.months', { count: stats.growth.length }),
-        eyebrow: t('dashboard.realSize'),
-        description: t('dashboard.totalRecordsDesc')
+        value: formatNumber(stats.totals.total_records || 0),
+        detail: t('dashboard.months', { count: stats.growth.length }),
       },
       {
         label: t('dashboard.collectionValue'),
-        displayValue: stats.totals.total_value ? formatCurrency(stats.totals.total_value, currency) : '-',
-        accent: 'from-emerald-400 to-cyan-300',
-        meta: 'Discogs',
-        eyebrow: t('dashboard.marketToday'),
-        description: t('dashboard.collectionValueDesc')
+        value: stats.totals.total_value ? formatCurrency(stats.totals.total_value, currency) : '-',
+        detail: t('dashboard.marketToday'),
       },
       {
         label: t('dashboard.topArtist'),
-        displayValue: formatNumber(stats.artists[0]?.count || 0),
-        accent: 'from-sky-400 to-indigo-300',
-        meta: stats.artists[0]?.artist || '-',
-        eyebrow: t('dashboard.whoLeads'),
-        description: t('dashboard.topArtistDesc')
+        value: stats.artists[0]?.artist || '-',
+        detail: stats.artists[0] ? t('dashboard.records', { count: formatNumber(stats.artists[0].count) }) : undefined,
       },
       {
         label: t('dashboard.topGenre'),
-        displayValue: formatNumber(stats.genres[0]?.count || 0),
-        accent: 'from-amber-300 to-orange-300',
-        meta: stats.genres[0]?.name || '-',
-        eyebrow: t('dashboard.soundPulse'),
-        description: t('dashboard.topGenreDesc')
-      }
+        value: stats.genres[0]?.name || '-',
+        detail: stats.genres[0] ? t('dashboard.records', { count: formatNumber(stats.genres[0].count) }) : undefined,
+      },
     ];
   }, [currency, stats, t]);
 
@@ -352,7 +338,7 @@ function Dashboard() {
   if (accountUnavailable) {
     return (
       <section className="glass-panel p-8 text-center">
-        <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('settings.accountTitle')}</p>
+        <p className="text-sm uppercase tracking-[0.14em] text-brand-200">{t('settings.accountTitle')}</p>
         <h2 className="mt-3 font-display text-4xl text-white">{t('dashboard.accountUnavailableTitle')}</h2>
         <p className="mx-auto mt-3 max-w-xl text-sm text-slate-400">
           {t('dashboard.accountUnavailableBody')}
@@ -365,7 +351,7 @@ function Dashboard() {
   if (!discogsConfigured) {
     return (
       <section className="glass-panel p-8 text-center">
-         <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('settings.accountTitle')}</p>
+         <p className="text-sm uppercase tracking-[0.14em] text-brand-200">{t('settings.accountTitle')}</p>
          <h2 className="mt-3 font-display text-4xl text-white">{t('dashboard.configureTitle')}</h2>
          <p className="mx-auto mt-3 max-w-xl text-sm text-slate-400">
            {t('dashboard.configureBody')}
@@ -388,19 +374,15 @@ function Dashboard() {
     <div className="space-y-6">
       {milestoneLabel ? <ConfettiBurst label={milestoneLabel} onDone={() => setMilestoneLabel('')} /> : null}
 
-      <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr] [&>*]:min-w-0">
-        <HeroPanel stats={stats} />
+      <section className="grid items-start gap-6 xl:grid-cols-[1.4fr_0.9fr] [&>*]:min-w-0">
+        <WelcomePanel stats={stats} />
 
         <SyncButton onSyncComplete={() => { void refresh(); }} disabled={!discogsConfigured} />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {statCards.map((card) => <StatCard key={card.label} {...card} />)}
       </section>
-
-      <RadarSummaryPanel radar={stats.radar} />
-
-      <CoveragePanel totals={stats.totals} />
 
       <CollectionValuePanel value={stats.collectionValue} onUpdated={() => { void refresh(); }} />
 
@@ -446,7 +428,7 @@ function Dashboard() {
                       </td>
                       <td className="py-3 pr-4">{release.artist}</td>
                       <td className="py-3 pr-4">{release.year || '-'}</td>
-                      <td className="py-3 text-right text-brand-100">{formatCurrency(release.estimated_value, currency)}</td>
+                      <td className="py-3 text-right tabular-nums text-slate-100">{formatCurrency(release.estimated_value, currency)}</td>
                     </tr>
                   ))
                 ) : (
@@ -472,7 +454,7 @@ function Dashboard() {
                 className="flex items-center justify-between rounded-xl border border-white/5 bg-white/3 px-3 py-2 transition hover:border-brand-300/40 hover:bg-white/[0.07]"
               >
                 <div className="flex items-center gap-3 transition hover:text-brand-200">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-500/20 text-xs text-brand-100">{index + 1}</span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/5 text-xs tabular-nums text-slate-300">{index + 1}</span>
                   <span className="font-medium text-slate-100">{artist.artist}</span>
                 </div>
                 <span className="text-sm text-slate-400">{t('dashboard.records', { count: formatNumber(artist.count) })}</span>
@@ -481,6 +463,10 @@ function Dashboard() {
           </div>
         </div>
       </section>
+
+      <CoveragePanel totals={stats.totals} />
+
+      <RadarSummaryPanel radar={stats.radar} />
 
       <RandomReleaseCard />
 

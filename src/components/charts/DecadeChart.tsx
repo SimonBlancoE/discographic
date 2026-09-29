@@ -1,20 +1,20 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { NamedCountRow } from '../../../shared/contracts/dashboardStats.js';
 import { useI18n } from '../../lib/I18nContext';
-import { tooltipProps } from './ChartTooltip';
+import { axisProps, CHART_COLORS, tooltipProps } from './ChartTooltip';
 
 function DecadeChart({ data }: { data: NamedCountRow[] }) {
   const { t } = useI18n();
 
   return (
-    <div className="chart-wrap h-80">
+    <div className="chart-wrap h-64">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data}>
-          <CartesianGrid stroke="rgba(148, 163, 184, 0.15)" vertical={false} />
-          <XAxis dataKey="name" stroke="#94a3b8" />
-          <YAxis stroke="#94a3b8" />
-          <Tooltip {...tooltipProps} formatter={(value) => [String(value), t('dashboard.records', { count: Number(value) || 0 })]} />
-          <Bar dataKey="count" fill="#38bdf8" radius={[10, 10, 0, 0]} />
+          <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
+          <XAxis dataKey="name" {...axisProps} />
+          <YAxis allowDecimals={false} width={36} {...axisProps} />
+          <Tooltip {...tooltipProps} formatter={(value) => [t('chart.records', { count: Number(value) || 0 }), '']} separator="" />
+          <Bar dataKey="count" fill={CHART_COLORS.mark} maxBarSize={28} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -58,7 +58,7 @@ function AppLayoutFrame() {
         <Link to="/" className="brand-lockup brand-lockup--compact">
           <VinylBadge genres={badgeGenres} />
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.32em] text-brand-200">{t('app.tagline')}</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-brand-200">{t('app.tagline')}</p>
             <p className="font-display text-2xl font-semibold tracking-wide text-white">{t('app.name')}</p>
           </div>
         </Link>

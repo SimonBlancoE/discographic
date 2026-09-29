@@ -2,92 +2,73 @@
 
 # Discographic
 
-**A self-hosted command center for your vinyl collection.**
+**Your Discogs collection, finally at home.**
 
-Sync your Discogs records, explore stats, rate and annotate everything, and export posters or spreadsheets from a single app that runs on your machine or server.
+A self-hosted app that turns your Discogs collection into something you actually enjoy browsing:
+beautiful covers, real insights, and every detail of every copy you own.
 
-**Spanish version:** [Leer en español](./README.es.md)
+[![Latest release](https://img.shields.io/github/v/release/SimonBlancoE/discographic?color=d1a45a&label=release)](https://github.com/SimonBlancoE/discographic/releases)
+[![MIT License](https://img.shields.io/badge/license-MIT-57534e.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-57534e.svg?logo=docker&logoColor=white)](#quick-start)
 
-> `README.md` is the canonical version. Any content change here should be mirrored in `README.es.md` within the same PR.
-
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](https://docs.docker.com/get-docker/)
-[![Node.js](https://img.shields.io/badge/node-24.x-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![SQLite](https://img.shields.io/badge/database-SQLite-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[Leer en español](./README.es.md)
 
 <br />
-<br />
 
-<img src="docs/screenshots/dashboard-hero.webp" alt="Discographic dashboard with charts and collection stats" width="900" />
-
-<br />
-<br />
-
-*Built for collectors who want a fast, personal dashboard for their record library.*
+<img src="docs/screenshots/dashboard.webp" alt="Discographic dashboard: welcome, key figures and the collection value according to Discogs" width="900" />
 
 </div>
 
-> [!NOTE]
-> **v0.4.0 is out** - redesigned interface, rarity/demand stats, condition grading, Discogs folders, other pressings, Discogs collection value history and a Node 24 / React 19 stack. See [CHANGELOG.en.md](CHANGELOG.en.md) for the full list.
+<br />
 
-## What is Discographic?
+## Why Discographic
 
-Discographic is a self-hosted web app for browsing and managing your Discogs collection in a way that actually feels useful day to day.
+- **See your collection, not a spreadsheet.** Browse by cover, filter by anything, and jump straight to the record you're thinking of.
+- **Know what you have.** How much it's worth, which records collectors are hunting for, and the condition of every copy.
+- **Your data stays with you.** It runs on your own computer or server and keeps a local copy of your collection. Edits sync back to Discogs.
 
-Instead of just showing a raw list of releases, it gives you a proper dashboard, a searchable collection browser, a visual cover wall, exports, notes, ratings, and a local cache so the app stays fast once your library is synced. It works well for a solo collector, and it also makes sense for a small group of friends sharing the same instance.
-
-If you use Discogs every day, especially if you sell records there, your feedback is welcome. Open issues with anything that gets in the way or anything you would like to see improved. I am not a seller myself, so that kind of input helps a lot.
-
-## Why use it?
-
-- **Your data stays with you** - everything is cached locally in SQLite.
-- **Easy to run** - Docker Compose and you're in.
-- **Built for collectors, not just CRUD** - charts, value tracking, filters, notes, exports, poster generation.
-- **Spanish and English UI** - the app is bilingual.
-- **Multi-user ready** - each user connects their own Discogs account and sees only their own collection.
-
-## A quick look
+## Highlights
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/screenshots/collection.webp" alt="Collection browser with filters and inline editing" width="100%" />
-      <p><strong>Collection browser</strong><br />Search, filter, sort, rate, annotate, and export your records.</p>
+      <img src="docs/screenshots/collection.webp" alt="Collection browsed as a cover grid, sorted by demand" width="100%" />
+      <p><strong>Browse by cover</strong><br />Switch between a cover grid and a detailed table. Filter by genre, style, decade, format, label, folder or condition. Your page, sort and filters are remembered.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/screenshots/wall.webp" alt="Cover wall and poster generator" width="100%" />
-      <p><strong>Cover wall</strong><br />Turn your collection into a visual wall or high-resolution poster.</p>
+      <img src="docs/screenshots/release.webp" alt="Release page with community stats and your copy's details" width="100%" />
+      <p><strong>Every copy, in depth</strong><br />Tracklist, community stats, media and sleeve condition, folder and notes, all saved straight to Discogs. See every other pressing of the album and which ones you already own.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/insights.webp" alt="Rarity and demand rankings" width="100%" />
+      <p><strong>Rarity &amp; demand</strong><br />Discover your most wanted, most coveted and rarest records, based on how many Discogs collectors own and want them.</p>
+    </td>
+    <td width="50%" valign="top" align="center">
+      <img src="docs/screenshots/mobile.webp" alt="Discographic on a phone" width="45%" />
+      <p align="left"><strong>At home on your phone</strong><br />A layout that adapts from wide monitors to phones, in English and Spanish.</p>
     </td>
   </tr>
 </table>
 
-## What you get
+### Everything else
 
-- **Dashboard** - collection totals, estimated value, charts, leaderboard views.
-- **Collection browser** - search, filters, sorting, inline ratings, and notes.
-- **Release detail pages** - tracklist, metadata, and PNG export.
-- **Cover wall** - seamless poster generation up to 7200px.
-- **Import / Export** - Excel and CSV support.
-- **Achievements** - tiered unlockables and hidden badges.
-- **Random picker** - for when you want the app to choose tonight's record.
-
-## Radar v1 guardrails
-
-Radar v1 is a local Wantlist workspace, not a Marketplace automation layer.
-
-- It uses release-level Marketplace stats and local decisions only.
-- It does not implement seller recommendations, combined purchasing, shipping logic, listing-level availability, exact condition filtering, scheduled jobs, automatic alerts, price history, or complex scoring.
-- It does not write Radar decisions, notes, or Wantlist membership back to Discogs in v1.
-- Minimum condition is stored as a future-facing preference and is informational only in v1.
-- The older "Wantlist Price Alerts" direction is superseded by the Radar v1 PRD unless it is explicitly revived in a later plan.
+| | |
+|---|---|
+| 💰 **Collection value** | Discogs' own estimate (min / median / max), tracked over time, plus marketplace prices per record. |
+| 🏷️ **Suggested prices** | What Discogs suggests asking for each condition, with your copy's grade highlighted (needs Discogs seller settings). |
+| 📊 **Stats** | Genres, styles, decades, formats, labels, growth over time and your top artists. |
+| 🖼️ **Cover wall** | A mosaic of your covers, exportable as a poster up to 7200 px. |
+| 🖨️ **Print catalog** | A clean, printable list of your whole collection or any filtered part of it. |
+| 📥 **Import / export** | Excel and CSV. Edit ratings and notes in a spreadsheet and import them back. |
+| 🎯 **Wantlist manager** | Review your Wantlist with prices, priorities and local notes. |
+| 🎲 **Pick for tonight** | Let the app choose a random record, and unlock achievements as your collection grows. |
+| 👥 **Multi-user** | Each person connects their own Discogs account and sees only their collection. |
 
 ## Quick start
 
-If you just want to run it, this is the path.
-
-### 1. Start with Docker
-
-You need [Docker](https://docs.docker.com/get-docker/) installed.
+You need [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
 git clone https://github.com/SimonBlancoE/discographic.git
@@ -95,147 +76,53 @@ cd discographic
 docker compose up -d
 ```
 
-Then open **http://localhost:3800** in your browser.
+Open **http://localhost:3800**, then:
 
-> [!IMPORTANT]
-> ### Ephemeral manual test instance
->
-> This is a throwaway QA-only instance. It is not part of the normal setup flow and it does not keep persistent data.
->
-> ```bash
-> pnpm run test:instance:start -- --host 127.0.0.1 --port 3801
-> ```
->
-> That command starts a disposable Docker instance with these users already created:
->
-> - **Admin** - `admin-demo` / `demo12345`
-> - **User** - `user-demo` / `demo12345`
->
-> All data lives in memory only. When you finish testing, destroy everything with:
->
-> ```bash
-> pnpm run test:instance:stop -- --host 127.0.0.1 --port 3801
-> ```
+1. **Create your account.** The first user becomes the admin.
+2. **Connect Discogs.** In *Settings*, enter your Discogs username and a personal token ([get one here](https://www.discogs.com/settings/developers) → *Generate new token*).
+3. **Sync.** Press *Sync with Discogs* on the dashboard. Large collections take a few minutes the first time.
 
-### 2. Create your first user
-
-On first launch, Discographic will ask you to create an admin account.
-
-### 3. Connect your Discogs account
-
-After signing in:
-
-1. Open **Settings**
-2. Enter your Discogs username
-3. Paste your personal access token
-4. Run **Sync with Discogs**
-
-### 4. Get your Discogs token
-
-1. Go to [discogs.com/settings/developers](https://www.discogs.com/settings/developers)
-2. Click **Generate new token**
-3. Copy it into Discographic
-
-That's all the app needs to read your collection and sync things like ratings and notes back to Discogs.
-
-### Stop or restart it later
-
-```bash
-docker compose down
-docker compose up -d
-```
-
-Your data stays in the Docker volume.
-
-### Updating to a new version
+### Updating
 
 ```bash
 git pull
 docker compose up -d --build
 ```
 
-Your database and cached covers are preserved - they live in a Docker volume separate from the image. If the new version needs changes to the database, they are applied automatically on startup.
+Your data lives in a Docker volume and is kept across updates. Database changes are applied automatically on startup. Back up the volume before major upgrades.
 
-## Local development
+## Configuration
 
-If you want to work on the code instead of just running the app, use Node.js 24.x and pnpm:
+Optional. Copy `.env.example` to `.env` to change any of these:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PORT` | `3800` | Port the app listens on. |
+| `HOST_IP` | `127.0.0.1` | Interface Docker binds to. Use your LAN IP to reach it from other devices. |
+| `COOKIE_SECURE` | `false` | Set to `true` when serving over HTTPS. |
+| `TRUST_PROXY` | `1` when `COOKIE_SECURE=true` | Proxy hops to trust, e.g. behind Cloudflare Tunnel or a reverse proxy. |
+| `SESSION_SECRET` | *(generated)* | Cookie signing secret. If empty, a random one is created and kept in the data volume. |
+
+Discogs credentials are never set here: each user adds their own inside the app.
+
+## FAQ
+
+**Is my Discogs token safe?** It's stored on your server and only used by the server to talk to Discogs. The browser only ever sees a short preview of it.
+
+**Why is the first sync slow?** Discogs limits apps to 60 requests per minute. The first sync, price review and community data download respect that limit. After that, everything is local and fast.
+
+**Can I run it without Docker?** Yes. See *Development* below. You'll need Node.js 24 and pnpm.
+
+## Development
 
 ```bash
 pnpm install
+pnpm run dev:server   # API on http://localhost:3800
+pnpm run dev          # app on http://localhost:5173
 ```
 
-You need two terminals:
-
-```bash
-# Terminal 1 - API server with direct TypeScript execution
-pnpm run dev:server
-
-# Terminal 2 - Vite dev server with hot reload
-pnpm run dev
-```
-
-- Frontend: http://localhost:5173
-- Backend: http://localhost:3800
-
-### Environment variables
-
-Copy `.env.example` to `.env` if you want to override the defaults:
-
-```env
-HOST_IP=127.0.0.1                         # Docker bind IP (use your LAN IP to expose it)
-PORT=3800                                 # API port
-SESSION_SECRET=                           # Cookie signing secret (empty = random one kept in the data volume)
-COOKIE_SECURE=false                       # Set to true behind HTTPS
-TRUST_PROXY=                              # Proxy hops to trust (defaults to 1 when COOKIE_SECURE=true)
-```
-
-Discogs credentials are **not** set via environment variables. Each user adds them inside the app.
-
-## Contributing
-
-Direct contributions are not accepted as a standing policy, but all kinds of feedback are very welcome and appreciated, including issues and pull requests.
-
-If you do open a pull request, please check [CONTRIBUTING.md](./CONTRIBUTING.md) first for the project guardrails and verification commands.
-
-## Tech stack
-
-| Layer | Tech |
-|---|---|
-| Frontend | React 18, Vite, Tailwind CSS |
-| Backend | Node.js, Express |
-| Database | SQLite via better-sqlite3 |
-| Charts | Recharts |
-| Image processing | Sharp |
-| Packaging | Docker multi-stage build |
-
-## Project structure
-
-```text
-src/          React frontend (pages, components, hooks, context)
-server/       Express API, SQLite setup, Discogs client, route handlers
-shared/       i18n strings and utilities shared between frontend and backend
-public/       Static assets
-data/         Runtime data - SQLite DB and cached covers (gitignored)
-docs/         README screenshots
-```
-
-## Troubleshooting
-
-**`better-sqlite3` or `sharp` fails to install**
-
-Both packages use native binaries. On Linux you may need `build-essential` and `python3`. On macOS, install Xcode command line tools. The Docker image avoids this problem entirely.
-
-**Port 3800 is already in use**
-
-Change the port in `.env` or in `docker-compose.yml`.
-
-**First sync takes a while**
-
-That is normal for larger collections. Discogs rate-limits API calls, so the initial sync can take several minutes. Later syncs are much faster.
-
-**Covers are slow the first time**
-
-Cover thumbnails are cached locally. The first wall/poster run is the slow one; after that it gets much faster.
+Built with React 19, React Router 7, Tailwind CSS 4, Vite 8, Express 5, SQLite (better-sqlite3), Recharts and Sharp, all in TypeScript.
+Before opening a pull request, read [CONTRIBUTING.md](./CONTRIBUTING.md) for the project guidelines and the verification commands.
 
 ## License
 
