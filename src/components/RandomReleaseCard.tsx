@@ -57,7 +57,7 @@ function RandomReleaseCard() {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
         <div className="flex-1 space-y-4">
           <div>
-            <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('random.eyebrow')}</p>
+            <p className="text-sm uppercase tracking-[0.14em] text-brand-200">{t('random.eyebrow')}</p>
             <h3 className="mt-2 font-display text-3xl text-white">{t('random.title')}</h3>
             <p className="mt-3 max-w-xl text-sm text-slate-400">
               {t('random.subtitle')}
@@ -76,15 +76,15 @@ function RandomReleaseCard() {
           </div>
 
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-          {spinning ? <p className="text-sm text-cyan-200/90">{shuffleLabel}</p> : null}
+          {spinning ? <p className="text-sm text-brand-200/90">{shuffleLabel}</p> : null}
         </div>
 
         <div className="relative w-full max-w-sm">
           <div className="random-card__halo" aria-hidden="true" />
-          <div className={`relative overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/70 p-4 shadow-[0_26px_60px_rgba(2,6,23,0.45)] transition duration-500 ${spinning ? 'random-card__shell--spinning' : ''}`}>
+          <div className={`relative overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70 p-4 shadow-[0_26px_60px_rgba(2,6,23,0.45)] transition duration-500 ${spinning ? 'random-card__shell--spinning' : ''}`}>
             {release ? (
               <div className="space-y-4">
-                <div className="aspect-square overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/80">
+                <div className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80">
                   <CoverImage
                     src={release.cover_url ? release.detail_cover_url : null}
                     fallbackSrc={release.cover_url}
@@ -94,7 +94,7 @@ function RandomReleaseCard() {
                   />
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.25em] text-brand-200">{t('random.pick')}</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-brand-200">{t('random.pick')}</p>
                   <h4 className="mt-2 font-display text-2xl text-white">{release.title}</h4>
                   <p className="mt-1 text-base text-slate-300">{release.artist}</p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
@@ -105,7 +105,7 @@ function RandomReleaseCard() {
                 </div>
               </div>
             ) : (
-              <div className="flex aspect-square flex-col items-center justify-center gap-4 rounded-[24px] border border-dashed border-white/10 bg-white/5 text-center text-slate-400">
+              <div className="flex aspect-square flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-white/10 bg-white/5 text-center text-slate-400">
                 <div className="random-card__record" aria-hidden="true" />
                  <p className="max-w-xs text-sm">{t('random.placeholder')}</p>
               </div>

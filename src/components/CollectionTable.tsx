@@ -103,7 +103,7 @@ const RENDERERS: Record<ColumnId, Renderer> = {
             <CoverImage src={localCoverUrl} fallbackSrc={release.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" placeholderClassName="h-full w-full" />
           </span>
           {localCoverUrl ? (
-            <span className="cover-peek absolute left-16 top-1/2 z-20 hidden w-40 -translate-y-1/2 rounded-[22px] border border-white/10 bg-slate-950/90 p-2 shadow-[0_24px_60px_rgba(2,6,23,0.48)] backdrop-blur-xl lg:block">
+            <span className="cover-peek absolute left-16 top-1/2 z-20 hidden w-40 -translate-y-1/2 rounded-2xl border border-white/10 bg-slate-950/90 p-2 shadow-[0_24px_60px_rgba(2,6,23,0.48)] backdrop-blur-xl lg:block">
                <img src={localCoverUrl} alt={t('collection.coverExpanded', { title: release.title })} className="aspect-square w-full rounded-[16px] object-cover" />
             </span>
           ) : null}

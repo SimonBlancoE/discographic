@@ -98,7 +98,7 @@ function OtherPressings({ releaseId, discogsReleaseId }: { releaseId: number; di
                     {!isCurrent && version.localReleaseId ? (
                       <Link to={`/release/${version.localReleaseId}`} className="pill-tag border-emerald-400/30 text-emerald-200 hover:bg-emerald-400/10">{t('pressings.owned')}</Link>
                     ) : null}
-                    {version.inRadar ? <span className="pill-tag border-cyan-300/30 text-cyan-200">{t('pressings.wanted')}</span> : null}
+                    {version.inRadar ? <span className="pill-tag border-brand-300/30 text-brand-200">{t('pressings.wanted')}</span> : null}
                     <a
                       href={`https://www.discogs.com/release/${version.releaseId}`}
                       target="_blank"

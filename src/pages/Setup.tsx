@@ -57,7 +57,7 @@ function Setup() {
       <form onSubmit={handleSubmit} className="glass-panel w-full space-y-5 p-8">
         <div>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm uppercase tracking-[0.35em] text-brand-200">{t('setup.eyebrow')}</p>
+            <p className="text-sm uppercase tracking-[0.14em] text-brand-200">{t('setup.eyebrow')}</p>
             <select value={locale} onChange={(event) => setLocale(event.target.value)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-hidden">
               <option value="es" className="bg-slate-950">{t('language.es')}</option>
               <option value="en" className="bg-slate-950">{t('language.en')}</option>

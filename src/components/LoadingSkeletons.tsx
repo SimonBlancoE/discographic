@@ -6,7 +6,7 @@ export function DashboardSkeleton() {
   return (
     <div className="space-y-6">
       <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-        <div className="hero-panel space-y-5">
+        <div className="glass-panel space-y-5 p-8">
           <SkeletonBlock className="h-4 w-36" />
           <SkeletonBlock className="h-12 w-full max-w-2xl" />
           <SkeletonBlock className="h-5 w-full max-w-xl" />
@@ -28,7 +28,7 @@ export function DashboardSkeleton() {
           <div key={index} className="glass-panel space-y-4 p-5">
             <SkeletonBlock className="h-4 w-28" />
             <SkeletonBlock className="h-10 w-32" />
-            <SkeletonBlock className="h-16 w-full rounded-[24px]" />
+            <SkeletonBlock className="h-16 w-full rounded-2xl" />
           </div>
         ))}
       </section>
@@ -38,7 +38,7 @@ export function DashboardSkeleton() {
           <div key={index} className="glass-panel space-y-4 p-5">
             <SkeletonBlock className="h-6 w-40" />
             <SkeletonBlock className="h-4 w-3/4" />
-            <SkeletonBlock className="h-64 w-full rounded-[28px]" />
+            <SkeletonBlock className="h-64 w-full rounded-2xl" />
           </div>
         ))}
       </section>
@@ -84,7 +84,7 @@ export function ReleaseDetailSkeleton() {
     <div className="space-y-6">
       <SkeletonBlock className="h-5 w-40" />
       <section className="glass-panel grid gap-6 p-6 xl:grid-cols-[320px_1fr]">
-        <SkeletonBlock className="min-h-[320px] w-full rounded-[28px]" />
+        <SkeletonBlock className="min-h-[320px] w-full rounded-2xl" />
         <div className="space-y-4">
           <SkeletonBlock className="h-4 w-28" />
           <SkeletonBlock className="h-12 w-full max-w-xl" />
@@ -93,7 +93,7 @@ export function ReleaseDetailSkeleton() {
             <SkeletonBlock className="h-24 w-full" />
             <SkeletonBlock className="h-24 w-full" />
           </div>
-          <SkeletonBlock className="h-32 w-full rounded-[28px]" />
+          <SkeletonBlock className="h-32 w-full rounded-2xl" />
         </div>
       </section>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -103,7 +103,7 @@ export function ReleaseDetailSkeleton() {
       </section>
       <section className="glass-panel space-y-4 p-5">
         <SkeletonBlock className="h-8 w-44" />
-        <SkeletonBlock className="h-64 w-full rounded-[28px]" />
+        <SkeletonBlock className="h-64 w-full rounded-2xl" />
       </section>
     </div>
   );

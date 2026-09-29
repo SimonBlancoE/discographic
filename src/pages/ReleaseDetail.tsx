@@ -21,7 +21,7 @@ import type { CollectionMeta, ReleaseTrackRow, UpdateReleasePatch } from '../lib
 function MetaItem({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div className="rounded-2xl border border-white/5 bg-white/3 p-4">
-      <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
+      <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
       <p className="mt-1.5 text-sm text-slate-100">{value || '-'}</p>
     </div>
   );
@@ -29,9 +29,9 @@ function MetaItem({ label, value }: { label: string; value: string | number | nu
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3" title={hint}>
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 font-display text-xl text-white">{value}</p>
+    <div className="min-w-0 rounded-xl border border-white/5 bg-black/20 px-3 py-3" title={hint}>
+      <p className="text-[11px] uppercase leading-tight tracking-[0.1em] text-slate-500">{label}</p>
+      <p className="mt-1 truncate font-display text-xl tabular-nums text-white">{value}</p>
     </div>
   );
 }
@@ -190,7 +190,7 @@ function ReleaseDetail() {
         {t('release.back')}
       </button>
 
-      <div ref={shareCardRef} className="space-y-6 rounded-[26px]">
+      <div ref={shareCardRef} className="space-y-6 rounded-2xl">
         <section className="glass-panel relative overflow-hidden">
           {coverSrc ? <div className="detail-backdrop" style={{ backgroundImage: `url(${coverSrc})` }} aria-hidden="true" /> : null}
           <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[300px_1fr]">
@@ -198,7 +198,7 @@ function ReleaseDetail() {
               <CoverImage src={coverSrc} fallbackSrc={release.cover_url} alt={release.title} className="aspect-square h-full w-full object-cover" placeholderClassName="aspect-square w-full" />
             </div>
 
-            <div className="min-w-0">
+            <div className="@container min-w-0">
               <p className="page-eyebrow">{t('release.eyebrow')}</p>
               <h2 className="mt-2 font-display text-3xl font-semibold leading-tight text-white sm:text-4xl">{release.title}</h2>
               <p className="mt-2 text-lg text-slate-300">{release.artist}</p>
@@ -228,7 +228,7 @@ function ReleaseDetail() {
               </div>
 
               {hasCommunity ? (
-                <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="mt-6 grid grid-cols-2 gap-2 @2xl:grid-cols-4">
                   <StatTile label={t('release.communityHave')} value={formatCompactNumber(release.community_have)} />
                   <StatTile label={t('release.communityWant')} value={formatCompactNumber(release.community_want)} />
                   <StatTile

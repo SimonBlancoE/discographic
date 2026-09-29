@@ -25,7 +25,7 @@ function CoverImage({ src, fallbackSrc, alt = '', className, placeholderClassNam
         aria-label={alt}
         className={`flex items-center justify-center bg-[radial-gradient(circle_at_center,#1e293b_0_16%,#05060a_17%_46%,#1f2937_47%_49%,#05060a_50%)] ${placeholderClassName ?? className ?? ''}`}
       >
-        <span className="h-[14%] w-[14%] rounded-full bg-linear-to-br from-brand-400 to-cyan-300 opacity-80" />
+        <span className="h-[14%] w-[14%] rounded-full bg-brand-400 opacity-80" />
       </span>
     );
   }

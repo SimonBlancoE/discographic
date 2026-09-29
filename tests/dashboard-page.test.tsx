@@ -65,10 +65,6 @@ vi.mock('../src/components/AchievementsPanel', () => ({
   default: () => <div>Achievements</div>,
 }));
 
-vi.mock('../src/components/HeroCarousel', () => ({
-  default: () => <div>Hero</div>,
-}));
-
 vi.mock('../src/components/LoadingSkeletons', () => ({
   DashboardSkeleton: () => <div>Loading</div>,
 }));

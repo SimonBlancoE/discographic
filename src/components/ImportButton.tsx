@@ -174,7 +174,7 @@ function ImportButton({ disabled = false, onApplied }: { disabled?: boolean; onA
       {phase === 'idle' && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <label className={`secondary-button cursor-pointer focus-within:ring-2 focus-within:ring-cyan-300 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+            <label className={`secondary-button cursor-pointer focus-within:ring-2 focus-within:ring-brand-300 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
               {t('collection.import')}
               <input
                 ref={fileRef}
@@ -316,7 +316,7 @@ function ImportButton({ disabled = false, onApplied }: { disabled?: boolean; onA
           </div>
 
           <div className="h-3 overflow-hidden rounded-full bg-slate-900/80">
-            <div className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400 transition-all duration-500" style={{ width: `${syncProgress}%` }} />
+            <div className="h-full rounded-full bg-brand-400 transition-all duration-500" style={{ width: `${syncProgress}%` }} />
           </div>
 
           <p className="text-sm text-slate-400">

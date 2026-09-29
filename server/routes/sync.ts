@@ -757,6 +757,8 @@ router.get('/status', (req, res) => {
 
   res.json(normalizeSyncStatus({
     ...state,
+    // The idle message is created once per user; re-translate it so it follows the viewer's language.
+    ...(state.status === 'idle' ? { message: req.t('backend.sync.idle') } : {}),
     enrichment: {
       ...state.enrichment,
       pending

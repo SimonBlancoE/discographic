@@ -216,10 +216,10 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
     : t('sync.pendingEnrich', { count: pendingValues });
 
   return (
-    <div className="glass-panel w-full max-w-md p-4">
+    <div className="glass-panel w-full p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm uppercase tracking-[0.25em] text-slate-400">{t('sync.title')}</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{t('sync.title')}</p>
           <p className="text-sm text-slate-300">{status?.message || t('sync.ready')}</p>
         </div>
         <button type="button" onClick={handleSync} disabled={syncing || disabled} className="primary-button disabled:cursor-not-allowed disabled:opacity-60">
@@ -227,14 +227,19 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
         </button>
       </div>
 
-      <div className="h-3 overflow-hidden rounded-full bg-slate-900/80">
-        <div className="h-full rounded-full bg-linear-to-r from-brand-400 to-cyan-400 transition-all duration-500" style={{ width: `${progress}%` }} />
-      </div>
+      {/* Progress only means something while a sync runs; idle it was an empty bar reading "0 / 0". */}
+      {syncing ? (
+        <>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+            <div className="h-full rounded-full bg-brand-400 transition-all duration-500" style={{ width: `${progress}%` }} />
+          </div>
 
-      <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
-        <span>{t(`sync.phase.${status?.phase || 'idle'}`)}</span>
-        <span>{status?.current || 0} / {status?.total || 0}</span>
-      </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+            <span>{t(`sync.phase.${status?.phase || 'idle'}`)}</span>
+            <span className="tabular-nums">{status?.current || 0} / {status?.total || 0}</span>
+          </div>
+        </>
+      ) : null}
 
       {syncStatusError ? (
         <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -263,7 +268,7 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
           </div>
           {enrichRunning && (
             <div className="h-2 overflow-hidden rounded-full bg-slate-900/80">
-              <div className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400 transition-all duration-500" style={{ width: `${enrichProgress}%` }} />
+              <div className="h-full rounded-full bg-brand-400 transition-all duration-500" style={{ width: `${enrichProgress}%` }} />
             </div>
           )}
           {enrichStatusError ? (
@@ -284,7 +289,7 @@ function SyncButton({ onSyncComplete, disabled = false }: { onSyncComplete?: Syn
             <span className="text-xs text-slate-500">{t('sync.mosaicPoster')}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-slate-900/80">
-            <div className="h-full rounded-full bg-linear-to-r from-cyan-400 to-sky-400 transition-all duration-500" style={{ width: `${status?.thumbnails.progressPercent || 0}%` }} />
+            <div className="h-full rounded-full bg-brand-400 transition-all duration-500" style={{ width: `${status?.thumbnails.progressPercent || 0}%` }} />
           </div>
         </div>
       ) : null}

@@ -43,7 +43,7 @@ function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
             <button
               type="button"
               onClick={() => onDismiss(toast.id)}
-              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs uppercase tracking-[0.2em] text-slate-300 transition hover:bg-white/10 hover:text-white"
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs uppercase tracking-[0.14em] text-slate-300 transition hover:bg-white/10 hover:text-white"
               aria-label={translate(getCurrentLocale(), 'toast.dismiss')}
             >
               x

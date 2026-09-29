@@ -8,12 +8,13 @@ const NEUTRAL_BADGE_LABELS = ['DISC 1', 'DISC 2', 'DISC 3', 'DISC 4', 'DISC 5'];
 export const VINYL_SPIN_IDLE_DPS = 80;
 export const VINYL_SPIN_HOVER_DPS = 124;
 const VINYL_SPIN_SMOOTHING_MS = 260;
+// Label colours of real pressings: golds, creams and a deep oxblood, never neon.
 const GENRE_SWATCHES = [
-  'radial-gradient(circle at 30% 30%, #fef3c7, #f59e0b 70%, #78350f)',
-  'linear-gradient(135deg, #67e8f9, #a78bfa)',
-  'linear-gradient(135deg, #fb7185, #be123c)',
-  'radial-gradient(circle at 50% 50%, #fde68a, #ea580c)',
-  'linear-gradient(135deg, #94a3b8, #334155)'
+  'radial-gradient(circle at 35% 35%, #efd9ab, #c9a15c 70%, #7a5a2a)',
+  'radial-gradient(circle at 35% 35%, #f3eee4, #cfc6b4 70%, #8a806c)',
+  'radial-gradient(circle at 35% 35%, #b4574b, #7c2d25 70%, #3f1612)',
+  'radial-gradient(circle at 35% 35%, #d9cdb4, #a39676 70%, #5b5240)',
+  'radial-gradient(circle at 35% 35%, #57534e, #292524 75%, #0c0a09)'
 ];
 
 type BadgeGenreInput = string | NamedCountRow | { name?: string | null } | null | undefined;
