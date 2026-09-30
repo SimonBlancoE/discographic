@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [0.4.1] - 2026-09-30
+
+Backend maintenance release focused on data integrity, authentication, cancellation and verified upgrades.
+
+### Fixed
+
+- **Import identity** — imports resolve collection copies by consistent instance/release identifiers and reject ambiguous or conflicting rows, including duplicate identity columns.
+- **Durable imported edits** — pending ratings and notes survive restarts, partial failures and incoming synchronization. Revision checks and serialized writes keep older retries from replacing newer edits. Authenticated clients can retry with `POST /api/import/retry`; import status includes durable `pending` and `pendingFailed` field counts.
+- **Session revocation** — password changes and administrative resets invalidate earlier sessions; deleted accounts cannot continue using an old cookie. Login rechecks account state after password verification.
+- **Concurrent login limiting** — attempts reserve account, client and concurrent verification capacity before password verification, closing the parallel-request bypass.
+- **Cancelled job ownership** — stopped or reset account jobs cannot publish late results, repopulate cleared data or release a replacement run's lock.
+- **Sync completion** — a Discogs sync run remains active through inventory and cover warmup, and follow-up failures are reported instead of marking the run successful early.
+- **Wantlist snapshots** — malformed, duplicate or incomplete paginated responses cannot mark valid Radar records as missing.
+- **Inventory snapshots** — listing state is preserved until a complete, coherent inventory has been received, including accounts with several listings for the same release.
+- **Collection snapshots** — incomplete pagination cannot prune local copies or partially replace their data; separate instances of the same release remain valid.
+- **Discogs request deadlines** — bounded quota waits, requests, body reads and rate-limit retries honor cancellation. Retry delays are capped and response resources are released.
+- **Cover download deadlines** — cover downloads and body reads honor account/job cancellation and a 30-second deadline, including the authenticated media proxy and sync warmup.
+- **Docker Compose ports** — a custom host `PORT` keeps the container listener and health check on port 3800.
+- **Collection filter performance** — bounded facet caching avoids rescanning unchanged collections, remains valid across session writes and detects collection changes from other SQLite connections without retaining rolled-back values.
+- **Data boundaries** — reject malformed collection/inventory metadata before reconciliation, and normalize stored JSON array shapes on read so exports and statistics do not fail on malformed stored values.
+
+### Changed
+
+- Restore TypeScript checking across the backend with explicit database, request and external-data contracts; remove the remaining backend `@ts-nocheck` directives.
+- Replace copied import-header, inventory and migration test algorithms with tests of production behavior. The complete Database schema lifecycle runs in one transaction so failed migrations roll back together.
+
+### Upgrade notes
+
+- Existing databases migrate automatically. Sessions created before this release require a fresh login.
+- The durable import queue covers edits confirmed with this version; it cannot reconstruct previously lost in-memory failures. Retrying pending edits is an explicit backend API operation.
+
+[0.4.1]: https://github.com/SimonBlancoE/discographic/compare/v0.4.0...v0.4.1
+
 ## [0.4.0] - 2026-09-29
 
 Release with an interface redesign, new Discogs-powered features, a full stack upgrade and production hardening.
