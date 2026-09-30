@@ -1,11 +1,14 @@
 export type UnknownRecord = Record<string, unknown>;
 
+export type SnapshotProgress = { page: number; pages: number; items: number; current: number };
+
 type SnapshotOptions<Entry> = {
   name: string;
   rowsKey: string;
   identityName: string;
   normalizeEntry: (value: unknown, invalid: (reason: string) => never) => Entry;
   identity: (entry: Entry) => number;
+  onPage?: (progress: SnapshotProgress) => void;
 };
 
 export function record(value: unknown): UnknownRecord | null {
@@ -74,12 +77,14 @@ export async function fetchCompleteSnapshot<Entry>(
   }
 
   append(first.rows);
+  options.onPage?.({ page: 1, pages, items, current: entries.length });
   for (let page = 2; page <= pages; page += 1) {
     const next = normalizePage(await fetchPage(page, perPage), page);
     if (next.pagination.pages !== pages || next.pagination.items !== items) {
       return invalid('pagination changed during traversal');
     }
     append(next.rows);
+    options.onPage?.({ page, pages, items, current: entries.length });
   }
 
   if (entries.length !== items) return invalid('incomplete total coverage');
