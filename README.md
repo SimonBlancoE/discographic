@@ -97,7 +97,7 @@ Optional. Copy `.env.example` to `.env` to change any of these:
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PORT` | `3800` | Port the app listens on. |
+| `PORT` | `3800` | Docker Compose host port; the container listens on `3800`. When running the server directly, this sets its listening port. |
 | `HOST_IP` | `127.0.0.1` | Interface Docker binds to. Use your LAN IP to reach it from other devices. |
 | `COOKIE_SECURE` | `false` | Set to `true` when serving over HTTPS. |
 | `TRUST_PROXY` | `1` when `COOKIE_SECURE=true` | Proxy hops to trust, e.g. behind Cloudflare Tunnel or a reverse proxy. |
