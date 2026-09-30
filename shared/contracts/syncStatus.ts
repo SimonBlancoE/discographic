@@ -61,6 +61,8 @@ export type ImportSyncState = {
   applied: number;
   synced: number;
   failed: number;
+  pending: number;
+  pendingFailed: number;
   failures: ImportFailure[];
   progressPercent: number;
   isTerminal: boolean;
@@ -235,6 +237,8 @@ export function normalizeImportSyncState(payload: UnknownRecord = {}): ImportSyn
     synced: asNumber(payload?.synced),
     failed: asNumber(payload?.failed, failures.length),
     failures,
+    pending: asNumber(payload?.pending),
+    pendingFailed: asNumber(payload?.pendingFailed),
     progressPercent: progressPercent(current, total),
     isTerminal: isTerminalImportStatus(status),
     message: asText(payload?.message)

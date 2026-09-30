@@ -1,5 +1,6 @@
 // @ts-nocheck
 import Database from 'better-sqlite3';
+import { migratePendingImportEdits } from '../server/services/pendingImportEdits.js';
 import express from 'express';
 import type { Server } from 'http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -62,6 +63,7 @@ describe('PUT /api/collection/:id', () => {
       num_for_sale INTEGER, synced_at TEXT)`);
     db.prepare(`INSERT INTO releases (id, user_id, release_id, instance_id, title, artist, rating, notes, folder_id)
       VALUES (1, 5, 100, 200, 'T', 'A', 2, ?, 1)`).run(JSON.stringify([{ field_id: 1, value: 'Good (G)' }, { field_id: 3, value: 'old' }]));
+    migratePendingImportEdits(db);
     memoryDb.current = db;
     Object.values(discogs).forEach((fn) => fn.mockReset());
 
@@ -109,8 +111,8 @@ describe('PUT /api/collection/:id', () => {
 
     expect(response.status).toBe(200);
     expect(discogs.updateField).toHaveBeenCalledTimes(1);
-    expect(discogs.updateField).toHaveBeenCalledWith(expect.objectContaining({ fieldId: 3, value: 'new note' }));
-    expect(discogs.moveToFolder).toHaveBeenCalledWith(expect.objectContaining({ folderId: 1, targetFolderId: 7 }));
+    expect(discogs.updateField).toHaveBeenCalledWith(expect.objectContaining({ fieldId: 3, value: 'new note' }), expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(discogs.moveToFolder).toHaveBeenCalledWith(expect.objectContaining({ folderId: 1, targetFolderId: 7 }), expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(JSON.parse(row().notes)).toEqual([{ field_id: 1, value: 'Good (G)' }, { field_id: 3, value: 'new note' }]);
     expect(row().folder_id).toBe(7);
   });

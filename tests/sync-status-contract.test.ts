@@ -113,6 +113,8 @@ describe('import sync status contract', () => {
       applied: '4',
       synced: '1',
       failed: '1',
+      pending: '3',
+      pendingFailed: '2',
       failures: [
         {
           dbId: '7',
@@ -135,6 +137,8 @@ describe('import sync status contract', () => {
       applied: 4,
       synced: 1,
       failed: 1,
+      pending: 3,
+      pendingFailed: 2,
       failures: [
         {
           dbId: 7,
@@ -149,6 +153,10 @@ describe('import sync status contract', () => {
       isTerminal: false,
       message: 'Syncing 2/4'
     });
+  });
+
+  it('defaults durable counts when an older status payload omits them', () => {
+    expect(normalizeImportSyncState({})).toMatchObject({ pending: 0, pendingFailed: 0 });
   });
 
   it('classifies terminal import statuses and UI metadata', () => {

@@ -17,6 +17,7 @@ import {
 import { getNoteFieldText, notesToText, parseStoredNotes, replaceNoteText } from '../services/notes.js';
 import { translate } from '../../shared/i18n.js';
 import { normalizeImportSyncState } from '../../shared/contracts/syncStatus.js';
+import { pendingImportCounts, pendingImportInstances, queueImportEdit, sendPendingImportEdits } from '../services/pendingImportEdits.js';
 import { resolveImportIdentity } from '../services/importIdentity.js';
 
 const router = express.Router();
@@ -242,58 +243,12 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale, run })
   try {
     for (const change of changes) {
       if (run.stopped) return;
-      const release = db.prepare(
-        'SELECT folder_id, release_id, instance_id, notes FROM releases WHERE id = ? AND user_id = ?'
-      ).get(change.dbId, userId);
-
-      if (!release) {
-        failures.push(buildImportFailure(change, t('backend.import.releaseMissing')));
-        processed += 1;
-        setImportSyncState(userId, createRunningImportSyncState({
-          locale,
-          current: processed,
-          total: changes.length,
-          synced,
-          failures,
-          t
-        }));
-        continue;
-      }
-
-      const base = {
-        folderId: release.folder_id || 0,
-        releaseId: release.release_id,
-        instanceId: release.instance_id
-      };
-
-      const itemErrors = [];
-
-      if (change.ratingChanged) {
-        try {
-          await discogs.updateRating({ ...base, rating: change.newRating }, { signal: run.signal });
-        } catch (error) {
-          itemErrors.push(`${t('collection.rating')}: ${error?.message || t('backend.import.unknownSyncError')}`);
-        }
-      }
-
-      if (run.stopped) return;
-      if (change.notesChanged) {
-        const notesFieldId = getCollectionFieldMap(userId).notesFieldId;
-
-        try {
-          await discogs.updateField({
-            ...base,
-            fieldId: notesFieldId,
-            value: change.newNotes
-          }, { signal: run.signal });
-        } catch (error) {
-          itemErrors.push(`${t('collection.notes')}: ${error?.message || t('backend.import.unknownSyncError')}`);
-        }
-      }
-
+      const itemErrors = await sendPendingImportEdits(db, userId, change.instanceId, discogs, run);
       if (run.stopped) return;
       if (itemErrors.length) {
-        failures.push(buildImportFailure(change, itemErrors.join(' | ')));
+        failures.push(buildImportFailure(change, itemErrors.map(error =>
+          `${t(error.fieldId === 0 ? 'collection.rating' : 'collection.notes')}: ${error.reason}`
+        ).join(' | ')));
       } else {
         synced += 1;
       }
@@ -418,11 +373,6 @@ router.post('/apply', async (req, res) => {
     previewCache.delete(previewId);
     const userId = req.session.userId;
 
-    // Applying another preview replaces the previous background run.
-    importRuns.get(userId)?.cancel();
-    const run = createUserJobScope(userId);
-    importRuns.set(userId, run);
-
     // Apply to local DB immediately
     const applyTx = db.transaction(() => {
       for (const change of changes) {
@@ -430,10 +380,12 @@ router.post('/apply', async (req, res) => {
         if (!release) continue;
 
         if (change.ratingChanged) {
+          queueImportEdit(db, userId, change.instanceId, change.releaseId, 0, change.newRating);
           db.prepare('UPDATE releases SET rating = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
             .run(change.newRating, change.dbId, userId);
         }
         if (change.notesChanged) {
+          queueImportEdit(db, userId, change.instanceId, change.releaseId, getCollectionFieldMap(userId).notesFieldId, change.newNotes);
           const current = parseStoredNotes(release.notes);
           const updated = replaceNoteText(current, change.newNotes, getCollectionFieldMap(userId).notesFieldId);
 
@@ -444,6 +396,12 @@ router.post('/apply', async (req, res) => {
     });
 
     applyTx();
+
+    // Applying another preview replaces the previous background run.
+    importRuns.get(userId)?.cancel();
+    const run = createUserJobScope(userId);
+    importRuns.set(userId, run);
+
     let discogs;
     try {
       discogs = getDiscogsClientForUser(req);
@@ -455,7 +413,7 @@ router.post('/apply', async (req, res) => {
         t: req.t
       });
       setImportSyncState(userId, syncState);
-      return res.json({ ok: true, applied: changes.length, syncState: normalizeImportSyncState(syncState) });
+      return res.json({ ok: true, applied: changes.length, syncState: normalizeImportSyncState({ ...syncState, ...pendingImportCounts(db, userId) }) });
     }
 
     const syncState = createRunningImportSyncState({
@@ -467,7 +425,7 @@ router.post('/apply', async (req, res) => {
       t: req.t
     });
     setImportSyncState(userId, syncState);
-    res.json({ ok: true, applied: changes.length, syncState: normalizeImportSyncState(syncState) });
+    res.json({ ok: true, applied: changes.length, syncState: normalizeImportSyncState({ ...syncState, ...pendingImportCounts(db, userId) }) });
 
     // Background sync with Discogs
     void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale, run });
@@ -476,8 +434,26 @@ router.post('/apply', async (req, res) => {
   }
 });
 
+// Explicit set-value retry, independent of preview diffs; nothing is dispatched on startup.
+router.post('/retry', (req, res) => {
+  const userId = req.session.userId;
+  if (importRuns.has(userId)) return res.status(409).json({ error: 'Import sync is already running' });
+  try {
+    const discogs = getDiscogsClientForUser(req);
+    const changes = pendingImportInstances(db, userId);
+    const run = createUserJobScope(userId);
+    importRuns.set(userId, run);
+    const syncState = createRunningImportSyncState({ locale: req.locale, total: changes.length, t: req.t });
+    setImportSyncState(userId, syncState);
+    res.json({ ok: true, syncState: normalizeImportSyncState({ ...syncState, ...pendingImportCounts(db, userId) }) });
+    void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale, run });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+});
+
 router.get('/status', (req, res) => {
-  res.json(normalizeImportSyncState(getImportSyncState(req.session.userId, req.locale)));
+  res.json(normalizeImportSyncState({ ...getImportSyncState(req.session.userId, req.locale), ...pendingImportCounts(db, req.session.userId) }));
 });
 
 export default router;
