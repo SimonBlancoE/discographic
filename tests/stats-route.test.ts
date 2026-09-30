@@ -14,6 +14,7 @@ vi.mock('../server/db.js', () => ({
   default: {
     prepare,
   },
+  getUserById: (id) => id === 7 ? { id: 7, username: 'collector', role: 'user', created_at: null, auth_epoch: 0 } : undefined,
   getSettingForUser,
   getRadarForUser,
   getCollectionFieldMap: () => ({ notesFieldId: 3, mediaFieldId: 1, sleeveFieldId: 2, mediaOptions: [], sleeveOptions: [] }),
@@ -120,7 +121,7 @@ describe('stats route', () => {
 
     const app = express();
     app.use((req, _res, next) => {
-      req.session = { userId: 7 };
+      req.session = { userId: 7, authEpoch: 0 };
       req.t = (key: string) => key;
       next();
     });

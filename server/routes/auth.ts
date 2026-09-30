@@ -1,6 +1,6 @@
-// @ts-nocheck
 import bcrypt from 'bcryptjs';
 import express from 'express';
+import type { Request, Response } from 'express';
 import { normalizeAuthStatus, normalizeUser } from '../../shared/contracts/account.js';
 import { createUser, getUserAuthById, getUserAuthByUsername, getUserCount, getUserById, migrateLegacyDataToUser, updateUserPasswordHash } from '../db.js';
 import { getCurrentUser, requireAuth } from '../middleware/auth.js';
@@ -12,13 +12,19 @@ const loginLimiter = createLoginLimiter();
 const DUMMY_HASH = bcrypt.hashSync('discographic-timing-guard', 12);
 
 // A fresh session id on every login prevents session fixation.
-function startSession(req, res, userId, payload) {
+function startSession(req: Request, res: Response, userId: number, authEpoch: number, payload: () => unknown) {
   return req.session.regenerate((regenerateError) => {
     if (regenerateError) {
       return res.status(500).json({ error: req.t('backend.auth.session') });
     }
 
+    const currentUser = getUserAuthById(userId);
+    if (!currentUser || currentUser.auth_epoch !== authEpoch) {
+      return res.status(401).json({ error: req.t('backend.auth.invalid') });
+    }
+
     req.session.userId = userId;
+    req.session.authEpoch = authEpoch;
     return req.session.save((error) => {
       if (error) {
         return res.status(500).json({ error: req.t('backend.auth.session') });
@@ -29,7 +35,7 @@ function startSession(req, res, userId, payload) {
   });
 }
 
-function sanitizeUser(user) {
+function sanitizeUser(user: unknown) {
   return normalizeUser(user);
 }
 
@@ -66,7 +72,7 @@ router.post('/bootstrap', async (req, res) => {
 
   const user = createUser(username, passwordHash, 'admin');
   migrateLegacyDataToUser(user.id);
-  return startSession(req, res, user.id, () => ({ ok: true, user: sanitizeUser(user) }));
+  return startSession(req, res, user.id, user.auth_epoch, () => ({ ok: true, user: sanitizeUser(user) }));
 });
 
 router.post('/login', async (req, res) => {
@@ -82,13 +88,15 @@ router.post('/login', async (req, res) => {
 
   const user = getUserAuthByUsername(username);
   const matches = await bcrypt.compare(password, user?.password_hash || DUMMY_HASH);
-  if (!user || !matches) {
+  // Credentials may have changed while the asynchronous comparison was running.
+  const currentUser = user ? getUserAuthById(user.id) : null;
+  if (!user || !matches || !currentUser || currentUser.auth_epoch !== user.auth_epoch || currentUser.password_hash !== user.password_hash) {
     loginLimiter.recordFailure(client, username);
     return res.status(401).json({ error: req.t('backend.auth.invalid') });
   }
 
   loginLimiter.recordSuccess(client, username);
-  return startSession(req, res, user.id, () => ({ ok: true, user: sanitizeUser(getUserById(user.id)) }));
+  return startSession(req, res, user.id, user.auth_epoch, () => ({ ok: true, user: sanitizeUser(getUserById(user.id)) }));
 });
 
 router.post('/logout', (req, res) => {
@@ -121,8 +129,12 @@ router.post('/change-password', requireAuth, async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  updateUserPasswordHash(user.id, passwordHash);
-  return res.json({ ok: true, message: req.t('backend.auth.passwordChanged') });
+  // A reset during either bcrypt operation must not be overwritten by this stale request.
+  const updatedUser = updateUserPasswordHash(user.id, passwordHash, user.auth_epoch);
+  if (!updatedUser) {
+    return res.status(401).json({ error: req.t('backend.auth.required') });
+  }
+  return startSession(req, res, user.id, updatedUser.auth_epoch, () => ({ ok: true, message: req.t('backend.auth.passwordChanged') }));
 });
 
 export default router;

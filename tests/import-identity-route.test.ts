@@ -36,6 +36,7 @@ describe('Import workflow collection copy identity', () => {
     app.use(session({ secret: 'import-identity-test', resave: false, saveUninitialized: false }));
     app.use((req, _res, next) => {
       req.session.userId = Number(req.get('x-test-user') || 1);
+      req.session.authEpoch = 0;
       req.locale = 'en';
       req.t = (key, vars) => translate('en', key, vars as TranslationVars);
       next();

@@ -2,7 +2,7 @@ declare module 'better-sqlite3-session-store' {
   import type Database from 'better-sqlite3';
   import type session from 'express-session';
 
-  type SqliteStoreOptions = session.SessionOptions & {
+  type SqliteStoreOptions = {
     client: Database.Database;
     expired?: {
       clear?: boolean;
