@@ -83,6 +83,8 @@ export async function fetchRemoteImage(url: string, {
       headers: { 'User-Agent': USER_AGENT },
       signal: operation.signal,
     }).then(received => {
+      // Own cleanup before withAbort can lose the settlement race to cancellation.
+      response = received;
       if (operation.signal.aborted) disposeBody(received);
       return received;
     });

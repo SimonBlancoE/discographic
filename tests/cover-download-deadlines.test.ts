@@ -62,6 +62,23 @@ it('cancels promptly while fetch ignores abort and disposes its late unread resp
   expect(cancelled).toBe(true); expect(read).not.toHaveBeenCalled();
 });
 
+it('disposes an unread response when cancellation wins after transport settlement', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  const controller = new AbortController(); const upstream = deferred<Response>(); let cancelled = 0;
+  const response = new Response(new ReadableStream({ cancel() { cancelled += 1; } }));
+  const read = vi.spyOn(response.body!, 'getReader');
+  vi.stubGlobal('fetch', () => upstream.promise);
+  const result = fetchRemoteImage(url, { signal: controller.signal }).catch(error => error);
+  upstream.resolve(response);
+  // The transport callback runs first, then abort wins before withAbort delivers it.
+  queueMicrotask(() => controller.abort());
+  expect(await result).toMatchObject({ name: 'AbortError' });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  expect(cancelled).toBe(1); expect(read).not.toHaveBeenCalled();
+  expect(response.body?.locked).toBe(false); expect(vi.getTimerCount()).toBe(0);
+  expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+});
+
 it('does not dispatch already cancelled downloads', async () => {
   vi.useFakeTimers(); const scope = createUserJobScope(911); scope.cancel();
   const transport = vi.fn<typeof fetch>(async () => image()); vi.stubGlobal('fetch', transport);
