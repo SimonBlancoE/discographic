@@ -80,23 +80,27 @@ router.post('/login', async (req, res) => {
   const password = String(req.body.password || '');
   const client = req.ip || 'unknown';
 
-  const retryAfter = loginLimiter.retryAfter(client, username);
-  if (retryAfter) {
-    res.setHeader('Retry-After', String(retryAfter));
-    return res.status(429).json({ error: req.t('backend.auth.tooManyAttempts', { minutes: Math.ceil(retryAfter / 60) }) });
+  const admission = loginLimiter.reserve(client, username);
+  if (!admission.allowed) {
+    res.setHeader('Retry-After', String(admission.retryAfter));
+    return res.status(429).json({ error: req.t('backend.auth.tooManyAttempts', { minutes: Math.ceil(admission.retryAfter / 60) }) });
   }
 
-  const user = getUserAuthByUsername(username);
-  const matches = await bcrypt.compare(password, user?.password_hash || DUMMY_HASH);
-  // Credentials may have changed while the asynchronous comparison was running.
-  const currentUser = user ? getUserAuthById(user.id) : null;
-  if (!user || !matches || !currentUser || currentUser.auth_epoch !== user.auth_epoch || currentUser.password_hash !== user.password_hash) {
-    loginLimiter.recordFailure(client, username);
-    return res.status(401).json({ error: req.t('backend.auth.invalid') });
-  }
+  let success = false;
+  try {
+    const user = getUserAuthByUsername(username);
+    const matches = await bcrypt.compare(password, user?.password_hash || DUMMY_HASH);
+    // Credentials may have changed while the asynchronous comparison was running.
+    const currentUser = user ? getUserAuthById(user.id) : null;
+    if (!user || !matches || !currentUser || currentUser.auth_epoch !== user.auth_epoch || currentUser.password_hash !== user.password_hash) {
+      return res.status(401).json({ error: req.t('backend.auth.invalid') });
+    }
 
-  loginLimiter.recordSuccess(client, username);
-  return startSession(req, res, user.id, user.auth_epoch, () => ({ ok: true, user: sanitizeUser(getUserById(user.id)) }));
+    success = true;
+    return startSession(req, res, user.id, user.auth_epoch, () => ({ ok: true, user: sanitizeUser(getUserById(user.id)) }));
+  } finally {
+    admission.finish(success);
+  }
 });
 
 router.post('/logout', (req, res) => {

@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NextFunction, Request, Response } from 'express';
@@ -54,53 +54,102 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   next();
 }
 
-type AttemptWindow = { failures: number; resetAt: number };
+type AttemptWindow = { failures: number; inFlight: number; resetAt: number };
+type LoginAdmission =
+  | { allowed: false; retryAfter: number }
+  | { allowed: true; finish: (success: boolean) => void };
 
-/** Counts failed logins per client+username and per client; successful logins clear the counter. */
+/** Reserves account/client budgets and a bounded password-verification slot before async work. */
 export function createLoginLimiter({
   windowMs = 15 * 60 * 1000,
   maxPerAccount = 10,
   maxPerClient = 50,
+  maxConcurrent = 10,
+  maxEntries = 10_000,
   now = () => Date.now(),
-}: { windowMs?: number; maxPerAccount?: number; maxPerClient?: number; now?: () => number } = {}) {
+}: {
+  windowMs?: number; maxPerAccount?: number; maxPerClient?: number;
+  maxConcurrent?: number; maxEntries?: number; now?: () => number;
+} = {}) {
   const attempts = new Map<string, AttemptWindow>();
+  let inFlight = 0;
 
-  function read(key: string): AttemptWindow | null {
-    const entry = attempts.get(key);
-    if (entry && entry.resetAt <= now()) {
-      attempts.delete(key);
-      return null;
+  function refresh(entry: AttemptWindow, time: number) {
+    if (entry.resetAt <= time) {
+      entry.failures = 0;
+      entry.resetAt = time + windowMs;
     }
-    return entry ?? null;
   }
 
-  function bump(key: string) {
-    const entry = read(key) ?? { failures: 0, resetAt: now() + windowMs };
-    entry.failures += 1;
-    attempts.set(key, entry);
+  function prune(time: number) {
+    for (const [key, entry] of attempts) {
+      if (entry.resetAt <= time && entry.inFlight === 0) attempts.delete(key);
+      else refresh(entry, time);
+    }
   }
 
-  function keys(client: string, username: string) {
-    return { account: `${client}|${username.toLowerCase()}`, client: `${client}|*` };
+  // Fixed-size, unambiguous keys also bound memory for unusually long supplied usernames.
+  function key(parts: string[]): string {
+    return createHash('sha256').update(JSON.stringify(parts)).digest('hex');
+  }
+
+  function seconds(resetAt: number, time: number): number {
+    return Math.max(1, Math.ceil((resetAt - time) / 1000));
   }
 
   return {
-    /** Seconds until the client may retry, or 0 when the attempt is allowed. */
-    retryAfter(client: string, username: string): number {
-      const { account, client: clientKey } = keys(client, username);
-      const blocked = [
-        [read(account), maxPerAccount],
-        [read(clientKey), maxPerClient],
-      ].find(([entry, max]) => entry && (entry as AttemptWindow).failures >= (max as number)) as [AttemptWindow, number] | undefined;
-      return blocked ? Math.max(1, Math.ceil((blocked[0].resetAt - now()) / 1000)) : 0;
-    },
-    recordFailure(client: string, username: string) {
-      const { account, client: clientKey } = keys(client, username);
-      bump(account);
-      bump(clientKey);
-    },
-    recordSuccess(client: string, username: string) {
-      attempts.delete(keys(client, username).account);
+    reserve(client: string, username: string): LoginAdmission {
+      const time = now();
+      prune(time);
+      const accountKey = key([client, username.toLowerCase()]);
+      const clientKey = key([client]);
+      const account = attempts.get(accountKey);
+      const clientEntry = attempts.get(clientKey);
+      const blockedUntil = Math.max(
+        account && account.failures + account.inFlight >= maxPerAccount ? account.resetAt : 0,
+        clientEntry && clientEntry.failures + clientEntry.inFlight >= maxPerClient ? clientEntry.resetAt : 0,
+      );
+      if (blockedUntil > time) return { allowed: false, retryAfter: seconds(blockedUntil, time) };
+      if (inFlight >= maxConcurrent) return { allowed: false, retryAfter: 1 };
+
+      const requiredEntries = Number(!account) + Number(!clientEntry);
+      if (attempts.size + requiredEntries > maxEntries) {
+        // Never evict live budgets: reject new identities until an existing window expires.
+        let earliestExpiry = Infinity;
+        for (const entry of attempts.values()) earliestExpiry = Math.min(earliestExpiry, entry.resetAt);
+        return { allowed: false, retryAfter: Number.isFinite(earliestExpiry) ? seconds(earliestExpiry, time) : 1 };
+      }
+
+      const accountWindow = account ?? { failures: 0, inFlight: 0, resetAt: time + windowMs };
+      const clientWindow = clientEntry ?? { failures: 0, inFlight: 0, resetAt: time + windowMs };
+      attempts.set(accountKey, accountWindow);
+      attempts.set(clientKey, clientWindow);
+      accountWindow.inFlight += 1;
+      clientWindow.inFlight += 1;
+      inFlight += 1;
+      let finished = false;
+
+      return {
+        allowed: true,
+        finish(success: boolean) {
+          if (finished) return;
+          finished = true;
+          const finishedAt = now();
+          refresh(accountWindow, finishedAt);
+          refresh(clientWindow, finishedAt);
+          accountWindow.inFlight -= 1;
+          clientWindow.inFlight -= 1;
+          inFlight -= 1;
+          if (success) accountWindow.failures = 0;
+          else {
+            accountWindow.failures += 1;
+            clientWindow.failures += 1;
+          }
+          // A success clears completed account failures, never other in-flight reservations.
+          if (accountWindow.failures === 0 && accountWindow.inFlight === 0) attempts.delete(accountKey);
+          if (clientWindow.failures === 0 && clientWindow.inFlight === 0) attempts.delete(clientKey);
+        },
+      };
     },
   };
 }
