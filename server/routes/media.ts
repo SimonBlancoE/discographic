@@ -9,6 +9,7 @@ import {
   isAllowedRemoteImageUrl,
   isCoverVariant
 } from '../services/coverMedia.js';
+import { createUserJobScope } from '../services/userJobs.js';
 import { buildReleaseFilterWhere } from '../services/releaseFilters.js';
 
 const router = express.Router();
@@ -22,8 +23,10 @@ router.get('/proxy-image', async (req, res) => {
     return res.status(400).json({ error: req.t('backend.media.urlNotAllowed') });
   }
 
+  const scope = createUserJobScope(req.session.userId);
   try {
-    const { contentType, buffer } = await fetchRemoteImage(target);
+    const { contentType, buffer } = await fetchRemoteImage(target, { signal: scope.signal });
+    scope.assertCurrent();
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.send(buffer);
