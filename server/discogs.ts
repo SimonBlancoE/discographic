@@ -111,7 +111,13 @@ class DiscogsClient {
       throw new Error('Could not complete the Discogs request');
     } catch (error) {
       if (operation.signal.aborted) {
-        if (operation.signal.reason instanceof Error && operation.signal.reason.name === 'TimeoutError') throw operation.signal.reason;
+        const reason: unknown = operation.signal.reason;
+        if (reason instanceof Error && reason.name === 'TimeoutError') {
+          const message = reason.message.startsWith(`${context}:`) ? reason.message : `${context}: ${reason.message}`;
+          const timeout = new Error(message, { cause: reason });
+          timeout.name = 'TimeoutError';
+          throw timeout;
+        }
         throw new DOMException(`${context}: request cancelled`, 'AbortError');
       }
       throw error;

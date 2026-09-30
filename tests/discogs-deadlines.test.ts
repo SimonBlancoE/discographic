@@ -37,6 +37,29 @@ describe('Discogs application deadlines', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it.each(['client', 'request'] as const)('contextualizes a caller TimeoutError from the %s signal and retains its cause', async source => {
+    const caller = new AbortController();
+    const reason = new DOMException('Caller budget expired', 'TimeoutError');
+    caller.abort(reason);
+    const discogs = createDiscogsClient({ ...account, signal: source === 'client' ? caller.signal : undefined });
+    const result = await discogs.getRelease(12, source === 'request' ? { signal: caller.signal } : {}).catch(error => error);
+    expect(result).toMatchObject({ name: 'TimeoutError', message: expect.stringContaining('GET /releases/12'), cause: reason });
+    expect(result instanceof Error && result.cause).toBe(reason);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('contextualizes a native AbortSignal.timeout during transport', async () => {
+    // Node's native timeout signal uses internal timers, outside Vitest's fake clock.
+    // Await its event through the client; do not assert elapsed wall-clock time.
+    vi.useRealTimers();
+    const caller = AbortSignal.timeout(0);
+    vi.stubGlobal('fetch', neverFetch());
+    const result = await createDiscogsClient(account).getRelease(12, { signal: caller }).catch(error => error);
+    expect(result).toMatchObject({ name: 'TimeoutError', message: expect.stringContaining('GET /releases/12') });
+    expect(result instanceof Error && result.cause).toBe(caller.reason);
+  });
+
   it.each(['application/json', 'text/plain'])('keeps its timeout through the %s body read', async contentType => {
     let cancelled = false;
     const response = new Response(new ReadableStream({ cancel() { cancelled = true; } }), {
