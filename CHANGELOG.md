@@ -13,6 +13,9 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 - Retirado el ejecutor de agentes en desuso y sus dependencias exclusivas de desarrollo.
 - Retirados los informes internos de auditoría y planes de ejecución del código público; las exclusiones de Git y Docker ahora cubren los artefactos locales de automatización y worktrees.
+- Retirados los planes de implementación ya completados y el alias redundante del README; actualizada la guía de contribución para el código TypeScript actual.
+- Limitado el contexto de Docker a los archivos necesarios para compilar y la aplicación de la imagen final al código compilado. Excluidos de Git los datos locales, cachés y backups de desarrollo.
+- Retirada la implementación antigua e inaccesible de enriquecimiento de Radar, junto con su estado, contratos y tests exclusivos. Se conserva el flujo activo de actualización de Wantlist.
 
 ## [0.4.1] - 2026-09-30
 

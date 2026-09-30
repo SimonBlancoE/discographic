@@ -23,7 +23,6 @@ vi.stubEnv('DISCOGRAPHIC_DATA_DIR', dataDir);
 const { default: db, createUser, clearUserCollectionData, deleteUser, upsertDiscogsAccount, getCollectionFieldMap } = await import('../server/db.js');
 const { startRadarUpdateRun, stopRadarUpdateRun } = await import('../server/services/radarUpdateRun.js');
 const { getRadarUpdateRunState, isRadarUpdateRunRunning } = await import('../server/services/radarRuntimeState.js');
-const { startRadarEnrichment, stopRadarEnrichment } = await import('../server/services/radarEnrichmentWorkflow.js');
 const { syncRadarWantlist } = await import('../server/services/radarWantlist.js');
 const routers = await Promise.all(['sync', 'collection', 'import', 'radar', 'account'].map(name => import(`../server/routes/${name}.ts`)));
 let server: Server;
@@ -164,13 +163,6 @@ it.each(['resolve','reject'] as const)('import late %s cannot restore status or 
   expect(await (await api('import/status', undefined, 'GET')).json()).toMatchObject({ status: 'idle' });
   expect(client.updateField).not.toHaveBeenCalled();
 });
-it('Radar enrichment cannot mutate a replacement row after stop', async () => {
-  syncRadarWantlist(db, userId, [want(901)]);
-  const held = deferred<{ lowest_price: { value: number } }>();
-  startRadarEnrichment({ db, userId, locale: 'en', discogs: { getMarketplaceStats: () => held.promise } });
-  stopRadarEnrichment(db, userId, 'en'); held.resolve({ lowest_price: { value: 99 } }); await settle();
-  expect(db.prepare('SELECT estimated_price FROM radar_releases WHERE user_id = ?').get(userId)).toEqual({ estimated_price: null });
-});
 
 it.each(['resolve', 'reject'] as const)('sync late %s cannot clobber a replacement run', async outcome => {
   const old = deferred<unknown>(); const replacement = deferred<unknown>();
@@ -272,20 +264,6 @@ it.each(['enrich', 'community'])('old %s failure cannot finish a replacement job
   const state = await (await api(kind === 'enrich' ? 'sync/status' : 'sync/community', undefined, 'GET')).json();
   expect(kind === 'enrich' ? state.enrichment.status : state.status).toBe('running');
   replacement.resolve({}); await settle();
-});
-it('old Radar enrichment completion cannot clear a replacement lock or mutate its row', async () => {
-  syncRadarWantlist(db, userId, [want(901)]);
-  const old = deferred<{ lowest_price: { value: number } }>();
-  const replacement = deferred<{ lowest_price: { value: number } }>();
-  const input = { db, userId, locale: 'en' };
-  startRadarEnrichment({ ...input, discogs: { getMarketplaceStats: () => old.promise } });
-  stopRadarEnrichment(db, userId, 'en');
-  startRadarEnrichment({ ...input, discogs: { getMarketplaceStats: () => replacement.promise } });
-  old.resolve({ lowest_price: { value: 99 } }); await settle();
-  expect(startRadarEnrichment({ ...input, discogs: { getMarketplaceStats: () => replacement.promise } })).toBe(false);
-  expect(db.prepare('SELECT estimated_price FROM radar_releases WHERE user_id = ?').get(userId)).toEqual({ estimated_price: null });
-  replacement.resolve({ lowest_price: { value: 7 } }); await settle();
-  expect(db.prepare('SELECT estimated_price FROM radar_releases WHERE user_id = ?').get(userId)).toEqual({ estimated_price: 7 });
 });
 
 it.each(['account', 'account/reset'])('%s invalidates work through the actual account route', async path => {

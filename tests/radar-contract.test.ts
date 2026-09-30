@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  RADAR_ENRICH_STATUS,
   RADAR_UPDATE_RUN_PHASE,
   MARKETPLACE_STATUS,
   RADAR_MINIMUM_CONDITION,
-  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   normalizeRadarSyncResponse,
   normalizeRadarUpdateRunStatus,
@@ -313,42 +311,6 @@ describe('radar contract', () => {
           reason: 'Release ID must be a positive integer.',
         },
       ],
-    });
-  });
-
-  it('normalizes Radar enrichment status into a stable progress contract', () => {
-    expect(normalizeRadarEnrichmentStatus()).toEqual({
-      status: RADAR_ENRICH_STATUS.IDLE,
-      current: 0,
-      total: 0,
-      pending: 0,
-      progressPercent: 0,
-      message: '',
-      startedAt: null,
-      finishedAt: null,
-      isRunning: false,
-      isTerminal: false,
-    });
-
-    expect(normalizeRadarEnrichmentStatus({
-      status: 'stopped',
-      current: '3',
-      total: '12',
-      pending: '9',
-      message: 'Stopped after 3',
-      startedAt: '2026-05-10T10:00:00.000Z',
-      finishedAt: '2026-05-10T10:01:00.000Z',
-    })).toEqual({
-      status: RADAR_ENRICH_STATUS.STOPPED,
-      current: 3,
-      total: 12,
-      pending: 9,
-      progressPercent: 25,
-      message: 'Stopped after 3',
-      startedAt: '2026-05-10T10:00:00.000Z',
-      finishedAt: '2026-05-10T10:01:00.000Z',
-      isRunning: false,
-      isTerminal: true,
     });
   });
 

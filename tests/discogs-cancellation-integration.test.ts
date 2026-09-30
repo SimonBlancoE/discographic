@@ -6,13 +6,10 @@ import type { Server } from 'node:http';
 import express from 'express';
 import session from 'express-session';
 import { translate, type TranslationVars } from '../shared/i18n.js';
-import { createDiscogsClient } from '../server/discogs.js';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'discographic-transport-cancellation-'));
 vi.stubEnv('DISCOGRAPHIC_DATA_DIR', dataDir);
 const { default: db, createUser, deleteUser, clearUserCollectionData, upsertDiscogsAccount } = await import('../server/db.js');
-const { startRadarEnrichment, stopRadarEnrichment } = await import('../server/services/radarEnrichmentWorkflow.js');
-const { syncRadarWantlist } = await import('../server/services/radarWantlist.js');
 const routers = await Promise.all(['sync', 'collection', 'import', 'radar'].map(name => import(`../server/routes/${name}.ts`)));
 let server: Server;
 let baseUrl: string;
@@ -122,15 +119,6 @@ it('a replaced Import workflow aborts its write and cannot send the next field e
   expect(outbound.every(url => !url.includes('/fields/'))).toBe(true);
   clearUserCollectionData(userId);
   expect(pending[1].aborted).toBe(true);
-});
-
-it('Radar Marketplace enrichment stop aborts the real client', async () => {
-  syncRadarWantlist(db, userId, [{ id: 901, basic_information: { id: 901, title: 'Fixture' } }]);
-  startRadarEnrichment({ db, userId, locale: 'en', discogs: createDiscogsClient({ token: 'fixture', username: 'fixture' }) });
-  await until(() => pending.length === 1);
-  stopRadarEnrichment(db, userId, 'en');
-  expect(pending[0].aborted).toBe(true);
-  expect(db.prepare('SELECT estimated_price FROM radar_releases WHERE user_id = ?').get(userId)).toEqual({ estimated_price: null });
 });
 
 it('account reset aborts a collection edit and prevents any further write', async () => {
