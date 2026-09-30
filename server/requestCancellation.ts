@@ -28,3 +28,25 @@ export function withAbort<T>(operation: Promise<T>, signal: AbortSignal): Promis
     operation.then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
   });
 }
+
+/** Reading with an owned reader releases even stalled bodies on cancellation or failure. */
+export async function* responseBodyChunks(response: Response, signal: AbortSignal): AsyncGenerator<Uint8Array> {
+  signal.throwIfAborted();
+  const reader = response.body?.getReader();
+  if (!reader) return;
+  const cancel = () => { void reader.cancel(signal.reason).catch(() => {}); };
+  signal.addEventListener('abort', cancel, { once: true });
+  let completed = false;
+  try {
+    for (;;) {
+      const chunk = await withAbort(reader.read(), signal);
+      signal.throwIfAborted();
+      if (chunk.done) { completed = true; return; }
+      yield chunk.value;
+    }
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    if (!completed) cancel();
+    reader.releaseLock();
+  }
+}

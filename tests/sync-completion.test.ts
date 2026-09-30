@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
@@ -21,7 +21,7 @@ const { default: router } = await import('../server/routes/sync.js');
 let server: Server;
 let baseUrl: string;
 let userId: number;
-let coverResponse: () => Promise<Response>;
+let coverResponse: (init?: RequestInit) => Promise<Response>;
 let coverEntered = false;
 let source: Buffer;
 function deferred<T>() {
@@ -56,7 +56,7 @@ beforeAll(async () => {
   const realFetch = globalThis.fetch;
   vi.stubGlobal('fetch', (input: string | URL | Request, init?: RequestInit) => {
     if (String(input).startsWith('http://127.0.0.1:')) return realFetch(input, init);
-    if (String(input) === 'https://i.discogs.com/fixture.jpg') { coverEntered = true; return coverResponse(); }
+    if (String(input) === 'https://i.discogs.com/fixture.jpg') { coverEntered = true; return coverResponse(init); }
     throw new Error('Unexpected external network in sync completion test');
   });
   db.exec(`CREATE TABLE terminal_updates (status TEXT);
@@ -141,12 +141,9 @@ it('continues remaining thumbnail warmup but reports partial failure rather than
 it.each([['inventory', 'resolve'], ['inventory', 'reject'], ['warmup', 'resolve'], ['warmup', 'reject']] as const)(
   'late cancelled %s %s cannot finalize or unlock a replacement run', async (followup, outcome) => {
   const inventory = deferred<unknown>(); const cover = deferred<Response>(); const replacement = deferred<unknown>();
-  const bodyRead = deferred<void>();
-  const response = image();
-  vi.spyOn(response, 'arrayBuffer').mockImplementation(async () => {
-    bodyRead.resolve();
-    return Uint8Array.from(source).buffer;
-  });
+  const bodyDisposed = deferred<void>();
+  const response = new Response(new ReadableStream({ cancel() { bodyDisposed.resolve(); } }));
+  const bodyRead = vi.spyOn(response.body!, 'getReader');
   if (followup === 'inventory') client.getInventory.mockReturnValueOnce(inventory.promise);
   else coverResponse = () => cover.promise;
   await api(); await until(() => followup === 'inventory' ? client.getInventory.mock.calls.length === 1 : coverEntered);
@@ -160,7 +157,10 @@ it.each([['inventory', 'resolve'], ['inventory', 'reject'], ['warmup', 'resolve'
     outcome === 'resolve' ? cover.resolve(response) : cover.reject(new Error('cancelled cover failed'));
   }
   await (followup === 'inventory' ? inventory.promise : cover.promise).catch(() => undefined);
-  if (followup === 'warmup' && outcome === 'resolve') await bodyRead.promise;
+  if (followup === 'warmup' && outcome === 'resolve') {
+    await bodyDisposed.promise;
+    expect(bodyRead).not.toHaveBeenCalled();
+  }
   // The controlled response has no pending I/O. The local HTTP request runs after
   // its cancellation continuations drain, while replacement collection work stays held.
   expect(await state()).toMatchObject({ status: 'running', phase: 'initializing', thumbnails: { status: 'idle' } });
@@ -170,5 +170,47 @@ it.each([['inventory', 'resolve'], ['inventory', 'reject'], ['warmup', 'resolve'
   expect(db.prepare('SELECT * FROM releases WHERE user_id = ?').all(userId)).toEqual([]);
   expect(existsSync(join(dataDir, 'covers', String(userId), `${oldRow.id}-wall.jpg`))).toBe(false);
   replacement.resolve({ pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, releases: [] }); await terminal();
+  expect((await state()).status).toBe('completed');
+});
+
+
+it('account reset cancels an active warmup body without stale covers or replacement status writes', async () => {
+  let cancelled = false; let signal: AbortSignal | null | undefined;
+  const response = new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+  coverResponse = async init => { signal = init?.signal; return response; };
+  await api(); await until(() => coverEntered);
+  const oldRow = db.prepare<[number], { id: number }>('SELECT id FROM releases WHERE user_id = ?').get(userId)!;
+  clearUserCollectionData(userId);
+  const replacement = deferred<unknown>(); client.getCollection.mockReturnValueOnce(replacement.promise);
+  expect((await api()).status).toBe(200);
+  await until(() => cancelled);
+  expect(signal?.aborted).toBe(true); expect(response.body?.locked).toBe(false);
+  expect(await state()).toMatchObject({ status: 'running', phase: 'initializing', thumbnails: { status: 'idle' } });
+  expect(log()).toMatchObject({ status: 'running', finished_at: null });
+  expect(existsSync(join(dataDir, 'covers', String(userId), `${oldRow.id}-wall.jpg`))).toBe(false);
+  expect(db.prepare('SELECT * FROM terminal_updates').all()).toEqual([]);
+  coverResponse = async () => image(); replacement.resolve(collection()); await terminal();
+  expect((await state()).status).toBe('completed');
+  expect(readdirSync(join(dataDir, 'covers', String(userId))).every(file => file.endsWith('.jpg'))).toBe(true);
+});
+
+it.each(['fetch', 'body'] as const)('warmup reports a failed terminal result when a held %s exceeds the cover deadline', async stage => {
+  let signal: AbortSignal | null | undefined; let cancelled = false;
+  coverResponse = init => {
+    signal = init?.signal;
+    return stage === 'fetch' ? new Promise(() => {}) : Promise.resolve(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+  };
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    await api(); await until(() => coverEntered);
+    await vi.advanceTimersByTimeAsync(30_000);
+  } finally { vi.useRealTimers(); }
+  await terminal();
+  expect(signal?.aborted).toBe(true); if (stage === 'body') expect(cancelled).toBe(true);
+  expect(await state()).toMatchObject({ status: 'failed', thumbnails: { status: 'failed', current: 1, total: 1 } });
+  expect(log()).toMatchObject({ status: 'failed', finished_at: expect.any(String) });
+  expect(db.prepare('SELECT * FROM terminal_updates').all()).toEqual([{ status: 'failed' }]);
+  expect(readdirSync(join(dataDir, 'covers', String(userId)))).toEqual([]);
+  coverResponse = async () => image(); expect((await api()).status).toBe(200); await terminal();
   expect((await state()).status).toBe('completed');
 });

@@ -5,6 +5,7 @@ import { access, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import sharp from 'sharp';
 import { resolveRuntimePaths } from '../runtimePaths.js';
+import { deadlineSignal, responseBodyChunks, withAbort } from '../requestCancellation.js';
 
 const { dataDir } = resolveRuntimePaths(import.meta.url);
 const coversDir = join(dataDir, 'covers');
@@ -64,21 +65,46 @@ export function isAllowedRemoteImageUrl(url: string): boolean {
   }
 }
 
-export async function fetchRemoteImage(url: string): Promise<RemoteImage> {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': USER_AGENT
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Remote fetch failed: HTTP ${response.status}`);
+export async function fetchRemoteImage(url: string, {
+  signal,
+  deadlineMs = 30_000,
+}: { signal?: AbortSignal; deadlineMs?: number } = {}): Promise<RemoteImage> {
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > 2_147_483_647) {
+    throw new RangeError('Cover deadline must be a positive bounded duration');
   }
-
-  return {
-    contentType: response.headers.get('content-type') || 'image/jpeg',
-    buffer: Buffer.from(await response.arrayBuffer())
-  };
+  const operation = deadlineSignal(deadlineMs, 'Cover download deadline exceeded', signal ? [signal] : []);
+  let response: Response | undefined;
+  const disposeBody = (received: Response) => { void received.body?.cancel().catch(() => {}); };
+  try {
+    operation.signal.throwIfAborted();
+    // A transport adapter can ignore abort. Dispose any response arriving after the
+    // caller has left rather than starting a late read or retaining its body.
+    const pending = fetch(url, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: operation.signal,
+    }).then(received => {
+      if (operation.signal.aborted) disposeBody(received);
+      return received;
+    });
+    response = await withAbort(pending, operation.signal);
+    operation.signal.throwIfAborted();
+    if (!response.ok) {
+      if (response.body) await withAbort(response.body.cancel(), operation.signal);
+      throw new Error(`Remote fetch failed: HTTP ${response.status}`);
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of responseBodyChunks(response, operation.signal)) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return {
+      contentType: response.headers.get('content-type') || 'image/jpeg',
+      buffer: Buffer.concat(chunks),
+    };
+  } finally {
+    // Includes cancellation between fetch settlement and acquiring a body reader.
+    if (response?.body && !response.body.locked) disposeBody(response);
+    operation.dispose();
+  }
 }
 
 export async function ensureCachedCover({
@@ -121,8 +147,9 @@ export async function ensureCachedCover({
 
   let source;
   try {
-    source = await fetchRemoteImage(release.cover_url);
+    source = await fetchRemoteImage(release.cover_url, { signal: scope.signal });
   } catch {
+    scope.assertCurrent();
     throw new Error(t ? t('backend.media.coverDownloadFailed') : 'Could not download cover image');
   }
 

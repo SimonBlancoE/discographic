@@ -1,6 +1,6 @@
 import { createDiscogsRateLimiter, parseRetryAfter, type DiscogsRateLimiter } from './middleware/rateLimit.js';
 import { fetchCompleteWantlist } from './discogsWantlist.js';
-import { abortableDelay, deadlineSignal, withAbort } from './requestCancellation.js';
+import { abortableDelay, deadlineSignal, responseBodyChunks, withAbort } from './requestCancellation.js';
 
 const BASE_URL = 'https://api.discogs.com';
 const MAX_RETRIES = 3;
@@ -24,26 +24,13 @@ function positiveTimeout(value: number, name: string): number {
   return value;
 }
 
-// Reading with an owned reader lets cancellation release even a stalled response body.
 async function readBody(response: Response, signal: AbortSignal): Promise<string> {
-  signal.throwIfAborted();
-  const reader = response.body?.getReader();
-  if (!reader) return '';
-  const cancel = () => { void reader.cancel(signal.reason).catch(() => {}); };
-  signal.addEventListener('abort', cancel, { once: true });
   const decoder = new TextDecoder();
   let text = '';
-  try {
-    for (;;) {
-      const chunk = await withAbort(reader.read(), signal);
-      signal.throwIfAborted();
-      if (chunk.done) return text + decoder.decode();
-      text += decoder.decode(chunk.value, { stream: true });
-    }
-  } finally {
-    signal.removeEventListener('abort', cancel);
-    reader.releaseLock();
+  for await (const chunk of responseBodyChunks(response, signal)) {
+    text += decoder.decode(chunk, { stream: true });
   }
+  return text + decoder.decode();
 }
 
 class DiscogsClient {
