@@ -68,11 +68,15 @@ describe('Import workflow collection copy identity', () => {
   }
 
   async function previewUpload(content: string | Uint8Array<ArrayBuffer>, filename: string, userId = 1): Promise<ImportPreviewResponse> {
-    const form = new FormData();
-    form.append('file', new Blob([content]), filename);
-    const response = await fetch(`${baseUrl}/api/import/preview`, { method: 'POST', headers: { 'x-test-user': String(userId) }, body: form });
+    const response = await uploadPreview(content, filename, userId);
     expect(response.status).toBe(200);
     return response.json();
+  }
+
+  async function uploadPreview(content: string | Uint8Array<ArrayBuffer>, filename: string, userId = 1): Promise<Response> {
+    const form = new FormData();
+    form.append('file', new Blob([content]), filename);
+    return fetch(`${baseUrl}/api/import/preview`, { method: 'POST', headers: { 'x-test-user': String(userId) }, body: form });
   }
 
   async function apply(previewId: string | null, userId = 1): Promise<Response> {
@@ -120,6 +124,34 @@ describe('Import workflow collection copy identity', () => {
     expect(result.changes).toEqual([]);
     expect(result).toMatchObject({ matched: 0, unmatched: 1 });
     expect(result.errors).toMatchObject([{ row: 2, reason: expect.stringMatching(/multiple.*copies.*instance/i) }]);
+  });
+
+  it.each([
+    'Release ID,Instance ID,Instance ID,Rating\n101,1001,1002,5\n',
+    'Instance ID,Release ID,Release ID,Rating\n1002,101,102,5\n',
+    'ID,ID,Rating\n11,12,5\n',
+    'Instance ID,Instance ID,Rating\n1002,1002,5\n',
+  ])('rejects repeated CSV identity headers before SheetJS discards their identity semantics: %s', async csv => {
+    const response = await uploadPreview(csv, 'collection.csv');
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.stringMatching(/duplicate identification columns/i) });
+    expect(db.prepare('SELECT rating FROM releases WHERE id IN (11, 12)').all()).toEqual([{ rating: 1 }, { rating: 1 }]);
+  });
+
+  it('rejects repeated XLSX identity headers before SheetJS renames them', async () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ['Release ID', 'Instance ID', 'Instance ID', 'Rating'], [101, 1001, 1002, 5],
+    ]));
+    const response = await uploadPreview(new Uint8Array(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })), 'collection.xlsx');
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: expect.stringMatching(/duplicate identification columns/i) });
+  });
+
+  it('does not treat an original suffixed header as an identity alias', async () => {
+    const result = await preview('Release ID,Instance ID,Instance ID_1,Rating\n101,1002,1001,5\n');
+    expect(result.changes).toMatchObject([{ dbId: 12, instanceId: 1002 }]);
+    expect(result.errors).toEqual([]);
   });
 
   it.each(['1002.0', '1.002e3', '0x3ea', '+1002', '-1002', '0', '1002x', '9007199254740993'])('rejects malformed CSV identity %s instead of coercing it', async value => {

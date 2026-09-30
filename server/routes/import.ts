@@ -68,7 +68,22 @@ function parseFile(buffer, filename, t) {
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) throw new Error(t('backend.import.noSheets'));
 
-  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+  const sheet = workbook.Sheets[sheetName];
+  const headerRange = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+  headerRange.e.r = headerRange.s.r;
+  const [headers = []] = XLSX.utils.sheet_to_json(sheet, { header: 1, range: headerRange });
+  const identityHeaders = new Set();
+  // Check original headers before SheetJS renames repeats (e.g. Instance ID_1).
+  for (const header of headers) {
+    const normalized = normalizeHeader(header);
+    if (!ID_COLUMNS.has(normalized)) continue;
+    if (identityHeaders.has(normalized)) {
+      throw new Error(t('backend.import.duplicateIdentityColumn', { column: String(header) }));
+    }
+    identityHeaders.add(normalized);
+  }
+
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
   if (!rows.length) throw new Error(t('backend.import.noRows'));
 
   return rows;
