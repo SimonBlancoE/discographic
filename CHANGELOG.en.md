@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed completed implementation plans and the redundant README alias; updated the contribution guide for the current TypeScript codebase.
 - Limited the Docker build context to required inputs and the final application's files to compiled code. Excluded local runtime data, caches and development backups from Git.
 - Removed the unreachable legacy Radar enrichment implementation, along with its exclusive state, contracts and tests. The active Wantlist update workflow is preserved.
+- Corrected Radar's domain documentation to describe its current Wantlist management and local preferences, without automatic price review.
 
 ## [0.4.1] - 2026-09-30
 
