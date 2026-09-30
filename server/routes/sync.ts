@@ -14,6 +14,7 @@ import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { normalizeSyncStatus } from '../../shared/contracts/syncStatus.js';
 import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 import { fetchCompleteInventory } from '../discogsInventory.js';
+import { overlayPendingImportEdits, markMissingPendingInstances } from '../services/pendingImportEdits.js';
 import { fetchCompleteCollection } from '../discogsCollection.js';
 
 const router = express.Router();
@@ -139,6 +140,7 @@ const upsertStmt = db.prepare(`
 const upsertBatch = db.transaction((userId, syncId, items) => {
   for (const item of items) {
     const mapped = mapCollectionItem(item);
+    Object.assign(mapped, overlayPendingImportEdits(db, userId, mapped.instance_id, mapped));
     upsertStmt.run(
       userId,
       mapped.release_id,
@@ -232,6 +234,7 @@ async function runSync({ userId, logId, discogs, locale, run }) {
   // Snapshot validation proves observable page/identity coverage, not remote atomicity while
   // the user's collection changes on Discogs. Only a validated snapshot reaches reconciliation.
   const removedReleaseIds = pruneUnseenReleases(db, userId, logId);
+  markMissingPendingInstances(db, userId);
   if (removedReleaseIds.length) {
     await removeCachedCovers({ userId, releaseIds: removedReleaseIds }).catch((error) => {
       console.log('[sync] cache cleanup failed:', error.message);

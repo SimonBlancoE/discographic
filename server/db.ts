@@ -11,6 +11,7 @@ import { clearRadarRows, getRadarSnapshot, migrateRadarStorage, updateRadarLocal
 import { resolveRuntimePaths } from './runtimePaths.js';
 import { cancelUserJobs } from './services/userJobs.js';
 import { clearCollectionValueSnapshots, migrateCollectionValueSnapshots } from './services/collectionValue.js';
+import { migratePendingImportEdits, clearPendingImportEdits } from './services/pendingImportEdits.js';
 import { USER_PREFERENCE_KEYS } from '../shared/contracts/preferences.js';
 
 const { dataDir } = resolveRuntimePaths(import.meta.url);
@@ -277,6 +278,7 @@ migrateMarketplaceStatus(db);
 migrateCommunityColumns(db);
 migrateCollectionValueSnapshots(db);
 migrateRadarStorage(db);
+migratePendingImportEdits(db);
 createIndexes();
 cleanupStoredNotes(db);
 
@@ -388,6 +390,7 @@ export function listUsers() {
 
 export function deleteUser(id) {
   cancelUserJobs(id);
+  clearPendingImportEdits(db, id);
   fieldMapCache.delete(id);
   clearCollectionValueSnapshots(db, id);
   resetRadarRuntimeState(id);
@@ -443,6 +446,7 @@ export function upsertDiscogsAccount(userId, discogsUsername, discogsToken) {
 
 export function clearUserCollectionData(userId) {
   cancelUserJobs(userId);
+  clearPendingImportEdits(db, userId);
   fieldMapCache.delete(userId);
   clearCollectionValueSnapshots(db, userId);
   resetRadarRuntimeState(userId);
