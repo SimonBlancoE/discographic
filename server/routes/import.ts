@@ -1,5 +1,6 @@
 // @ts-nocheck
 import crypto from 'crypto';
+import { createUserJobScope, registerUserJobCanceller } from '../services/userJobs.js';
 import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
@@ -29,6 +30,20 @@ const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 // In-memory import sync state per user
 const importSyncStates = new Map();
+const importRuns = new Map();
+registerUserJobCanceller(userId => {
+  importRuns.get(userId)?.cancel();
+  importRuns.delete(userId);
+  importSyncStates.delete(userId);
+  for (const [id, preview] of previewCache) {
+    if (preview.userId === userId) previewCache.delete(id);
+  }
+});
+// Capture before multer's asynchronous upload boundary.
+router.use((req, _res, next) => {
+  req.accountScope = createUserJobScope(req.session.userId);
+  next();
+});
 
 
 function cleanPreviewCache() {
@@ -218,7 +233,7 @@ function setImportSyncState(userId, patch) {
   importSyncStates.set(userId, { ...getImportSyncState(userId, patch.locale), ...patch });
 }
 
-async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
+async function syncChangesWithDiscogs({ userId, changes, discogs, locale, run }) {
   const t = (key, vars) => importT(locale, key, vars);
   let processed = 0;
   let synced = 0;
@@ -226,6 +241,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
 
   try {
     for (const change of changes) {
+      if (run.stopped) return;
       const release = db.prepare(
         'SELECT folder_id, release_id, instance_id, notes FROM releases WHERE id = ? AND user_id = ?'
       ).get(change.dbId, userId);
@@ -260,6 +276,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
         }
       }
 
+      if (run.stopped) return;
       if (change.notesChanged) {
         const notesFieldId = getCollectionFieldMap(userId).notesFieldId;
 
@@ -274,6 +291,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
         }
       }
 
+      if (run.stopped) return;
       if (itemErrors.length) {
         failures.push(buildImportFailure(change, itemErrors.join(' | ')));
       } else {
@@ -299,6 +317,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
       t
     }));
   } catch (error) {
+    if (run.stopped) return;
     setImportSyncState(userId, summarizeInterruptedImportSync({
       locale,
       total: changes.length,
@@ -308,6 +327,8 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale }) {
       error,
       t
     }));
+  } finally {
+    if (importRuns.get(userId) === run) importRuns.delete(userId);
   }
 }
 
@@ -335,6 +356,7 @@ router.get('/template', (req, res) => {
 
 router.post('/preview', upload.single('file'), (req, res) => {
   try {
+    req.accountScope.assertCurrent();
     if (!req.file) {
       return res.status(400).json({ error: req.t('backend.import.fileRequired') });
     }
@@ -396,6 +418,11 @@ router.post('/apply', async (req, res) => {
     previewCache.delete(previewId);
     const userId = req.session.userId;
 
+    // Applying another preview replaces the previous background run.
+    importRuns.get(userId)?.cancel();
+    const run = createUserJobScope(userId);
+    importRuns.set(userId, run);
+
     // Apply to local DB immediately
     const applyTx = db.transaction(() => {
       for (const change of changes) {
@@ -421,6 +448,7 @@ router.post('/apply', async (req, res) => {
     try {
       discogs = getDiscogsClientForUser(req);
     } catch {
+      importRuns.delete(userId);
       const syncState = createLocalOnlyImportSyncState({
         locale: req.locale,
         total: changes.length,
@@ -442,7 +470,7 @@ router.post('/apply', async (req, res) => {
     res.json({ ok: true, applied: changes.length, syncState: normalizeImportSyncState(syncState) });
 
     // Background sync with Discogs
-    void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale });
+    void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale, run });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

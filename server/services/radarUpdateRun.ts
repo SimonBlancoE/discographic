@@ -1,3 +1,4 @@
+import type { UserJobScope } from './userJobs.js';
 import type Database from 'better-sqlite3';
 import {
   RADAR_UPDATE_RUN_PHASE,
@@ -9,7 +10,6 @@ import { translate } from '../../shared/i18n.js';
 import {
   clearRadarUpdateRunRunning,
   getRadarUpdateRunState,
-  isRadarUpdateRunRunning,
   markRadarUpdateRunRunning,
   setRadarUpdateRunState,
   type RadarRuntimeUpdateRunState,
@@ -83,36 +83,12 @@ function getCompletionMessage(locale: string | undefined, processed: number): st
   return radarT(locale, 'backend.radar.updateCompleted', { processed });
 }
 
-function completeStoppedUpdateRun({
-  userId,
-  locale,
-  wantlist,
-  processed,
-  total,
-}: {
-  userId: number;
-  locale: string | undefined;
-  wantlist: RadarSyncResult;
-  processed: number;
-  total: number;
-}): void {
-  setUpdateRunState(userId, locale, {
-    phase: RADAR_UPDATE_RUN_PHASE.STOPPED,
-    current: processed,
-    total,
-    pending: 0,
-    message: radarT(locale, 'backend.radar.updateStopped', { processed }),
-    wantlist,
-    finishedAt: new Date().toISOString(),
-  });
-}
-
 async function runClaimedRadarUpdateRun({
   db,
   userId,
   locale,
   discogs,
-}: RadarUpdateRunInput): Promise<void> {
+}: RadarUpdateRunInput, run: UserJobScope): Promise<void> {
   let wantlist = createEmptyWantlistResult();
 
   try {
@@ -128,19 +104,9 @@ async function runClaimedRadarUpdateRun({
     });
 
     const wantlistRows = await discogs.getAllWantlist();
+    if (run.stopped) return;
     wantlist = syncRadarWantlist(db, userId, wantlistRows);
     const processed = wantlist.totalFetched;
-
-    if (!isRadarUpdateRunRunning(userId)) {
-      completeStoppedUpdateRun({
-        userId,
-        locale,
-        wantlist,
-        processed,
-        total: processed,
-      });
-      return;
-    }
 
     setUpdateRunState(userId, locale, {
       phase: RADAR_UPDATE_RUN_PHASE.COMPLETED,
@@ -152,6 +118,7 @@ async function runClaimedRadarUpdateRun({
       finishedAt: new Date().toISOString(),
     });
   } catch {
+    if (run.stopped) return;
     setUpdateRunState(userId, locale, {
       phase: RADAR_UPDATE_RUN_PHASE.FAILED,
       message: radarT(locale, 'backend.radar.updateFailed'),
@@ -159,16 +126,17 @@ async function runClaimedRadarUpdateRun({
       finishedAt: new Date().toISOString(),
     });
   } finally {
-    clearRadarUpdateRunRunning(userId);
+    clearRadarUpdateRunRunning(userId, run);
   }
 }
 
 export function startRadarUpdateRun(input: RadarUpdateRunInput): boolean {
-  if (!markRadarUpdateRunRunning(input.userId)) {
+  const run = markRadarUpdateRunRunning(input.userId);
+  if (!run) {
     return false;
   }
 
-  runClaimedRadarUpdateRun(input).catch((error) => {
+  runClaimedRadarUpdateRun(input, run).catch((error) => {
     input.onBackgroundError?.(error);
   });
 

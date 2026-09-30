@@ -1,3 +1,4 @@
+import type { UserJobScope } from './userJobs.js';
 import type Database from 'better-sqlite3';
 import {
   MARKETPLACE_STATUS,
@@ -15,7 +16,6 @@ import {
 import {
   clearRadarEnrichmentRunning,
   getRadarEnrichmentState,
-  isRadarEnrichmentRunning,
   markRadarEnrichmentRunning,
   setRadarEnrichmentState,
   type RadarRuntimeEnrichmentState,
@@ -96,19 +96,13 @@ function getEstimatedPrice(marketplace: RadarMarketplaceValue): number | null {
 
 function getCompletionMessage({
   locale,
-  wasStopped,
   processed,
   pending,
 }: {
   locale: string | undefined;
-  wasStopped: boolean;
   processed: number;
   pending: number;
 }): string {
-  if (wasStopped) {
-    return radarT(locale, 'backend.radar.enrichStopped', { processed, pending });
-  }
-
   if (pending) {
     return radarT(locale, 'backend.radar.enrichRemaining', { processed, pending });
   }
@@ -160,7 +154,7 @@ async function runClaimedRadarEnrichment({
   userId,
   locale,
   discogs,
-}: RadarEnrichmentInput): Promise<void> {
+}: RadarEnrichmentInput, run: UserJobScope): Promise<void> {
   try {
     const pendingRows = getPendingRadarEnrichmentRows(db, userId);
     const totalPending = pendingRows.length;
@@ -190,15 +184,16 @@ async function runClaimedRadarEnrichment({
       finishedAt: null,
     });
 
-    for (let offset = 0; offset < pendingRows.length && isRadarEnrichmentRunning(userId); offset += ENRICH_BATCH_SIZE) {
+    for (let offset = 0; offset < pendingRows.length && !run.stopped; offset += ENRICH_BATCH_SIZE) {
       const rows = pendingRows.slice(offset, offset + ENRICH_BATCH_SIZE);
 
       for (const row of rows) {
-        if (!isRadarEnrichmentRunning(userId)) {
+        if (run.stopped) {
           break;
         }
 
         const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
+        if (run.stopped) return;
         updateRadarMarketplaceValue(db, userId, row, marketplace);
 
         processed += 1;
@@ -211,39 +206,40 @@ async function runClaimedRadarEnrichment({
       }
     }
 
+    if (run.stopped) return;
     const finalPending = getPendingRadarEnrichmentCount(db, userId);
-    const wasStopped = !isRadarEnrichmentRunning(userId) && finalPending > 0;
 
     setEnrichmentState(userId, locale, {
-      status: wasStopped ? RADAR_ENRICH_STATUS.STOPPED : RADAR_ENRICH_STATUS.COMPLETED,
+      status: RADAR_ENRICH_STATUS.COMPLETED,
       current: processed,
       total: totalPending,
       pending: finalPending,
       message: getCompletionMessage({
         locale,
-        wasStopped,
         processed,
         pending: finalPending,
       }),
       finishedAt: new Date().toISOString(),
     });
   } catch (error) {
+    if (run.stopped) return;
     setEnrichmentState(userId, locale, {
       status: RADAR_ENRICH_STATUS.FAILED,
       message: getErrorMessage(error),
       finishedAt: new Date().toISOString(),
     });
   } finally {
-    clearRadarEnrichmentRunning(userId);
+    clearRadarEnrichmentRunning(userId, run);
   }
 }
 
 export function startRadarEnrichment(input: RadarEnrichmentInput): boolean {
-  if (!markRadarEnrichmentRunning(input.userId)) {
+  const run = markRadarEnrichmentRunning(input.userId);
+  if (!run) {
     return false;
   }
 
-  runClaimedRadarEnrichment(input).catch((error) => {
+  runClaimedRadarEnrichment(input, run).catch((error) => {
     input.onBackgroundError?.(error);
   });
 

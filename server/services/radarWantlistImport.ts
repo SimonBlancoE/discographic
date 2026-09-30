@@ -1,3 +1,4 @@
+import { createUserJobScope } from './userJobs.js';
 import crypto from 'crypto';
 import * as XLSX from 'xlsx';
 import {
@@ -792,6 +793,7 @@ export async function applyStoredRadarWantlistPreview({
   userId,
   previewId,
 }: ApplyStoredRadarWantlistPreviewInput): Promise<RadarWantlistApplyResult> {
+  const scope = createUserJobScope(userId);
   const cached = getCachedWantlistPreview(previewId, userId);
   if (!cached) {
     throw new RadarWantlistPreviewExpiredError('Radar Wantlist preview expired');
@@ -799,7 +801,9 @@ export async function applyStoredRadarWantlistPreview({
 
   deleteStoredRadarWantlistPreview(previewId);
 
-  const applied = applyRadarWantlistImport(db, userId, await toRadarWantlistApplyRows(cached));
+  const rows = await toRadarWantlistApplyRows(cached);
+  scope.assertCurrent();
+  const applied = applyRadarWantlistImport(db, userId, rows);
 
   return {
     totalRows: cached.preview.summary.totalRows,

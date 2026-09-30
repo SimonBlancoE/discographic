@@ -1,4 +1,6 @@
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, renameSync } from 'fs';
+import { randomUUID } from 'node:crypto';
+import { createUserJobScope, type UserJobScope } from './userJobs.js';
 import { access, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import sharp from 'sharp';
@@ -83,29 +85,35 @@ export async function ensureCachedCover({
   release,
   userId,
   variant,
-  t = null
+  t = null,
+  scope = createUserJobScope(Number(userId)),
 }: {
   release: ReleaseCover;
   userId: string | number;
   variant: string;
   t?: Translate | null;
+  scope?: UserJobScope;
 }): Promise<string> {
   // The variant ends up in a file path, so only known variant names are accepted.
   if (!isCoverVariant(variant)) {
     throw new Error(`Unknown cover variant: ${variant}`);
   }
 
+  scope.assertCurrent();
   const variantConfig = COVER_VARIANTS[variant];
   const userDir = getUserCoverDir(userId);
   await ensureDir(userDir);
+  scope.assertCurrent();
 
   const cachePath = getCachePath(userId, release.id, variant);
   try {
     await access(cachePath);
+    scope.assertCurrent();
     return cachePath;
   } catch {
     // Cache miss, continue and build it.
   }
+  scope.assertCurrent();
 
   if (!release.cover_url || !isAllowedRemoteImageUrl(release.cover_url)) {
     throw new Error(t ? t('backend.media.coverUnavailable') : 'Cover image is not available');
@@ -118,13 +126,25 @@ export async function ensureCachedCover({
     throw new Error(t ? t('backend.media.coverDownloadFailed') : 'Could not download cover image');
   }
 
+  scope.assertCurrent();
   const resized = await sharp(source.buffer)
     .resize({ width: variantConfig.width, withoutEnlargement: true })
     .jpeg({ quality: variantConfig.quality, mozjpeg: true })
     .toBuffer();
 
-  await writeFile(cachePath, resized);
-  return cachePath;
+  scope.assertCurrent();
+  const temporaryPath = `${cachePath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, resized);
+    scope.assertCurrent();
+    // Commit synchronously with the ownership check: a reset cannot interleave here.
+    renameSync(temporaryPath, cachePath);
+    return cachePath;
+  } finally {
+    await unlink(temporaryPath).catch(error => {
+      if (!hasErrorCode(error, 'ENOENT')) throw error;
+    });
+  }
 }
 
 export async function removeCachedCovers({
@@ -189,6 +209,7 @@ export async function generateTapeteImage({
   userId: string | number;
   maxSize: number;
 }): Promise<Buffer> {
+  const scope = createUserJobScope(Number(userId));
   const rawTileSize = Math.floor(computeOptimalTileSize(releases.length, maxSize, maxSize));
   const variant = selectTapeteVariant(rawTileSize);
   const variantMaxPx = COVER_VARIANTS[variant].width;
@@ -201,11 +222,12 @@ export async function generateTapeteImage({
 
   for (const release of releases) {
     try {
-      const cachePath = await ensureCachedCover({ release, userId, variant });
+      const cachePath = await ensureCachedCover({ release, userId, variant, scope });
       tiles.push(cachePath);
     } catch {
       tiles.push(null);
     }
+    scope.assertCurrent();
   }
 
   const compositeInputs = [];

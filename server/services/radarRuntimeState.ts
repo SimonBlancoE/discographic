@@ -1,3 +1,4 @@
+import { createUserJobScope, type UserJobScope } from './userJobs.js';
 import type {
   RadarEnrichmentStatus,
   RadarUpdateRunStatus,
@@ -20,9 +21,9 @@ export type StoredRadarWantlistPreview<Preview = RadarWantlistPreviewResponse> =
   expiresAt: number;
 };
 
-const runningRadarEnrichments = new Set<number>();
+const runningRadarEnrichments = new Map<number, UserJobScope>();
 const radarEnrichmentStates = new Map<number, RadarRuntimeEnrichmentState>();
-const runningRadarUpdateRuns = new Set<number>();
+const runningRadarUpdateRuns = new Map<number, UserJobScope>();
 const radarUpdateRunStates = new Map<number, RadarRuntimeUpdateRunState>();
 const radarWantlistPreviewCache = new Map<string, StoredRadarWantlistPreview<RadarWantlistPreviewResponse>>();
 
@@ -30,16 +31,17 @@ export function isRadarEnrichmentRunning(userId: number): boolean {
   return runningRadarEnrichments.has(userId);
 }
 
-export function markRadarEnrichmentRunning(userId: number): boolean {
-  if (runningRadarEnrichments.has(userId)) {
-    return false;
-  }
-
-  runningRadarEnrichments.add(userId);
-  return true;
+export function markRadarEnrichmentRunning(userId: number): UserJobScope | null {
+  if (runningRadarEnrichments.has(userId)) return null;
+  const run = createUserJobScope(userId);
+  runningRadarEnrichments.set(userId, run);
+  return run;
 }
 
-export function clearRadarEnrichmentRunning(userId: number): void {
+export function clearRadarEnrichmentRunning(userId: number, owner?: UserJobScope): void {
+  const run = runningRadarEnrichments.get(userId);
+  if (owner && run !== owner) return;
+  run?.cancel();
   runningRadarEnrichments.delete(userId);
 }
 
@@ -59,16 +61,17 @@ export function isRadarUpdateRunRunning(userId: number): boolean {
   return runningRadarUpdateRuns.has(userId);
 }
 
-export function markRadarUpdateRunRunning(userId: number): boolean {
-  if (runningRadarUpdateRuns.has(userId)) {
-    return false;
-  }
-
-  runningRadarUpdateRuns.add(userId);
-  return true;
+export function markRadarUpdateRunRunning(userId: number): UserJobScope | null {
+  if (runningRadarUpdateRuns.has(userId)) return null;
+  const run = createUserJobScope(userId);
+  runningRadarUpdateRuns.set(userId, run);
+  return run;
 }
 
-export function clearRadarUpdateRunRunning(userId: number): void {
+export function clearRadarUpdateRunRunning(userId: number, owner?: UserJobScope): void {
+  const run = runningRadarUpdateRuns.get(userId);
+  if (owner && run !== owner) return;
+  run?.cancel();
   runningRadarUpdateRuns.delete(userId);
 }
 

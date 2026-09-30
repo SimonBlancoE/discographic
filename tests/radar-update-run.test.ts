@@ -328,24 +328,24 @@ describe('Radar update run', () => {
       { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
     ]);
 
+    await new Promise(resolve => setTimeout(resolve, 0));
     await waitFor(() => {
       const status = getStatus();
-      return status.phase === 'stopped' && status.current === 1 && status.total === 1;
+      return status.phase === 'stopped' && status.current === 0 && status.total === 0;
     });
 
     expect(getStatus()).toMatchObject({
       phase: 'stopped',
-      current: 1,
-      total: 1,
+      current: 0,
+      total: 0,
       pending: 0,
-      progressPercent: 100,
+      progressPercent: 0,
       isRunning: false,
       isTerminal: true,
       canStop: false,
     });
-    expect(rows).toEqual([
-      { id: 1, release_id: 111, marketplace_status: MARKETPLACE_STATUS.PENDING, estimated_price: null },
-    ]);
+    expect(rows).toEqual([]);
+    expect(syncRadarWantlist).not.toHaveBeenCalled();
   });
 
   it('keeps a stopped update stopped when the user cancels during Wantlist sync', async () => {
@@ -378,14 +378,14 @@ describe('Radar update run', () => {
       { id: 111, basic_information: { id: 111, title: 'Wanted A', year: 2001, artists: [{ name: 'Artist A' }] } },
     ]);
 
-    await waitFor(() => getStatus().current === 1);
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(getStatus()).toMatchObject({
       phase: 'stopped',
-      current: 1,
-      total: 1,
+      current: 0,
+      total: 0,
       pending: 0,
-      progressPercent: 100,
+      progressPercent: 0,
       isRunning: false,
       canStop: false,
     });
