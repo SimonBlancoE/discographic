@@ -7,6 +7,39 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [0.4.1] - 2026-09-30
+
+Versión de mantenimiento del backend centrada en integridad de datos, autenticación, cancelación y actualizaciones verificadas.
+
+### Corregido
+
+- **Identidad en importaciones** — las importaciones identifican cada copia mediante IDs de instancia y edición coherentes y rechazan filas ambiguas o contradictorias, incluidas columnas de identidad duplicadas.
+- **Ediciones importadas persistentes** — las valoraciones y notas pendientes sobreviven a reinicios, fallos parciales y sincronizaciones entrantes. Las revisiones y la serialización de escrituras evitan que un reintento antiguo sustituya ediciones nuevas. Los clientes autenticados pueden reintentar con `POST /api/import/retry`; el estado incluye los contadores persistentes de campos `pending` y `pendingFailed`.
+- **Revocación de sesiones** — cambiar o restablecer la contraseña invalida las sesiones anteriores; una cuenta eliminada no puede seguir usando su cookie. El login vuelve a comprobar la cuenta tras verificar la contraseña.
+- **Límite de login concurrente** — los intentos reservan capacidad por cuenta, cliente y verificaciones simultáneas antes de verificar la contraseña, evitando saltarse el límite con peticiones paralelas.
+- **Propiedad de tareas canceladas** — una tarea detenida o invalidada por un reset de cuenta no puede publicar resultados tardíos, repoblar datos borrados ni liberar el bloqueo de su sustituta.
+- **Finalización de la sincronización** — el Discogs sync run sigue activo durante el inventario y el calentamiento de portadas, y comunica sus fallos en vez de anunciar éxito antes de tiempo.
+- **Snapshots de Wantlist** — las respuestas paginadas malformadas, duplicadas o incompletas no marcan registros válidos de Radar como ausentes.
+- **Snapshots de inventario** — el estado de los anuncios se conserva hasta recibir un inventario completo y coherente, incluso cuando hay varios anuncios para la misma edición.
+- **Snapshots de colección** — una paginación incompleta no elimina copias locales ni reemplaza parcialmente sus datos; se siguen admitiendo distintas instancias de una misma edición.
+- **Plazos en Discogs** — las esperas de cuota, peticiones, lecturas del cuerpo y reintentos por límite de API tienen plazos y respetan la cancelación. Las esperas de reintento están acotadas y se liberan los recursos de respuesta.
+- **Plazos en portadas** — las descargas y lecturas de portadas respetan la cancelación de cuenta/tarea y un plazo de 30 segundos, incluidos el proxy autenticado y el calentamiento durante sync.
+- **Puertos de Docker Compose** — cambiar el `PORT` del host mantiene el listener y el healthcheck del contenedor en el puerto 3800.
+- **Rendimiento de filtros** — la caché acotada de facetas evita recorrer colecciones sin cambios, sobrevive a escrituras de sesión y detecta cambios de colección desde otras conexiones SQLite sin conservar datos revertidos.
+- **Validación de datos** — se rechazan metadatos malformados de colección e inventario antes de reconciliar, y se normaliza la forma de los arrays JSON al leerlos para evitar errores en exportaciones y estadísticas.
+
+### Cambiado
+
+- Restaurada la comprobación TypeScript de todo el backend mediante contratos explícitos para base de datos, peticiones y datos externos; eliminadas las directivas backend `@ts-nocheck` restantes.
+- Sustituidos los algoritmos copiados en tests de cabeceras, inventario y migraciones por pruebas del código de producción. El Database schema lifecycle completo se ejecuta en una transacción para revertir conjuntamente una migración fallida.
+
+### Notas de actualización
+
+- Las bases de datos existentes se migran automáticamente. Las sesiones creadas antes de esta versión requieren volver a iniciar sesión.
+- La cola persistente de importación cubre las ediciones confirmadas con esta versión; no puede reconstruir fallos anteriores perdidos en memoria. Reintentar los cambios pendientes es una operación explícita de la API del backend.
+
+[0.4.1]: https://github.com/SimonBlancoE/discographic/compare/v0.4.0...v0.4.1
+
 ## [0.4.0] - 2026-09-29
 
 Release con rediseño de la interfaz, nuevas funciones basadas en la API de Discogs, actualización completa del stack y endurecimiento para producción.
