@@ -3,6 +3,7 @@ import { createCollectionFilters, UNGRADED_CONDITION } from '../../shared/collec
 import type { CollectionFilterKey } from '../../shared/collectionFilters.js';
 import type { CollectionFolder } from '../../shared/contracts/collectionFields.js';
 import { parseJson } from './jsonStorage.js';
+import { getCollectionFacetRevision } from './collectionFacetRevision.js';
 
 const LIKE_ESCAPE = "ESCAPE '\\'";
 
@@ -108,22 +109,14 @@ type FacetRow = {
   notes: unknown;
 };
 
-type CollectionRevision = { totalChanges: number; dataVersion: number };
-type FacetCacheEntry = { revision: CollectionRevision; expiresAt: number; facets: CollectionFacets };
+type FacetCacheEntry = { revision: number; expiresAt: number; facets: CollectionFacets };
 
-// A connection's local changes and commits from other connections invalidate
-// conservatively, including unrelated tables/users. Weak keys avoid retaining
+// SQLite's release triggers invalidate across all writer connections without
+// invalidating on session touches or settings writes. Weak keys avoid retaining
 // closed databases; each live database retains at most 128 user/field variants.
 const facetCache = new WeakMap<Database.Database, Map<string, FacetCacheEntry>>();
 const FACET_CACHE_MAX_ENTRIES = 128;
 const FACET_CACHE_TTL_MS = 5 * 60 * 1_000;
-
-function readCollectionRevision(db: Database.Database): CollectionRevision {
-  return db.prepare<[], CollectionRevision>(`
-    SELECT total_changes() AS totalChanges,
-      (SELECT data_version FROM pragma_data_version) AS dataVersion
-  `).get()!;
-}
 
 function storedArray(value: unknown): unknown[] {
   const parsed = parseJson<unknown>(value, []);
@@ -200,15 +193,15 @@ export function getCollectionFilterOptions(
   userId: number,
   { folders = [], mediaFieldId = 1 }: { folders?: CollectionFolder[]; mediaFieldId?: number | null } = {},
 ): CollectionFacets & { folders: CollectionFolder[] } {
-  // total_changes includes rolled-back writes and does not change on rollback.
   // Never read or publish cached facets from a transaction's temporary snapshot.
+  // Both its rows and revision can roll back after this read.
   if (db.inTransaction) {
     return copyFilterOptions(deriveCollectionFacets(db, userId, mediaFieldId), folders);
   }
 
   // Stamp before reading rows: a concurrent commit after the SELECT must not
   // associate older rows with the newer revision and keep them on the next page.
-  const revision = readCollectionRevision(db);
+  const revision = getCollectionFacetRevision(db);
   const now = Date.now();
   let entries = facetCache.get(db);
   if (!entries) {
@@ -221,7 +214,7 @@ export function getCollectionFilterOptions(
 
   const key = `${userId}:${mediaFieldId}`;
   const cached = entries.get(key);
-  if (cached && cached.revision.totalChanges === revision.totalChanges && cached.revision.dataVersion === revision.dataVersion) {
+  if (cached && cached.revision === revision) {
     entries.delete(key);
     entries.set(key, cached);
     return copyFilterOptions(cached.facets, folders);

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import { createCollectionFilters, getActiveCollectionFilters } from '../shared/collectionFilters.js';
 import { buildReleaseFilterWhere, getCollectionFilterOptions } from '../server/services/releaseFilters.js';
+import { migrateCollectionFacetRevision } from '../server/services/collectionFacetRevision.js';
 
 describe('collection filters', () => {
   it('normalizes the shared filter shape', () => {
@@ -67,6 +68,7 @@ describe('collection filters', () => {
       db.exec(`CREATE TABLE releases (
         user_id INTEGER, genres TEXT, styles TEXT, formats TEXT, labels TEXT, year INTEGER, notes TEXT
       )`);
+      migrateCollectionFacetRevision(db);
       db.prepare('INSERT INTO releases VALUES (?, ?, ?, ?, ?, ?, ?)').run(
         9, '["Electronic"]', '["Techno"]', '[{"name":"Vinyl"}]',
         JSON.stringify(labelNames.map((name) => ({ name }))), 1994, '[]',

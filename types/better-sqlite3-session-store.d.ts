@@ -15,6 +15,7 @@ declare module 'better-sqlite3-session-store' {
     get: session.Store['get'];
     set: session.Store['set'];
     destroy: session.Store['destroy'];
+    touch: (sid: string, session: session.SessionData, callback?: (error?: unknown) => void) => void;
   }
 
   export default function connectSqlite3(

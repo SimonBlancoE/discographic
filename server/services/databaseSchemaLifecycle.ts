@@ -4,6 +4,7 @@ import { migrateCommunityColumns, migrateMarketplaceStatus } from './dbMigration
 import { migrateCollectionValueSnapshots } from './collectionValue.js';
 import { migrateRadarStorage } from './radarStorage.js';
 import { migratePendingImportEdits } from './pendingImportEdits.js';
+import { migrateCollectionFacetRevision } from './collectionFacetRevision.js';
 
 export type DatabaseSchemaLifecycleReport = {
   completedStages: string[];
@@ -281,6 +282,7 @@ export function runDatabaseSchemaLifecycle(
     stage('radar', () => migrateRadarStorage(db));
     stage('pending-import-edits', () => migratePendingImportEdits(db));
     stage('indexes', () => createIndexes());
+    stage('collection-facet-revision', () => migrateCollectionFacetRevision(db));
     const cleanedNoteRows = (hooks.cleanupStoredNotes ?? cleanupStoredNotes)(db);
     completedStages.push('notes-cleanup');
     return { completedStages, cleanedNoteRows };

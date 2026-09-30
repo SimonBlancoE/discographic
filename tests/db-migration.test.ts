@@ -53,7 +53,7 @@ describe('Database schema lifecycle', () => {
   it('creates the complete current schema, defaults, constraints and indexes from an empty database', () => {
     const report = runDatabaseSchemaLifecycle(db);
     expect(report.cleanedNoteRows).toBe(0);
-    expect(tables()).toEqual(['collection_value_snapshots', 'discogs_accounts', 'pending_import_edits', 'radar_releases', 'releases', 'settings', 'sync_log', 'users']);
+    expect(tables()).toEqual(['collection_facet_revision', 'collection_value_snapshots', 'discogs_accounts', 'pending_import_edits', 'radar_releases', 'releases', 'settings', 'sync_log', 'users']);
     db.prepare("INSERT INTO users (id, username, password_hash) VALUES (1, 'one', 'hash'), (2, 'two', 'hash')").run();
     db.prepare("INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (1, 10, 20, 'Title', 'Artist'), (2, 10, 20, 'Other', 'Artist')").run();
     expect(db.prepare('SELECT auth_epoch FROM users WHERE id = 1').get()).toEqual({ auth_epoch: 0 });
@@ -68,6 +68,9 @@ describe('Database schema lifecycle', () => {
     ]));
     expect(db.pragma('foreign_key_check')).toEqual([]);
     expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    db.prepare('DELETE FROM users WHERE id = ?').run(1);
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).toEqual({ revision: 3 });
+    expect(db.prepare('SELECT user_id FROM releases').all()).toEqual([{ user_id: 2 }]);
   });
 
   it.each([false, true])('upgrades legacy data without losing identities, account scope or settings (user scoped: %s)', userScoped => {
@@ -125,7 +128,7 @@ describe('Database schema lifecycle', () => {
       return cleanupStoredNotes(openDb);
     } });
     expect(report.cleanedNoteRows).toBe(1);
-    expect(report.completedStages).toEqual(['base-tables', 'releases', 'sync-log', 'settings', 'user-role', 'auth-epoch', 'listing-columns', 'last-seen-sync', 'marketplace', 'community', 'collection-value', 'radar', 'pending-import-edits', 'indexes', 'notes-cleanup']);
+    expect(report.completedStages).toEqual(['base-tables', 'releases', 'sync-log', 'settings', 'user-role', 'auth-epoch', 'listing-columns', 'last-seen-sync', 'marketplace', 'community', 'collection-value', 'radar', 'pending-import-edits', 'indexes', 'collection-facet-revision', 'notes-cleanup']);
     expect(pendingImportCounts(db, 7).pending).toBe(1);
   });
 
@@ -153,5 +156,48 @@ describe('Database schema lifecycle', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM releases').get()).toEqual({ count: 2 });
     expect(columns('releases')).not.toContain('release_id');
     expect(columns('users')).not.toContain('auth_epoch');
+  });
+
+  it('upgrades an existing Local collection with a persistent revision without changing its releases', () => {
+    seedLegacy(true);
+    runDatabaseSchemaLifecycle(db);
+    const rows = db.prepare('SELECT * FROM releases ORDER BY id').all();
+    // Simulate the previous current schema without the new revision mechanism.
+    db.exec(`DROP TRIGGER IF EXISTS collection_facets_insert;
+      DROP TRIGGER IF EXISTS collection_facets_update;
+      DROP TRIGGER IF EXISTS collection_facets_delete;
+      DROP TABLE IF EXISTS collection_facet_revision;`);
+    runDatabaseSchemaLifecycle(db);
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).toEqual({ revision: 0 });
+    expect(db.prepare('SELECT * FROM releases ORDER BY id').all()).toEqual(rows);
+    db.prepare('UPDATE releases SET genres = ? WHERE user_id = ?').run('["Jazz"]', 7);
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).toEqual({ revision: 2 });
+    runDatabaseSchemaLifecycle(db);
+    runDatabaseSchemaLifecycle(db);
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).toEqual({ revision: 2 });
+    db.prepare('DELETE FROM releases WHERE user_id = ?').run(7);
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).toEqual({ revision: 4 });
+  });
+
+  it('rolls back release revisions with writes and failed schema upgrades', () => {
+    seedLegacy(true);
+    const tablesBefore = tables();
+    expect(() => runDatabaseSchemaLifecycle(db, { cleanupStoredNotes: () => { throw new Error('Upgrade failed'); } }))
+      .toThrow('Upgrade failed');
+    expect(tables()).toEqual(tablesBefore);
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all()).toEqual([]);
+    runDatabaseSchemaLifecycle(db);
+    const revision = db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get();
+    db.exec('BEGIN');
+    db.prepare('UPDATE releases SET genres = ? WHERE user_id = ?').run('["Jazz"]', 7);
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).not.toEqual(revision);
+    db.exec('ROLLBACK');
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).toEqual(revision);
+    expect(() => runDatabaseSchemaLifecycle(db, { cleanupStoredNotes: openDb => {
+      openDb.prepare('DELETE FROM releases WHERE user_id = ?').run(7);
+      throw new Error('Cleanup failed');
+    } })).toThrow('Cleanup failed');
+    expect(db.prepare('SELECT revision FROM collection_facet_revision WHERE id = 1').get()).toEqual(revision);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = 7').get()).toEqual({ count: 2 });
   });
 });

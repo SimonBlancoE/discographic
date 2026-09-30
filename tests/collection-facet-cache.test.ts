@@ -1,9 +1,12 @@
 import Database from 'better-sqlite3';
+import session from 'express-session';
+import connectSqlite3 from 'better-sqlite3-session-store';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getCollectionFilterOptions } from '../server/services/releaseFilters.js';
+import { migrateCollectionFacetRevision } from '../server/services/collectionFacetRevision.js';
 
 const facetSql = 'SELECT genres, styles, formats, labels, year, notes FROM releases WHERE user_id = ?';
 const databases: Database.Database[] = [];
@@ -21,6 +24,7 @@ function openDatabase(filename = ':memory:') {
     id INTEGER PRIMARY KEY, user_id INTEGER, genres TEXT, styles TEXT,
     formats TEXT, labels TEXT, year INTEGER, notes TEXT
   )`);
+  migrateCollectionFacetRevision(db);
   return { db, scans: () => scans };
 }
 
@@ -33,11 +37,38 @@ function insertRelease(db: Database.Database, userId = 1, genre = 'Electronic') 
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   for (const db of databases.splice(0)) db.close();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
 describe('Local collection filter facet cache', () => {
+  it('reuses unchanged facets across real SQLite session touches and preference writes', async () => {
+    const { db, scans } = openDatabase();
+    insertRelease(db);
+    db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
+    vi.useFakeTimers();
+    const SqliteStore = connectSqlite3(session);
+    const store = new SqliteStore({ client: db, expired: { clear: false } });
+    const cookie = new session.Cookie();
+    cookie.maxAge = 60 * 60 * 1_000;
+    const storedSession = { cookie };
+    await new Promise<void>((resolve, reject) => store.set('collector', storedSession,
+      error => error ? reject(error) : resolve()));
+    const initialChanges = db.prepare<[], { changes: number }>('SELECT total_changes() AS changes').get()!.changes;
+
+    for (let page = 1; page <= 5; page++) {
+      expect(getCollectionFilterOptions(db, 1).genres).toEqual(['Electronic']);
+      await new Promise<void>((resolve, reject) => store.touch!('collector', storedSession,
+        error => error ? reject(error) : resolve()));
+      db.prepare('INSERT OR REPLACE INTO settings VALUES (?, ?)').run('currency', 'EUR');
+    }
+
+    expect(db.prepare<[], { changes: number }>('SELECT total_changes() AS changes').get()!.changes)
+      .toBeGreaterThan(initialChanges);
+    expect(scans()).toBe(1);
+  });
+
   it('scans unchanged collection rows once across repeated page requests', () => {
     const { db, scans } = openDatabase();
     insertRelease(db);
@@ -112,6 +143,19 @@ describe('Local collection filter facet cache', () => {
     expect(first.scans()).toBe(2);
   });
 
+  it('ignores unrelated writes committed by another connection', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'discographic-facets-'));
+    directories.push(directory);
+    const first = openDatabase(join(directory, 'collection.sqlite'));
+    const second = openDatabase(join(directory, 'collection.sqlite'));
+    first.db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
+    insertRelease(first.db);
+    getCollectionFilterOptions(first.db, 1);
+    second.db.prepare('INSERT INTO settings VALUES (?, ?)').run('currency', 'EUR');
+    expect(getCollectionFilterOptions(first.db, 1).genres).toEqual(['Electronic']);
+    expect(first.scans()).toBe(1);
+  });
+
   it('does not stamp older rows with a revision committed after reading them', () => {
     const directory = mkdtempSync(join(tmpdir(), 'discographic-facets-'));
     directories.push(directory);
@@ -154,7 +198,9 @@ describe('Local collection filter facet cache', () => {
 
     expect(getCollectionFilterOptions(db, 1).genres).toEqual(['Electronic']);
     expect(getCollectionFilterOptions(db, 1).genres).toEqual(['Electronic']);
-    expect(scans()).toBe(4);
+    // The rollback also restores the SQLite revision, so the original entry
+    // remains valid after the two uncached transactional reads.
+    expect(scans()).toBe(3);
   });
 
   it('does not retain a first-ever read inside a transaction that is rolled back', () => {
