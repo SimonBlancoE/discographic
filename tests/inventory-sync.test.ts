@@ -1,173 +1,174 @@
-// @ts-nocheck
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from 'better-sqlite3';
-import { existsSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { DEFAULT_CURRENCY, convertAmountWithRates } from '../server/services/exchangeRates.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { Server } from 'node:http';
+import express from 'express';
+import session from 'express-session';
+import { translate, type TranslationVars } from '../shared/i18n.js';
+import type { SyncStatusState } from '../shared/contracts/syncStatus.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const testDbPath = join(__dirname, '.test-inventory.db');
+// Controlled upstream fixtures have no remote quota or ECB network dependency.
+vi.mock('../server/middleware/rateLimit.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../server/middleware/rateLimit.js')>(),
+  createDiscogsRateLimiter: () => async () => undefined,
+}));
+vi.mock('../server/services/exchangeRates.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../server/services/exchangeRates.js')>(),
+  getExchangeSnapshot: async () => ({ rates: { EUR: 1, GBP: 0.8 }, base: 'EUR' }),
+}));
+const dataDir = mkdtempSync(join(tmpdir(), 'discographic-inventory-snapshot-'));
+vi.stubEnv('DISCOGRAPHIC_DATA_DIR', dataDir);
+const { default: db, createUser, deleteUser, upsertDiscogsAccount } = await import('../server/db.js');
+const { default: router } = await import('../server/routes/sync.js');
+let server: Server;
+let baseUrl: string;
+let userId: number;
+let otherUserId: number;
+let inventoryPages: unknown[];
+let inventoryResponse: ((page: number) => Promise<unknown>) | undefined;
 
-describe('Inventory sync logic', () => {
-  let db;
-
-  beforeAll(() => {
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-    db = new Database(testDbPath);
-    db.exec(`
-      CREATE TABLE releases (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        release_id INTEGER NOT NULL,
-        instance_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        artist TEXT NOT NULL,
-        listing_status TEXT DEFAULT NULL,
-        listing_price REAL DEFAULT NULL,
-        listing_currency TEXT DEFAULT NULL,
-        listing_price_eur REAL DEFAULT NULL,
-        UNIQUE(user_id, instance_id)
-      )
-    `);
-
-    // Seed collection
-    db.prepare(`INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (1, 1001, 1, 'Album A', 'Artist A')`).run();
-    db.prepare(`INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (1, 1002, 2, 'Album B', 'Artist B')`).run();
-    db.prepare(`INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (1, 1003, 3, 'Album C', 'Artist C')`).run();
-    db.prepare(`INSERT INTO releases (user_id, release_id, instance_id, title, artist) VALUES (2, 1001, 4, 'Album A', 'Artist A')`).run();
-  });
-
-  afterAll(() => {
-    db.close();
-    if (existsSync(testDbPath)) unlinkSync(testDbPath);
-  });
-
-  const rates = { EUR: 1, USD: 1.1, GBP: 0.85 };
-
-  function simulateInventorySync(userId, listings) {
-    // Clear existing listing data (same as the real sync)
-    db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE user_id = ?').run(userId);
-
-    // Build map of release_id -> best listing
-    const listingMap = new Map();
-    for (const listing of listings) {
-      const releaseId = listing.release?.id;
-      if (!releaseId) continue;
-
-      const currency = listing.price?.currency || DEFAULT_CURRENCY;
-      const originalPrice = listing.price?.value != null ? Number(listing.price.value) : null;
-      const priceEur = originalPrice == null ? null : convertAmountWithRates(originalPrice, currency, DEFAULT_CURRENCY, rates);
-
-      const entry = {
-        status: listing.status || 'For Sale',
-        price: originalPrice,
-        currency: originalPrice == null ? null : currency,
-        priceEur,
-      };
-
-      const existing = listingMap.get(releaseId);
-      if (!existing) {
-        listingMap.set(releaseId, entry);
-      } else {
-        const statusRank = (s) => (s === 'For Sale' ? 0 : 1);
-        if (statusRank(entry.status) < statusRank(existing.status) ||
-            (entry.status === existing.status && entry.priceEur != null && (existing.priceEur == null || entry.priceEur < existing.priceEur))) {
-          listingMap.set(releaseId, entry);
-        }
-      }
+const listing = (id: number, releaseId = 101, status = 'For Sale', value: number | null = 20, currency = 'EUR') => ({
+  id, release: { id: releaseId }, status, price: value === null ? {} : { value, currency },
+});
+const inventory = (listings: unknown[], page = 1, items = listings.length, pages = Math.ceil(items / 100)) => ({
+  pagination: { page, per_page: 100, pages, items }, listings,
+});
+const fullPage = Array.from({ length: 100 }, (_, i) => listing(1000 + i));
+const collection = {
+  pagination: { page: 1, per_page: 100, pages: 1, items: 2 },
+  releases: [101, 102].map(id => ({
+    instance_id: id + 1000, date_added: '2026-01-01',
+    basic_information: { id, title: 'Fixture', artists: [{ name: 'Fixture' }] },
+  })),
+};
+const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
+const listingFields = () => db.prepare(`SELECT user_id, instance_id, listing_status, listing_price,
+  listing_currency, listing_price_eur FROM releases ORDER BY user_id, instance_id`).all();
+async function state(): Promise<SyncStatusState> { return (await fetch(`${baseUrl}/status`)).json(); }
+async function start() { expect((await fetch(baseUrl, { method: 'POST' })).status).toBe(200); }
+async function terminal() {
+  await vi.waitFor(async () => expect((await state()).isTerminal).toBe(true), { timeout: 2000, interval: 5 });
+  return state();
+}
+beforeAll(async () => {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.origin === baseUrl) return realFetch(input, init);
+    if (url.origin !== 'https://api.discogs.com' || (init?.method && init.method !== 'GET')) {
+      throw new Error('Unexpected external request in inventory snapshot test');
     }
+    if (url.pathname.endsWith('/collection/folders/0/releases')) return json(collection);
+    if (url.pathname.endsWith('/collection/fields')) return json({ fields: [] });
+    if (url.pathname.endsWith('/collection/folders')) return json({ folders: [] });
+    if (url.pathname.endsWith('/collection/value')) return json({});
+    if (url.pathname.endsWith('/inventory')) {
+      const page = Number(url.searchParams.get('page'));
+      return json(inventoryResponse ? await inventoryResponse(page) : inventoryPages[page - 1]);
+    }
+    throw new Error(`Unexpected fixture endpoint: ${url.pathname}`);
+  });
+  const app = express();
+  app.use(session({ secret: 'temporary-fixture', resave: false, saveUninitialized: false }));
+  app.use((req, _res, next) => {
+    req.session.userId = userId; req.session.authEpoch = 0; req.locale = 'en';
+    req.t = (key, vars) => translate('en', key, vars as TranslationVars); next();
+  });
+  app.use(router);
+  await new Promise<void>(resolve => { server = app.listen(0, '127.0.0.1', () => {
+    const address = server.address(); if (!address || typeof address === 'string') throw new Error('bind');
+    baseUrl = `http://127.0.0.1:${address.port}`; resolve();
+  }); });
+});
+beforeEach(() => {
+  if (userId) deleteUser(userId);
+  if (otherUserId) deleteUser(otherUserId);
+  userId = createUser(`inventory-${Date.now()}`, 'unused').id;
+  otherUserId = createUser(`other-${Date.now()}`, 'unused').id;
+  upsertDiscogsAccount(userId, 'fixture', 'fixture-token');
+  const insert = db.prepare(`INSERT INTO releases (user_id,release_id,instance_id,title,artist,
+    listing_status,listing_price,listing_currency,listing_price_eur) VALUES (?,?,?,'Keep','Keep','For Sale',32,'GBP',40)`);
+  insert.run(userId, 101, 1101); insert.run(userId, 102, 1102); insert.run(otherUserId, 101, 1101);
+  inventoryPages = [inventory([])]; inventoryResponse = undefined;
+});
+afterAll(async () => {
+  deleteUser(userId); deleteUser(otherUserId);
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  db.close(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); rmSync(dataDir, { recursive: true, force: true });
+});
 
-    const updateStmt = db.prepare('UPDATE releases SET listing_status = ?, listing_price = ?, listing_currency = ?, listing_price_eur = ? WHERE user_id = ? AND release_id = ?');
-    const updateTx = db.transaction(() => {
-      for (const [releaseId, listing] of listingMap) {
-        updateStmt.run(listing.status, listing.price, listing.currency, listing.priceEur, userId, releaseId);
-      }
-    });
-    updateTx();
-  }
-
-  it('marks listed items with status and price', () => {
-    simulateInventorySync(1, [
-      { release: { id: 1001 }, status: 'For Sale', price: { value: 25.00, currency: 'USD' } },
-    ]);
-
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE user_id = 1 AND release_id = 1001').get();
-    expect(row.listing_status).toBe('For Sale');
-    expect(row.listing_price).toBeCloseTo(25.00);
-    expect(row.listing_currency).toBe('USD');
-    expect(row.listing_price_eur).toBeCloseTo(22.73);
+describe('production inventory snapshot reconciliation', () => {
+  it.each([
+    ['HTTP 200 empty object', [{}]],
+    ['null envelope', [null]],
+    ['missing pagination', [{ listings: [] }]],
+    ['missing listings', [{ pagination: inventory([]).pagination }]],
+    ['invalid listings', [{ ...inventory([]), listings: {} }]],
+    ['missing page', [{ ...inventory([]), pagination: { per_page: 100, pages: 0, items: 0 } }]],
+    ['missing page size', [{ ...inventory([]), pagination: { page: 1, pages: 0, items: 0 } }]],
+    ['missing items', [{ ...inventory([]), pagination: { page: 1, per_page: 100, pages: 0 } }]],
+    ['missing pages', [{ ...inventory([]), pagination: { page: 1, per_page: 100, items: 0 } }]],
+    ['wrong page number', [inventory([listing(1)], 2)]],
+    ['short first page', [inventory([listing(1)], 1, 2)]],
+    ['inflated pages', [inventory([listing(1)], 1, 1, 2)]],
+    ['duplicate listing', [inventory([listing(1), listing(1)])]],
+    ['missing listing identity', [inventory([{ release: { id: 101 } }])]],
+    ['invalid listing identity', [inventory([listing(-1)])]],
+    ['invalid release identity', [inventory([listing(1, 0)])]],
+    ['string listing identity', [inventory([{ ...listing(1), id: '1' }])]],
+    ['fractional release identity', [inventory([listing(1, 101.5)])]],
+    ['missing second page', [inventory(fullPage, 1, 101), null]],
+    ['truncated second page', [inventory(fullPage, 1, 102), inventory([listing(2000)], 2, 102)]],
+    ['cross-page duplicate listing', [inventory(fullPage, 1, 101), inventory([listing(1000)], 2, 101)]],
+    ['changing totals', [inventory(fullPage, 1, 101), inventory([listing(2000), listing(2001)], 2, 102)]],
+  ])('preserves every prior listing field and fails the whole run for %s', async (_name, pages) => {
+    inventoryPages = pages;
+    const before = listingFields();
+    await start(); const status = await terminal();
+    expect(listingFields()).toEqual(before);
+    expect(status).toMatchObject({ status: 'failed', inventory: { status: 'failed' }, message: expect.stringMatching(/inventory/i) });
+    expect(db.prepare('SELECT status,finished_at FROM sync_log WHERE user_id = ?').get(userId))
+      .toMatchObject({ status: 'failed', finished_at: expect.any(String) });
   });
 
-  it('leaves non-listed items as NULL', () => {
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE user_id = 1 AND release_id = 1002').get();
-    expect(row.listing_status).toBeNull();
-    expect(row.listing_price).toBeNull();
-    expect(row.listing_currency).toBeNull();
-    expect(row.listing_price_eur).toBeNull();
+  it.each([0, 1])('clears listings only for the syncing account for valid empty inventory with %i pages', async pages => {
+    inventoryPages = [inventory([], 1, 0, pages)];
+    const otherBefore = listingFields()[2];
+    await start(); expect(await terminal()).toMatchObject({ status: 'completed', inventory: { status: 'completed' } });
+    expect(listingFields().slice(0, 2)).toEqual([1101, 1102].map(instance_id => ({
+      user_id: userId, instance_id, listing_status: null, listing_price: null, listing_currency: null, listing_price_eur: null,
+    })));
+    expect(listingFields()[2]).toEqual(otherBefore);
   });
 
-  it('does not affect other users', () => {
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE user_id = 2 AND release_id = 1001').get();
-    expect(row.listing_status).toBeNull();
-    expect(row.listing_price).toBeNull();
-    expect(row.listing_currency).toBeNull();
-    expect(row.listing_price_eur).toBeNull();
+  it('accepts distinct listings for one release and preserves status and converted-price selection', async () => {
+    inventoryPages = [inventory([
+      listing(1, 101, 'Draft', 1), listing(2, 101, 'For Sale', 20), listing(3, 101, 'For Sale', 15, 'GBP'),
+      listing(4, 102, 'Draft', null),
+    ])];
+    const otherBefore = listingFields()[2];
+    await start(); expect((await terminal()).status).toBe('completed');
+    expect(listingFields()[0]).toMatchObject({ listing_status: 'For Sale', listing_price: 15, listing_currency: 'GBP', listing_price_eur: 18.75 });
+    expect(listingFields()[1]).toMatchObject({ listing_status: 'Draft', listing_price: null, listing_currency: null, listing_price_eur: null });
+    expect(listingFields()[2]).toEqual(otherBefore);
   });
 
-  it('prefers For Sale over Draft for same release', () => {
-    simulateInventorySync(1, [
-      { release: { id: 1002 }, status: 'Draft', price: { value: 10.00, currency: 'GBP' } },
-      { release: { id: 1002 }, status: 'For Sale', price: { value: 15.00, currency: 'USD' } },
-    ]);
-
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE user_id = 1 AND release_id = 1002').get();
-    expect(row.listing_status).toBe('For Sale');
-    expect(row.listing_price).toBeCloseTo(15.00);
-    expect(row.listing_currency).toBe('USD');
-    expect(row.listing_price_eur).toBeCloseTo(13.64);
-  });
-
-  it('prefers lower price for same status', () => {
-    simulateInventorySync(1, [
-      { release: { id: 1003 }, status: 'For Sale', price: { value: 30.00, currency: 'USD' } },
-      { release: { id: 1003 }, status: 'For Sale', price: { value: 20.00, currency: 'GBP' } },
-    ]);
-
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE user_id = 1 AND release_id = 1003').get();
-    expect(row.listing_status).toBe('For Sale');
-    expect(row.listing_price).toBeCloseTo(20.00);
-    expect(row.listing_currency).toBe('GBP');
-    expect(row.listing_price_eur).toBeCloseTo(23.53);
-  });
-
-  it('clears listing data when item is delisted', () => {
-    // First sync: item is listed
-    simulateInventorySync(1, [
-      { release: { id: 1001 }, status: 'For Sale', price: { value: 25.00, currency: 'USD' } },
-    ]);
-    let row = db.prepare('SELECT listing_status FROM releases WHERE user_id = 1 AND release_id = 1001').get();
-    expect(row.listing_status).toBe('For Sale');
-
-    // Second sync: item no longer in inventory
-    simulateInventorySync(1, []);
-    row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE user_id = 1 AND release_id = 1001').get();
-    expect(row.listing_status).toBeNull();
-    expect(row.listing_price).toBeNull();
-    expect(row.listing_currency).toBeNull();
-    expect(row.listing_price_eur).toBeNull();
-  });
-
-  it('handles listings with no price', () => {
-    simulateInventorySync(1, [
-      { release: { id: 1001 }, status: 'Draft', price: {} },
-    ]);
-
-    const row = db.prepare('SELECT listing_status, listing_price, listing_currency, listing_price_eur FROM releases WHERE user_id = 1 AND release_id = 1001').get();
-    expect(row.listing_status).toBe('Draft');
-    expect(row.listing_price).toBeNull();
-    expect(row.listing_currency).toBeNull();
-    expect(row.listing_price_eur).toBeNull();
+  it('waits for the complete second page before reconciling and then accepts unique listing coverage', async () => {
+    let resolve!: (value: unknown) => void;
+    let secondPageEntered = false;
+    const held = new Promise<unknown>(done => { resolve = done; });
+    inventoryResponse = async page => {
+      if (page === 1) return inventory(fullPage, 1, 101);
+      secondPageEntered = true; return held;
+    };
+    const before = listingFields();
+    await start(); await vi.waitFor(() => expect(secondPageEntered).toBe(true));
+    const during = listingFields(); const duringState = await state();
+    resolve(inventory([listing(2000, 102, 'Draft', 10)], 2, 101));
+    expect((await terminal()).status).toBe('completed');
+    expect(during).toEqual(before); expect(duringState.status).toBe('running');
+    expect(listingFields()[1]).toMatchObject({ listing_status: 'Draft', listing_price: 10 });
+    expect(listingFields()[2]).toEqual(before[2]);
   });
 });

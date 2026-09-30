@@ -79,11 +79,11 @@ beforeEach(() => {
   upsertDiscogsAccount(userId, 'fixture', 'fixture-token');
   vi.clearAllMocks();
   exchange.mockResolvedValue({ rates: { EUR: 1, GBP: 0.8 }, base: 'EUR' });
-  client.getCollection.mockResolvedValue({ pagination: { pages: 1, items: 0 }, releases: [] });
+  client.getCollection.mockResolvedValue({ pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, releases: [] });
   client.getCustomFields.mockResolvedValue({ fields: [{ id: 3, name: 'Notes', type: 'textarea' }] });
   client.getCollectionFolders.mockResolvedValue({ folders: [] });
   client.getCollectionValue.mockResolvedValue({});
-  client.getInventory.mockResolvedValue({ pagination: { pages: 1 }, listings: [] });
+  client.getInventory.mockResolvedValue({ pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, listings: [] });
   client.getRelease.mockResolvedValue({ country: 'OLD', tracklist: [] });
   client.getMarketplaceStats.mockResolvedValue({ lowest_price: { value: 99 } });
   client.updateRating.mockResolvedValue({}); client.updateField.mockResolvedValue({});
@@ -118,9 +118,9 @@ it.each(['getCollection', 'getCustomFields', 'getCollectionValue', 'getInventory
   await api('sync', {}); await until(() => client[method].mock.calls.length > 0);
   clearUserCollectionData(userId); seed();
   db.prepare("UPDATE releases SET listing_status = 'replacement' WHERE user_id = ?").run(userId);
-  const payload = method === 'getCollection' ? { pagination: { pages: 1, items: 1 }, releases: [{ instance_id: 99, basic_information: { id: 99 } }] }
+  const payload = method === 'getCollection' ? { pagination: { page: 1, per_page: 100, pages: 1, items: 1 }, releases: [{ instance_id: 99, basic_information: { id: 99 } }] }
     : method === 'getCustomFields' ? { fields: [{ id: 99, name: 'Notes', type: 'textarea' }] }
-    : method === 'getInventory' ? { pagination: { pages: 1 }, listings: [] } : { minimum: '€10', median: '€20', maximum: '€30' };
+    : method === 'getInventory' ? { pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, listings: [] } : { minimum: '€10', median: '€20', maximum: '€30' };
   held.resolve(payload); await settle();
   expect(getCollectionFieldMap(userId).notesFieldId).toBe(3);
   expect(db.prepare('SELECT instance_id, listing_status FROM releases WHERE user_id = ?').all(userId)).toEqual([{ instance_id: 1001, listing_status: 'replacement' }]);
@@ -176,11 +176,11 @@ it.each(['resolve', 'reject'] as const)('sync late %s cannot clobber a replaceme
   const old = deferred<unknown>(); const replacement = deferred<unknown>();
   client.getCollection.mockReturnValueOnce(old.promise).mockReturnValueOnce(replacement.promise);
   await api('sync', {}); clearUserCollectionData(userId); await api('sync', {});
-  outcome === 'resolve' ? old.resolve({ pagination: { pages: 1, items: 0 }, releases: [] }) : old.reject(new Error('late failure'));
+  outcome === 'resolve' ? old.resolve({ pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, releases: [] }) : old.reject(new Error('late failure'));
   await settle();
   expect(await (await api('sync/status', undefined, 'GET')).json()).toMatchObject({ status: 'running', phase: 'initializing' });
   expect((await api('sync', {})).status).toBe(409);
-  replacement.resolve({ pagination: { pages: 1, items: 0 }, releases: [] }); await settle();
+  replacement.resolve({ pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, releases: [] }); await settle();
 });
 it('import old completion cannot clobber another confirmed preview', async () => {
   seed(); const old = deferred<unknown>(); const replacement = deferred<unknown>();
