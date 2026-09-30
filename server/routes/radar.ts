@@ -1,3 +1,4 @@
+import { createUserJobScope } from '../services/userJobs.js';
 import express, { type Response } from 'express';
 import multer from 'multer';
 import { stringify } from 'csv-stringify/sync';
@@ -55,6 +56,10 @@ const RADAR_PRIORITIES = new Set<RadarPriority>(Object.values(RADAR_PRIORITY));
 const RADAR_MINIMUM_CONDITIONS = new Set<RadarMinimumCondition>(Object.values(RADAR_MINIMUM_CONDITION));
 
 router.use(requireAuth);
+router.use((req, res, next) => {
+  res.locals.accountScope = createUserJobScope(req.session.userId!);
+  next();
+});
 
 function buildWantlistTemplateData(t: Translate): WantlistTemplateRow[] {
   return [
@@ -287,7 +292,9 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Radar release id is invalid' });
     }
 
+    const scope = createUserJobScope(userId);
     const patch = await parseRadarUpdatePayload(userId, req.body);
+    scope.assertCurrent();
     const updated = updateRadarReleaseForUser(userId, radarId, patch);
     if (!updated) {
       return res.status(404).json({ error: 'Radar release not found' });
@@ -313,6 +320,7 @@ router.get('/wantlist/template', (req, res) => {
 
 router.post('/wantlist/preview', upload.single('file'), (req, res) => {
   try {
+    res.locals.accountScope.assertCurrent();
     if (!req.file) {
       return res.status(400).json({ error: req.t('backend.radarImport.fileRequired') });
     }

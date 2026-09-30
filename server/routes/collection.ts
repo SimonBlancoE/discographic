@@ -1,5 +1,6 @@
 // @ts-nocheck
 import express from 'express';
+import { createUserJobScope } from '../services/userJobs.js';
 import db, { getCollectionFieldMap, getCollectionFolders, getSettingForUser, hasStoredCollectionFieldMap, hydrateRelease, parseJson, setCollectionFieldMap, setCollectionFolders, stringifyJson } from '../db.js';
 import { getDiscogsClientForUser, requireAuth } from '../middleware/auth.js';
 import { DEFAULT_CURRENCY, convertAmountWithRates, convertReleasePrices, getExchangeSnapshot, normalizeCurrency } from '../services/exchangeRates.js';
@@ -85,6 +86,7 @@ async function convertHydratedRelease(req, release, normalizeRelease = normalize
 }
 
 async function enrichReleaseIfNeeded(req, release) {
+  const scope = createUserJobScope(req.session.userId);
   if (!release) {
     return null;
   }
@@ -105,11 +107,13 @@ async function enrichReleaseIfNeeded(req, release) {
 
   try {
     const detail = await discogs.getRelease(release.release_id);
+    scope.assertCurrent();
     // Releases that already have a price only needed the community stats backfill.
     const marketplace = neverEnriched || release.marketplace_status !== MARKETPLACE_STATUS.PRICED
       ? await fetchMarketplaceValue(discogs, release.release_id, DEFAULT_CURRENCY)
       : { marketplaceStatus: release.marketplace_status, estimatedValue: release.estimated_value };
 
+    scope.assertCurrent();
     const estimatedValue = marketplace.marketplaceStatus === MARKETPLACE_STATUS.PRICED
       ? marketplace.estimatedValue
       : null;
@@ -153,6 +157,7 @@ async function enrichReleaseIfNeeded(req, release) {
     const fresh = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(release.id, req.session.userId);
     return convertHydratedRelease(req, fresh, normalizeReleaseDetail);
   } catch (error) {
+    scope.assertCurrent();
     console.error(`[enrich] Failed to fetch release details for release ${release.release_id} from Discogs:`, error.message);
     return convertHydratedRelease(req, release, normalizeReleaseDetail);
   }
@@ -239,6 +244,7 @@ router.get('/covers', (req, res) => {
 // Field definitions are normally stored by the Discogs sync run. Right after upgrading there is no
 // stored map yet, and accounts with renamed/recreated fields would otherwise edit the wrong field ids.
 async function ensureCollectionMetadata(req) {
+  const scope = createUserJobScope(req.session.userId);
   const userId = req.session.userId;
   if (hasStoredCollectionFieldMap(userId)) {
     return;
@@ -247,6 +253,7 @@ async function ensureCollectionMetadata(req) {
   try {
     const discogs = getDiscogsClientForUser(req);
     const [fields, folders] = await Promise.all([discogs.getCustomFields(), discogs.getCollectionFolders()]);
+    scope.assertCurrent();
     if (fields) setCollectionFieldMap(userId, fields);
     if (folders) setCollectionFolders(userId, folders);
   } catch (error) {
@@ -329,6 +336,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
+  const scope = createUserJobScope(req.session.userId);
   try {
     const release = db.prepare(`
       SELECT id, user_id, release_id, instance_id, folder_id, notes, rating
@@ -346,6 +354,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await ensureCollectionMetadata(req);
+    scope.assertCurrent();
     const fieldMap = getCollectionFieldMap(req.session.userId);
     const conditionEdits = [
       ['media_condition', fieldMap.mediaFieldId, fieldMap.mediaOptions],
@@ -395,6 +404,7 @@ router.put('/:id', async (req, res) => {
     try {
       if (req.body.rating !== undefined && nextRating !== release.rating) {
         await discogs.updateRating({ ...base, rating: nextRating });
+        scope.assertCurrent();
         db.prepare('UPDATE releases SET rating = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
           .run(nextRating, release.id, userId);
       }
@@ -406,11 +416,13 @@ router.put('/:id', async (req, res) => {
         }
 
         await discogs.updateField({ ...base, fieldId, value });
+        scope.assertCurrent();
         persistField(fieldId, value);
       }
 
       if (targetFolderId != null && targetFolderId !== (release.folder_id || 0)) {
         await discogs.moveToFolder({ ...base, targetFolderId });
+        scope.assertCurrent();
         db.prepare('UPDATE releases SET folder_id = ?, synced_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
           .run(targetFolderId, release.id, userId);
       }

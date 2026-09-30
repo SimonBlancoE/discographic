@@ -1,3 +1,4 @@
+import { createUserJobScope, registerUserJobCanceller } from './userJobs.js';
 import type { PriceSuggestion, PriceSuggestionsResponse } from '../../shared/contracts/priceSuggestions.js';
 import { DEFAULT_MEDIA_CONDITIONS } from '../../shared/contracts/collectionFields.js';
 
@@ -12,6 +13,12 @@ type RawSuggestions = {
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const cache = new Map<string, { fetchedAt: number; value: RawSuggestions }>();
+
+registerUserJobCanceller(userId => {
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${userId}:`)) cache.delete(key);
+  }
+});
 
 /**
  * Discogs answers `{ "Mint (M)": { "currency": "EUR", "value": 12.5 }, ... }` with one entry per grade.
@@ -67,12 +74,14 @@ export async function getPriceSuggestions({
   releaseId: number;
   convert: (amount: number, fromCurrency: string) => Promise<{ amount: number; currency: string }>;
 }): Promise<PriceSuggestionsResponse> {
+  const scope = createUserJobScope(userId);
   const key = `${userId}:${releaseId}`;
   let raw = cache.get(key);
 
   if (!raw || Date.now() - raw.fetchedAt > CACHE_TTL_MS) {
     try {
       const parsed = parsePriceSuggestions(await discogs.getPriceSuggestions(releaseId));
+      scope.assertCurrent();
       if (!parsed) {
         return { available: false, reason: 'error', message: null };
       }
@@ -90,6 +99,7 @@ export async function getPriceSuggestions({
     ...(await convert(suggestion.value, raw.value.currency)),
   })));
 
+  scope.assertCurrent();
   return {
     available: true,
     currency: converted[0]?.currency ?? raw.value.currency,
