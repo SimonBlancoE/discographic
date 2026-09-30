@@ -7,6 +7,13 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 
 > English version: [CHANGELOG.en.md](CHANGELOG.en.md)
 
+## [Sin publicar]
+
+### Mantenimiento
+
+- Retirado el ejecutor de agentes en desuso y sus dependencias exclusivas de desarrollo.
+- Retirados los informes internos de auditoría y planes de ejecución del código público; las exclusiones de Git y Docker ahora cubren los artefactos locales de automatización y worktrees.
+
 ## [0.4.1] - 2026-09-30
 
 Versión de mantenimiento del backend centrada en integridad de datos, autenticación, cancelación y actualizaciones verificadas.

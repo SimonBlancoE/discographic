@@ -225,5 +225,5 @@ The following topics are intentionally deferred to v2 or later. The v1 implement
 - Radar should feel like a local decision workspace, not a Marketplace automation bot.
 - The first release should be useful with only release-level Marketplace stats and local rules.
 - The v2 topics should be planned explicitly before implementation because they affect API usage, rate limits, storage, source freshness, user trust, and Discogs terms.
-- The old "Wantlist Price Alerts" plan in the repository should be treated as superseded by this narrower Radar v1 PRD unless a future plan deliberately revives alerts.
+- The earlier "Wantlist Price Alerts" direction is superseded by this narrower Radar v1 PRD unless a future product decision deliberately revives alerts.
 - The wording "available again" requires remembering a prior unavailable state for a release. If implementation discovers this is too large for the first slice, preserve the data model boundary and split the visible label into a follow-up issue rather than silently faking it.

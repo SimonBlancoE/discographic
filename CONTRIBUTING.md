@@ -31,6 +31,7 @@ Normalize and validate data at the first untrusted boundary, then keep the inter
 
 - `README.md` is the canonical README. Mirror any content change in `README.es.md` within the same PR.
 - README screenshots live in `docs/screenshots/` (`name.webp` in English, `name.es.webp` in Spanish).
+- Keep local agent runners, credentials, raw review reports and execution plans outside the published source tree. Public documentation should describe the product, its supported workflows and architectural decisions. Git and Docker exclusions protect local work artifacts from accidental publication.
 
 ## Manual test instance
 
@@ -55,4 +56,3 @@ Radar (the Wantlist manager) is a local workspace, not a Marketplace automation 
 - It does not write Radar decisions, notes, or Wantlist membership back to Discogs.
 - Minimum condition is stored as a future-facing preference and is informational only.
 - The older "Wantlist Price Alerts" direction is superseded by the Radar v1 PRD unless it is explicitly revived in a later plan.
-
