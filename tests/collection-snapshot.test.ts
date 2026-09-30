@@ -99,6 +99,8 @@ afterAll(async () => {
 
 describe('production collection snapshot reconciliation', () => {
   it.each([
+    ['non-text artist name', [collection([{ ...release(1000), basic_information: { id: 101, artists: [{ name: 123 }] } }])]],
+    ['non-array genres', [collection([{ ...release(1000), basic_information: { id: 101, genres: { injected: true } } }])]],
     ['empty pagination', [{ pagination: {}, releases: [] }]],
     ['HTTP 200 empty object', [{}]],
     ['null envelope', [null]],

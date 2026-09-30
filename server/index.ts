@@ -1,5 +1,5 @@
-// @ts-nocheck
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
+import { errorMessage } from './services/errors.js';
 import session from 'express-session';
 import connectSqlite3 from 'better-sqlite3-session-store';
 import { existsSync } from 'fs';
@@ -87,8 +87,8 @@ if (existsSync(distDir)) {
   });
 }
 
-app.use((err, req, res, next) => {
-  res.status(500).json({ error: err.message || req.t('backend.server.internal') });
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+  res.status(500).json({ error: errorMessage(err) || req.t('backend.server.internal') });
 });
 
 app.listen(port, () => {

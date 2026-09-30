@@ -100,6 +100,8 @@ afterAll(async () => {
 
 describe('production inventory snapshot reconciliation', () => {
   it.each([
+    ['non-object price', [inventory([{ ...listing(1), price: 'invalid' }])]],
+    ['non-finite price text', [inventory([{ ...listing(1), price: { value: 'not-a-price', currency: 'EUR' } }])]],
     ['HTTP 200 empty object', [{}]],
     ['null envelope', [null]],
     ['missing pagination', [{ listings: [] }]],

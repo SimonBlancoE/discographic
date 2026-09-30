@@ -1,3 +1,4 @@
+import { record } from '../discogsPagination.js';
 import bcrypt from 'bcryptjs';
 import express from 'express';
 import type { Request, Response } from 'express';
@@ -49,12 +50,13 @@ router.get('/status', (req, res) => {
 });
 
 router.post('/bootstrap', async (req, res) => {
+  const body = record(req.body) ?? {};
   if (getUserCount() > 0) {
     return res.status(409).json({ error: req.t('backend.auth.initExists') });
   }
 
-  const username = String(req.body.username || '').trim();
-  const password = String(req.body.password || '');
+  const username = String(body.username || '').trim();
+  const password = String(body.password || '');
 
   if (username.length < 3) {
     return res.status(400).json({ error: req.t('backend.auth.usernameTooShort') });
@@ -76,8 +78,9 @@ router.post('/bootstrap', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const username = String(req.body.username || '').trim();
-  const password = String(req.body.password || '');
+  const body = record(req.body) ?? {};
+  const username = String(body.username || '').trim();
+  const password = String(body.password || '');
   const client = req.ip || 'unknown';
 
   const admission = loginLimiter.reserve(client, username);
@@ -115,14 +118,15 @@ router.get('/me', requireAuth, (req, res) => {
 });
 
 router.post('/change-password', requireAuth, async (req, res) => {
-  const currentPassword = String(req.body.currentPassword || '');
-  const newPassword = String(req.body.newPassword || '');
+  const body = record(req.body) ?? {};
+  const currentPassword = String(body.currentPassword || '');
+  const newPassword = String(body.newPassword || '');
 
   if (newPassword.length < 8) {
     return res.status(400).json({ error: req.t('backend.auth.passwordTooShort') });
   }
 
-  const user = getUserAuthById(req.session.userId);
+  const user = getUserAuthById(req.session.userId!);
   if (!user) {
     return res.status(404).json({ error: req.t('backend.auth.required') });
   }
