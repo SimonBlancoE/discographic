@@ -16,6 +16,7 @@ import {
 import { getNoteFieldText, notesToText, parseStoredNotes, replaceNoteText } from '../services/notes.js';
 import { translate } from '../../shared/i18n.js';
 import { normalizeImportSyncState } from '../../shared/contracts/syncStatus.js';
+import { resolveImportIdentity } from '../services/importIdentity.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -62,7 +63,8 @@ function parseFile(buffer, filename, t) {
     throw new Error(t('backend.import.fileType'));
   }
 
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  // Preserve CSV identity text so malformed IDs are not coerced before validation.
+  const workbook = XLSX.read(buffer, { type: 'buffer', raw: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) throw new Error(t('backend.import.noSheets'));
 
@@ -104,25 +106,6 @@ function mapColumns(rows, t) {
   return columnMap;
 }
 
-function findRelease(userId, row, columnMap) {
-  for (const [header, mapping] of Object.entries(columnMap)) {
-    if (mapping.type !== 'id') continue;
-    const value = row[header];
-    if (!value && value !== 0) continue;
-
-    const numValue = Number(value);
-    if (!Number.isFinite(numValue)) continue;
-
-    const release = db.prepare(
-      `SELECT id, release_id, instance_id, artist, title, rating, notes FROM releases WHERE user_id = ? AND ${mapping.dbField} = ?`
-    ).get(userId, numValue);
-
-    if (release) return release;
-  }
-
-  return null;
-}
-
 function extractChanges(userId, rows, columnMap, t) {
   const changes = [];
   const unmatchedRows = [];
@@ -132,14 +115,18 @@ function extractChanges(userId, rows, columnMap, t) {
     const row = rows[i];
     const rowNum = i + 2; // 1-indexed + header row
 
-    const release = findRelease(userId, row, columnMap);
+    const { release, reason } = resolveImportIdentity(db, userId, row, columnMap);
     if (!release) {
       const identifier = Object.entries(columnMap)
         .filter(([, m]) => m.type === 'id')
         .map(([h]) => row[h])
-        .filter(Boolean)
+        .filter(value => value !== null && value !== undefined && String(value).trim() !== '')
         .join('/');
-      unmatchedRows.push({ row: rowNum, identifier, reason: t('backend.import.unmatched') });
+      const rejection = t(`backend.import.${reason}`);
+      unmatchedRows.push({ row: rowNum, identifier, reason: rejection });
+      if (reason !== 'unmatched') {
+        errors.push({ row: rowNum, column: t('export.id'), value: identifier, reason: rejection });
+      }
       continue;
     }
 
