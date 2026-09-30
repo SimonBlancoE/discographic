@@ -16,6 +16,7 @@ y este proyecto sigue [Versionado Semantico](https://semver.org/lang/es/).
 - Retirados los planes de implementación ya completados y el alias redundante del README; actualizada la guía de contribución para el código TypeScript actual.
 - Limitado el contexto de Docker a los archivos necesarios para compilar y la aplicación de la imagen final al código compilado. Excluidos de Git los datos locales, cachés y backups de desarrollo.
 - Retirada la implementación antigua e inaccesible de enriquecimiento de Radar, junto con su estado, contratos y tests exclusivos. Se conserva el flujo activo de actualización de Wantlist.
+- Corregida la documentación de dominio de Radar para reflejar su función actual de gestor de Wantlist y preferencias locales, sin revisión automática de precios.
 
 ## [0.4.1] - 2026-09-30
 

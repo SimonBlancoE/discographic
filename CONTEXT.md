@@ -33,7 +33,7 @@ The user flow that turns an uploaded CSV/XLSX into a preview, lets the user veri
 _Avoid_: file upload route, import parser
 
 **Radar update run**:
-A user-triggered refresh of Radar that brings the Wantlist current and resolves the related marketplace state needed for the wanted releases to be actionable.
+A user-triggered refresh that brings the Discogs Wantlist into Radar while preserving the user's local buying decisions.
 _Avoid_: sync button, enrichment panel, price refresh
 
 **Account state**:
@@ -65,8 +65,8 @@ _Avoid_: migration helper, startup SQL
 - An **Import workflow** receives persistence, parsing, ID, clock, and translation dependencies at module creation time; Discogs access is supplied when the user confirms a preview.
 - An **Import workflow** interface follows the user-visible journey: upload creates a preview, confirmation applies edits, status reports Discogs progress/result, and clearing dismisses stale results.
 - An **Import workflow** returns result objects for expected user-facing failures such as invalid files, missing columns, expired previews, and no-change previews.
-- A **Radar update run** is the primary Radar action; it combines Wantlist refresh and Radar-specific **Marketplace enrichment** instead of exposing them as competing primary controls.
-- A **Radar update run** preserves local Radar decisions while updating external Wantlist and marketplace facts.
+- A **Radar update run** is the primary Radar action and refreshes the Wantlist; it does not perform **Marketplace enrichment** or review prices.
+- A **Radar update run** preserves local Radar decisions while updating external Wantlist facts. Target price and minimum condition are local preferences and do not produce automatic buying-opportunity classifications.
 - Radar file import is a fallback workflow, not a competing primary path; after applying imported rows, the interface should guide the user back toward updating Radar rather than launching a full Discogs refresh unexpectedly.
 - Radar's main list is for scanning wanted releases and choosing what deserves attention; the Radar release detail is where local buying decisions are edited and saved with explicit feedback.
 - A Radar release detail is a navigable page for one wanted release, not a transient modal.
