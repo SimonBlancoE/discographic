@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { createDiscogsClient } from '../discogs.js';
+import { createUserJobScope } from '../services/userJobs.js';
 import { getDiscogsAccount, getUserById } from '../db.js';
 
 export function getCurrentUser(req: Request) {
@@ -44,6 +45,7 @@ export function getDiscogsClientForUser(req: Request) {
   const account = requireDiscogsAccount(req);
   return createDiscogsClient({
     token: account.discogs_token,
-    username: account.discogs_username
+    username: account.discogs_username,
+    signal: createUserJobScope(req.session.userId!).signal
   });
 }

@@ -3,10 +3,11 @@
 // handlers must check that scope rather than another run's per-user running flag.
 type UserJobCanceller = (userId: number) => void;
 const cancellers = new Set<UserJobCanceller>();
-const generations = new Map<number, object>();
+const generations = new Map<number, AbortController>();
 
 export type UserJobScope = {
   readonly stopped: boolean;
+  readonly signal: AbortSignal;
   cancel: () => void;
   assertCurrent: () => void;
 };
@@ -14,19 +15,24 @@ export type UserJobScope = {
 export class UserJobCancelledError extends Error {
   constructor() {
     super('Account operation was cancelled');
+    this.name = 'AbortError';
   }
 }
 
 export function createUserJobScope(userId: number): UserJobScope {
   let generation = generations.get(userId);
   if (!generation) {
-    generation = {};
+    generation = new AbortController();
     generations.set(userId, generation);
   }
-  let cancelled = false;
+  const controller = new AbortController();
+  // Native composition uses weak dependencies: the account generation must not retain
+  // every transient route scope until reset. Request-owned timers/listeners are disposed.
+  const signal = AbortSignal.any([generation.signal, controller.signal]);
   const scope: UserJobScope = {
-    get stopped() { return cancelled || generations.get(userId) !== generation; },
-    cancel() { cancelled = true; },
+    signal,
+    get stopped() { return signal.aborted; },
+    cancel() { controller.abort(new UserJobCancelledError()); },
     assertCurrent() { if (scope.stopped) throw new UserJobCancelledError(); },
   };
   return scope;
@@ -38,6 +44,8 @@ export function registerUserJobCanceller(canceller: UserJobCanceller): void {
 
 export function cancelUserJobs(userId: number): void {
   // Delete instead of incrementing: object identity also handles deletion and later ID reuse.
+  const generation = generations.get(userId);
   generations.delete(userId);
+  generation?.abort(new UserJobCancelledError());
   for (const cancel of cancellers) cancel(userId);
 }

@@ -1,60 +1,58 @@
-// Discogs allows 60 requests/minute for authenticated users.
-// We stay conservative at 55 to avoid edge-case 429s.
+// Discogs allows 60 requests/minute for authenticated users; retain a safety margin.
 const SAFE_RPM = 55;
 const WINDOW_MS = 60_000;
 const RETRY_AFTER_DEFAULT_MS = 30_000;
+const RETRY_AFTER_MAX_MS = 60_000;
 
-type RetryAfterResponse = {
-  headers?: {
-    get?: (header: string) => string | null;
-  } | null;
-};
+type RetryAfterResponse = { headers?: { get?: (header: string) => string | null } | null };
+export type DiscogsRateLimiter = (signal?: AbortSignal) => Promise<void>;
+type Waiter = { signal?: AbortSignal; resolve: () => void; reject: (reason: unknown) => void; abort: () => void };
 
-function purgeExpiredTimestamps(timestamps: number[], now: number): void {
-  while (timestamps.length > 0 && now - timestamps[0] >= WINDOW_MS) {
-    timestamps.shift();
-  }
-}
-
-export function createDiscogsRateLimiter(): () => Promise<void> {
+export function createDiscogsRateLimiter(): DiscogsRateLimiter {
   const timestamps: number[] = [];
-  // Waiters are chained so concurrent jobs cannot all wake up and claim the same free slot.
-  let queue: Promise<void> = Promise.resolve();
+  const queue: Waiter[] = [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
-  async function claimSlot(): Promise<void> {
-    for (;;) {
-      const now = Date.now();
-      purgeExpiredTimestamps(timestamps, now);
-
-      if (timestamps.length < SAFE_RPM) {
-        timestamps.push(now);
-        return;
-      }
-
-      const waitMs = WINDOW_MS - (now - timestamps[0]) + 200; // +200ms safety margin
-      console.log(`[rate-limit] cuota llena, esperando ${(waitMs / 1000).toFixed(1)}s`);
-      await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+  function drain(): void {
+    clearTimeout(timer);
+    timer = undefined;
+    const now = Date.now();
+    while (timestamps.length && now - timestamps[0] >= WINDOW_MS) timestamps.shift();
+    while (queue.length && timestamps.length < SAFE_RPM) {
+      const waiter = queue.shift()!;
+      waiter.signal?.removeEventListener('abort', waiter.abort);
+      timestamps.push(now);
+      waiter.resolve();
     }
+    if (queue.length) timer = setTimeout(drain, WINDOW_MS - (now - timestamps[0]) + 200);
   }
 
-  return function waitTurn(): Promise<void> {
-    const turn = queue.then(claimSlot);
-    queue = turn.catch(() => {});
-    return turn;
-  };
+  return (signal) => new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const waiter: Waiter = {
+      signal, resolve, reject,
+      abort() {
+        const index = queue.indexOf(waiter);
+        if (index < 0) return;
+        queue.splice(index, 1);
+        signal?.removeEventListener('abort', waiter.abort);
+        reject(signal?.reason);
+        drain();
+      },
+    };
+    queue.push(waiter);
+    signal?.addEventListener('abort', waiter.abort, { once: true });
+    drain();
+  });
 }
 
-/**
- * Parse a Discogs 429 response and return how many ms to wait.
- * Falls back to RETRY_AFTER_DEFAULT_MS if no header is present.
- */
+/** Bound both delta-seconds and HTTP-date values before they reach a timer. */
 export function parseRetryAfter(response: RetryAfterResponse): number {
   const header = response.headers?.get?.('Retry-After');
-  if (header) {
+  if (header?.trim()) {
     const seconds = Number(header);
-    if (Number.isFinite(seconds) && seconds > 0) {
-      return seconds * 1000;
-    }
+    const ms = Number.isNaN(seconds) ? Date.parse(header) - Date.now() : seconds * 1000;
+    if (!Number.isNaN(ms) && ms >= 0) return Math.min(ms, RETRY_AFTER_MAX_MS);
   }
   return RETRY_AFTER_DEFAULT_MS;
 }

@@ -1,14 +1,9 @@
+import type { DiscogsRequestOptions } from '../discogs.js';
 import { MARKETPLACE_STATUS, type MarketplaceStatus } from '../../shared/contracts/marketplace.js';
 import { DEFAULT_CURRENCY } from './exchangeRates.js';
 
-type MarketplaceStatsResponse = {
-  lowest_price?: {
-    value?: unknown;
-  } | null;
-} | null | undefined;
-
 type MarketplaceClient = {
-  getMarketplaceStats: (releaseId: number, currency: string) => Promise<MarketplaceStatsResponse>;
+  getMarketplaceStats: (releaseId: number, currency: string, options?: DiscogsRequestOptions) => Promise<unknown>;
 };
 
 type MarketplaceValueResult = {
@@ -33,10 +28,12 @@ export async function fetchMarketplaceValue(
   discogs: MarketplaceClient,
   releaseId: number,
   currency = DEFAULT_CURRENCY,
+  options?: DiscogsRequestOptions,
 ): Promise<MarketplaceValueResult> {
   try {
-    const stats = await discogs.getMarketplaceStats(releaseId, currency);
-    const rawValue = stats?.lowest_price?.value;
+    const stats = await discogs.getMarketplaceStats(releaseId, currency, options);
+    const lowestPrice = stats && typeof stats === 'object' && 'lowest_price' in stats ? stats.lowest_price : null;
+    const rawValue = lowestPrice && typeof lowestPrice === 'object' && 'value' in lowestPrice ? lowestPrice.value : null;
     const estimatedValue = rawValue == null ? null : Number(rawValue);
 
     if (estimatedValue === null || !Number.isFinite(estimatedValue)) {

@@ -270,7 +270,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale, run })
 
       if (change.ratingChanged) {
         try {
-          await discogs.updateRating({ ...base, rating: change.newRating });
+          await discogs.updateRating({ ...base, rating: change.newRating }, { signal: run.signal });
         } catch (error) {
           itemErrors.push(`${t('collection.rating')}: ${error?.message || t('backend.import.unknownSyncError')}`);
         }
@@ -285,7 +285,7 @@ async function syncChangesWithDiscogs({ userId, changes, discogs, locale, run })
             ...base,
             fieldId: notesFieldId,
             value: change.newNotes
-          });
+          }, { signal: run.signal });
         } catch (error) {
           itemErrors.push(`${t('collection.notes')}: ${error?.message || t('backend.import.unknownSyncError')}`);
         }
