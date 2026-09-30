@@ -13,6 +13,7 @@ data/.session-secret
 enhancements/
 
 # Internal dev tooling
+.sandcastle/
 .agents/
 .aidevops.json
 .beads/

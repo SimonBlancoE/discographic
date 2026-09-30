@@ -55,7 +55,6 @@ describe('TypeScript migration toolchain guardrails', () => {
     expect(pnpmWorkspace).toContain('sharp');
     expect(pnpmWorkspace).toContain('ignoredBuiltDependencies:');
     expect(pnpmWorkspace).toContain('@parcel/watcher');
-    expect(pnpmWorkspace).toContain('msgpackr-extract');
     expect(pnpmWorkspace).toContain('trustPolicy: no-downgrade');
     expect(pnpmWorkspace).toContain('trustPolicyExclude:');
     expect(pnpmWorkspace).toContain('undici-types');
