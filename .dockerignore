@@ -2,10 +2,10 @@ node_modules
 dist
 data
 .git
-.env
-.env.*
-npm-debug.log*
-*.log
+**/.env
+**/.env.*
+**/npm-debug.log*
+**/*.log
 
 # Local development and automation state
 .sandcastle/
