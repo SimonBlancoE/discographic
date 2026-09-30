@@ -141,6 +141,12 @@ it('continues remaining thumbnail warmup but reports partial failure rather than
 it.each([['inventory', 'resolve'], ['inventory', 'reject'], ['warmup', 'resolve'], ['warmup', 'reject']] as const)(
   'late cancelled %s %s cannot finalize or unlock a replacement run', async (followup, outcome) => {
   const inventory = deferred<unknown>(); const cover = deferred<Response>(); const replacement = deferred<unknown>();
+  const bodyRead = deferred<void>();
+  const response = image();
+  vi.spyOn(response, 'arrayBuffer').mockImplementation(async () => {
+    bodyRead.resolve();
+    return Uint8Array.from(source).buffer;
+  });
   if (followup === 'inventory') client.getInventory.mockReturnValueOnce(inventory.promise);
   else coverResponse = () => cover.promise;
   await api(); await until(() => followup === 'inventory' ? client.getInventory.mock.calls.length === 1 : coverEntered);
@@ -151,10 +157,12 @@ it.each([['inventory', 'resolve'], ['inventory', 'reject'], ['warmup', 'resolve'
   if (followup === 'inventory') {
     outcome === 'resolve' ? inventory.resolve(emptyInventory) : inventory.reject(new Error('cancelled inventory failed'));
   } else {
-    outcome === 'resolve' ? cover.resolve(image()) : cover.reject(new Error('cancelled cover failed'));
+    outcome === 'resolve' ? cover.resolve(response) : cover.reject(new Error('cancelled cover failed'));
   }
-  // Wait for the cancelled continuation to settle while its replacement is held.
-  await new Promise(resolve => setTimeout(resolve, 30));
+  await (followup === 'inventory' ? inventory.promise : cover.promise).catch(() => undefined);
+  if (followup === 'warmup' && outcome === 'resolve') await bodyRead.promise;
+  // The controlled response has no pending I/O. The local HTTP request runs after
+  // its cancellation continuations drain, while replacement collection work stays held.
   expect(await state()).toMatchObject({ status: 'running', phase: 'initializing', thumbnails: { status: 'idle' } });
   expect(log()).toMatchObject({ status: 'running', finished_at: null });
   expect((await api()).status).toBe(409);
