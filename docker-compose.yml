@@ -5,7 +5,7 @@ services:
     ports:
       - "${HOST_IP:-127.0.0.1}:${PORT:-3800}:3800"
     environment:
-      PORT: ${PORT:-3800}
+      PORT: "3800"
       # Leave empty to have a random secret generated and kept in the data volume.
       SESSION_SECRET: ${SESSION_SECRET:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}

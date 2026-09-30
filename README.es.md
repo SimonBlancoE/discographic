@@ -97,7 +97,7 @@ Opcional. Copia `.env.example` a `.env` para cambiar cualquiera de estas variabl
 
 | Variable | Por defecto | Para qué sirve |
 |---|---|---|
-| `PORT` | `3800` | Puerto de la app. |
+| `PORT` | `3800` | Puerto publicado en el host con Docker Compose; el contenedor escucha en `3800`. Si ejecutas el servidor directamente, define el puerto de escucha. |
 | `HOST_IP` | `127.0.0.1` | Interfaz a la que se enlaza Docker. Usa tu IP de red local para abrirla desde otros dispositivos. |
 | `COOKIE_SECURE` | `false` | Ponlo en `true` si sirves la app por HTTPS. |
 | `TRUST_PROXY` | `1` si `COOKIE_SECURE=true` | Saltos de proxy de confianza, por ejemplo detrás de Cloudflare Tunnel o de un proxy inverso. |
