@@ -5,7 +5,6 @@ onlyBuiltDependencies:
 
 ignoredBuiltDependencies:
   - '@parcel/watcher'
-  - msgpackr-extract
 
 trustPolicy: no-downgrade
 

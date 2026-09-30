@@ -4,3 +4,4 @@ data
 .git
 .env
 npm-debug.log*
+.sandcastle/
