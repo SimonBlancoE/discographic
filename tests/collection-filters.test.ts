@@ -1,31 +1,7 @@
+import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import { createCollectionFilters, getActiveCollectionFilters } from '../shared/collectionFilters.js';
-
-const { buildReleaseFilterWhere, getCollectionFilterOptions } = await import('../server/services/releaseFilters.js') as {
-  buildReleaseFilterWhere: (input: {
-    userId: number;
-    filters?: Record<string, unknown>;
-    baseClauses?: string[];
-    mediaFieldId?: number;
-  }) => {
-    clause: string;
-    params: unknown[];
-  };
-  getCollectionFilterOptions: (
-    db: {
-      prepare: () => {
-        all: () => Array<Record<string, unknown>>;
-      };
-    },
-    userId: number,
-  ) => {
-    genres: string[];
-    styles: string[];
-    decades: number[];
-    formats: string[];
-    labels: string[];
-  };
-};
+import { buildReleaseFilterWhere, getCollectionFilterOptions } from '../server/services/releaseFilters.js';
 
 describe('collection filters', () => {
   it('normalizes the shared filter shape', () => {
@@ -86,23 +62,22 @@ describe('collection filters', () => {
 
   it('returns every distinct label option for the selector', () => {
     const labelNames = Array.from({ length: 105 }, (_, index) => `Label ${String(index).padStart(3, '0')}`);
-    const db = {
-      prepare: () => ({
-        all: () => [
-          {
-            genres: JSON.stringify(['Electronic']),
-            styles: JSON.stringify(['Techno']),
-            formats: JSON.stringify([{ name: 'Vinyl' }]),
-            labels: JSON.stringify(labelNames.map((name) => ({ name }))),
-            year: 1994
-          }
-        ]
-      })
-    };
+    const db = new Database(':memory:');
+    try {
+      db.exec(`CREATE TABLE releases (
+        user_id INTEGER, genres TEXT, styles TEXT, formats TEXT, labels TEXT, year INTEGER, notes TEXT
+      )`);
+      db.prepare('INSERT INTO releases VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+        9, '["Electronic"]', '["Techno"]', '[{"name":"Vinyl"}]',
+        JSON.stringify(labelNames.map((name) => ({ name }))), 1994, '[]',
+      );
 
-    const options = getCollectionFilterOptions(db, 9);
+      const options = getCollectionFilterOptions(db, 9);
 
-    expect(options.labels).toHaveLength(labelNames.length);
-    expect(options.labels).toEqual(labelNames);
+      expect(options.labels).toHaveLength(labelNames.length);
+      expect(options.labels).toEqual(labelNames);
+    } finally {
+      db.close();
+    }
   });
 });
