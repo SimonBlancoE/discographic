@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createDiscogsRateLimiter, parseRetryAfter } from './middleware/rateLimit.js';
+import { fetchCompleteWantlist } from './discogsWantlist.js';
 
 const BASE_URL = 'https://api.discogs.com';
 const MAX_RETRIES = 3;
@@ -76,16 +77,7 @@ class DiscogsClient {
   }
 
   async getAllWantlist(perPage = 100) {
-    const firstPage = await this.getWantlist(1, perPage);
-    const totalPages = Math.max(firstPage?.pagination?.pages || 0, firstPage ? 1 : 0);
-    const wants = [...(firstPage?.wants || [])];
-
-    for (let page = 2; page <= totalPages; page += 1) {
-      const payload = await this.getWantlist(page, perPage);
-      wants.push(...(payload?.wants || []));
-    }
-
-    return wants;
+    return fetchCompleteWantlist((page, pageSize) => this.getWantlist(page, pageSize), perPage);
   }
 
   getRelease(releaseId) {
