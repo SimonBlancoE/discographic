@@ -1,16 +1,17 @@
 node_modules
 dist
-data/*.db
-data/*.db-*
-data/covers/
+/data/
 .DS_Store
 .env
 .env.*
 !.env.example
 *.log
+npm-debug.log*
 .playwright-cli/
-data/backups/
-data/.session-secret
+.playwright-mcp/
+.pnpm-store/
+.deploy-backups/
+Discographic.zip
 
 enhancements/
 
@@ -18,6 +19,8 @@ enhancements/
 .sandcastle/
 .superpowers/
 .agents/
+.clawpatch/
+.codex
 .aidevops.json
 .beads/
 AGENTS.md

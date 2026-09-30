@@ -16,11 +16,9 @@ ENV NODE_ENV=production
 ENV PORT=3800
 RUN corepack enable
 
-COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/shared ./shared
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/server ./server
 
 EXPOSE 3800
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
