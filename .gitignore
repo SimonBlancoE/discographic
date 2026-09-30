@@ -5,6 +5,8 @@ data/*.db-*
 data/covers/
 .DS_Store
 .env
+.env.*
+!.env.example
 *.log
 .playwright-cli/
 data/backups/
@@ -14,6 +16,7 @@ enhancements/
 
 # Internal dev tooling
 .sandcastle/
+.superpowers/
 .agents/
 .aidevops.json
 .beads/
@@ -25,6 +28,11 @@ migrations/
 schemas/
 seeds/
 docs/plans/
+docs/superpowers/
+docs/archive/aidevops-plans/
+docs/*-audit*.txt
+docs/*-implementation-plan.md
+docs/*-design-plans.md
 
 # Beads / Dolt files
 .dolt/

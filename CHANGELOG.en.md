@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version en espanol: [CHANGELOG.md](CHANGELOG.md)
 
+## [Unreleased]
+
+### Maintenance
+
+- Removed the discontinued agent runner and its exclusive development dependencies.
+- Removed internal audit reports and execution plans from the public source tree; Git and Docker exclusions now cover local automation artifacts and worktrees.
+
 ## [0.4.1] - 2026-09-30
 
 Backend maintenance release focused on data integrity, authentication, cancellation and verified upgrades.

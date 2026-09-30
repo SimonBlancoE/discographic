@@ -1,3 +1,5 @@
 # Public repository metadata
 
 Discographic's public repository metadata, clone instructions, contribution guidance, and release links should point to the public GitHub repository. Private development remotes are operational details and must not appear in public repo-facing files.
+
+The published source tree contains the application, its supported build/test tooling and maintained product documentation. Local agent runners, credentials, machine-specific paths, raw audit reports and execution plans belong outside that tree. Keep local work artifacts excluded from both Git and Docker build contexts; retain reusable product requirements and architectural decisions as public documentation.

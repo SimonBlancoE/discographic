@@ -3,5 +3,30 @@ dist
 data
 .git
 .env
+.env.*
 npm-debug.log*
+*.log
+
+# Local development and automation state
 .sandcastle/
+.agents/
+.aidevops.json
+.beads/
+.beads-credential-key
+.dolt/
+.superpowers/
+.worktrees/
+.playwright-cli/
+enhancements/
+AGENTS.md
+DESIGN.md
+TODO.md
+todo/
+
+# Internal work reports and execution plans
+docs/plans/
+docs/superpowers/
+docs/archive/aidevops-plans/
+docs/*-audit*.txt
+docs/*-implementation-plan.md
+docs/*-design-plans.md
