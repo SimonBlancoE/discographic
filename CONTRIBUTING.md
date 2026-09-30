@@ -10,9 +10,9 @@ For a clone created before this cleanup, start from a fresh clone of the public 
 
 ## TypeScript-only policy
 
-- TypeScript-only is the target direction for all project-owned source, tests, and config.
+- All project-owned source, tests, and supported configuration are TypeScript-only.
 - Do not add new versioned `.js`, `.jsx`, `.mjs`, or `.cjs` files.
-- When a migration slice touches an existing JavaScript file, prefer converting that file to `.ts` or `.tsx` within the same slice instead of extending the JavaScript surface.
+- Generated build output and dependency code are not maintained source.
 - `tsconfig.json` is the strict, no-emit typecheck baseline. `tsconfig.server.json` emits the production server entry under `dist/server`.
 
 ## Normalize untrusted boundary data once
@@ -22,14 +22,14 @@ Normalize and validate data at the first untrusted boundary, then keep the inter
 ## Verification
 
 - Required before review: `pnpm run typecheck`, `pnpm run test`, and `pnpm run build`.
-- Migration gate: `pnpm run verify`.
-- Upgrade gate for this migration slice: `pnpm run test:upgrade-smoke`.
+- Full verification: `pnpm run verify`.
+- Standalone upgrade check: `pnpm run test:upgrade-smoke`.
 - Docker-enforced self-hosted upgrade gate: `pnpm run test:upgrade-smoke:docker`.
-- Full Docker-capable upgrade-path verification for this migration slice: `pnpm run verify:upgrade-path`.
+- Full Docker-capable upgrade-path verification: `pnpm run verify:upgrade-path`.
 - `pnpm run verify` chains the tracked-file JavaScript source scan, typecheck, tests, build, and upgrade smoke in one command.
-- `pnpm run verify:upgrade-path` is the authoritative issue-15 / PRD-9 completion gate on a Docker-capable runner.
+- `pnpm run verify:upgrade-path` verifies existing-installation upgrades in both the compiled runtime and Docker.
 - `pnpm run verify` and `pnpm run test:upgrade-smoke` will skip the Docker half automatically when `docker` is unavailable on PATH or the Docker daemon is unreachable.
-- Use `pnpm run test:upgrade-smoke:docker` for the final migration verification in a Docker-capable environment; it clears the skip flag and treats Docker as mandatory, including a reachable Docker daemon.
+- Use `pnpm run test:upgrade-smoke:docker` when Docker verification is required; it clears the skip flag and treats Docker as mandatory, including a reachable Docker daemon.
 - Set `DISCOGRAPHIC_UPGRADE_SMOKE_SKIP_DOCKER=true` only when you need to force the non-Docker path even on a machine that has Docker.
 - The JavaScript scan is expected to pass once the tracked source tree is TypeScript-only; treat any reported project-owned `.js`, `.jsx`, `.mjs`, or `.cjs` file as a regression.
 
@@ -61,4 +61,4 @@ Radar (the Wantlist manager) is a local workspace, not a Marketplace automation 
 - It does not implement seller recommendations, combined purchasing, shipping logic, listing-level availability, exact condition filtering, scheduled jobs, automatic alerts, price history, or complex scoring.
 - It does not write Radar decisions, notes, or Wantlist membership back to Discogs.
 - Minimum condition is stored as a future-facing preference and is informational only.
-- The older "Wantlist Price Alerts" direction is superseded by the Radar v1 PRD unless it is explicitly revived in a later plan.
+- Future Marketplace automation requires an explicit product decision before implementation.
