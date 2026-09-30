@@ -268,6 +268,47 @@ async function runSync({ userId, logId, discogs, locale, run }) {
     return;
   }
 
+  db.prepare('UPDATE sync_log SET records_synced = ? WHERE id = ? AND user_id = ?')
+    .run(totalSynced, logId, userId);
+
+  const pending = db.prepare(
+    `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
+  ).get(userId).count;
+
+  setSyncState(userId, {
+    phase: 'inventory',
+    current: totalSynced,
+    total: totalItems,
+    recordsSynced: totalSynced,
+    message: syncT(locale, 'backend.sync.inventoryPreparing'),
+    enrichment: {
+      pending,
+      message: pending
+        ? syncT(locale, 'backend.sync.pending', { count: pending })
+        : syncT(locale, 'backend.sync.completeSet')
+    },
+    inventory: { status: 'running', message: syncT(locale, 'backend.sync.inventoryPreparing') }
+  });
+
+  try {
+    await syncInventory({ userId, discogs, run });
+  } catch (error) {
+    if (run.stopped) return;
+    const message = syncT(locale, 'backend.sync.inventoryFail', { error: error.message });
+    setSyncState(userId, { inventory: { status: 'failed', message } });
+    throw new Error(message);
+  }
+  if (run.stopped) return;
+
+  setSyncState(userId, {
+    phase: 'thumbnails',
+    message: syncT(locale, 'backend.sync.thumbStarting'),
+    inventory: { status: 'completed', message: syncT(locale, 'backend.sync.inventoryDone') }
+  });
+  await warmupThumbnails(userId, run);
+
+  // Only the current owner may finalize the whole Discogs sync run.
+  if (run.stopped || syncRuns.get(userId) !== run) return;
   db.prepare(`
     UPDATE sync_log
     SET finished_at = CURRENT_TIMESTAMP,
@@ -275,62 +316,11 @@ async function runSync({ userId, logId, discogs, locale, run }) {
         status = 'completed'
     WHERE id = ? AND user_id = ?
   `).run(totalSynced, logId, userId);
-
-  const pending = db.prepare(
-    `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
-  ).get(userId).count;
-
   setSyncState(userId, {
     status: 'completed',
     phase: 'ready',
-    current: totalSynced,
-    total: totalItems,
     message: syncT(locale, 'backend.sync.completed', { count: totalSynced }),
-    finishedAt: new Date().toISOString(),
-    recordsSynced: totalSynced,
-    enrichment: {
-      pending,
-      message: pending
-        ? syncT(locale, 'backend.sync.pending', { count: pending })
-        : syncT(locale, 'backend.sync.completeSet')
-    },
-    thumbnails: {
-      status: 'idle',
-      current: 0,
-      total: 0,
-      message: syncT(locale, 'backend.sync.warmReady')
-    }
-  });
-
-  if (run.stopped) {
-    return;
-  }
-
-  await syncInventory({ userId, discogs, run }).catch((error) => {
-    if (run.stopped) return;
-    console.log('[sync] inventory sync failed:', error.message);
-    setSyncState(userId, {
-      inventory: {
-        status: 'failed',
-        message: syncT(locale, 'backend.sync.inventoryFail', { error: error.message })
-      }
-    });
-  });
-
-  if (run.stopped) {
-    return;
-  }
-
-  await warmupThumbnails(userId, run).catch((error) => {
-    if (run.stopped) return;
-    setSyncState(userId, {
-      thumbnails: {
-        status: 'failed',
-        current: 0,
-        total: 0,
-        message: syncT(locale, 'backend.sync.thumbFail', { error: error.message })
-      }
-    });
+    finishedAt: new Date().toISOString()
   });
 }
 
@@ -421,7 +411,7 @@ async function warmupThumbnails(userId, run) {
   if (!rows.length) {
     setSyncState(userId, {
       thumbnails: {
-        status: 'idle',
+        status: 'completed',
         current: 0,
         total: 0,
         message: syncT(locale, 'backend.sync.noCovers')
@@ -440,6 +430,7 @@ async function warmupThumbnails(userId, run) {
   });
 
   let processed = 0;
+  let failed = 0;
   for (const release of rows) {
     try {
       if (run.stopped) return;
@@ -447,7 +438,9 @@ async function warmupThumbnails(userId, run) {
       if (run.stopped) return;
       await ensureCachedCover({ release, userId, variant: 'poster', scope: run });
     } catch {
-      // continue warming remaining covers
+      if (run.stopped) return;
+      failed += 1;
+      // Continue preparing the remaining covers, then report the partial failure.
     }
 
     if (run.stopped) return;
@@ -460,6 +453,12 @@ async function warmupThumbnails(userId, run) {
         message: syncT(locale, 'backend.sync.thumbPreparing', { current: processed, total: rows.length })
       }
     });
+  }
+
+  if (failed) {
+    const message = syncT(locale, 'backend.sync.thumbPartial', { failed, total: rows.length });
+    setSyncState(userId, { thumbnails: { status: 'failed', current: processed, total: rows.length, message } });
+    throw new Error(message);
   }
 
   setSyncState(userId, {
@@ -651,9 +650,7 @@ async function runCommunityRefresh({ userId, discogs, run }) {
 
 router.post('/', async (req, res) => {
   const userId = req.session.userId;
-  const state = getSyncState(userId, req.locale);
-
-  if (state.status === 'running') {
+  if (syncRuns.has(userId)) {
     return res.status(409).json({ error: req.t('backend.sync.active') });
   }
 
@@ -675,24 +672,27 @@ router.post('/', async (req, res) => {
       finishedAt: null,
       recordsSynced: 0,
       enrichment: null,
-      thumbnails: null
+      thumbnails: null,
+      inventory: null
     });
 
+    const run = startRun(syncRuns, userId);
     res.json({ ok: true });
 
-    const run = startRun(syncRuns, userId);
     runSync({ userId, logId, discogs, locale: req.locale, run }).catch((error) => {
-      if (run.stopped) return;
+      if (run.stopped || syncRuns.get(userId) !== run) return;
       db.prepare(`
         UPDATE sync_log
         SET finished_at = CURRENT_TIMESTAMP,
-            status = 'failed'
+            status = 'failed',
+            records_synced = ?
         WHERE id = ? AND user_id = ?
-      `).run(logId, userId);
+      `).run(getSyncState(userId).current, logId, userId);
 
       setSyncState(userId, {
         status: 'failed',
         phase: 'error',
+        recordsSynced: getSyncState(userId).current,
         message: error.message,
         finishedAt: new Date().toISOString()
       });
