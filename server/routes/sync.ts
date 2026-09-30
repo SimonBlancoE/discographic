@@ -13,6 +13,7 @@ import { ENRICH_CONDITION, getPendingEnrichmentCount, getPendingEnrichmentRows }
 import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { normalizeSyncStatus } from '../../shared/contracts/syncStatus.js';
 import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
+import { fetchCompleteInventory } from '../discogsInventory.js';
 
 const router = express.Router();
 const PER_PAGE = 100;
@@ -326,17 +327,13 @@ async function runSync({ userId, logId, discogs, locale, run }) {
 
 async function syncInventory({ userId, discogs, run }) {
   try {
-    // Fetch all pages of the user's inventory
-    const firstPage = await discogs.getInventory(1, 100);
+    const allListings = await fetchCompleteInventory(async (page, perPage) => {
+      if (run.stopped) throw new Error('Inventory sync cancelled');
+      const payload = await discogs.getInventory(page, perPage);
+      if (run.stopped) throw new Error('Inventory sync cancelled');
+      return payload;
+    }, PER_PAGE);
     if (run.stopped) return;
-    const totalPages = firstPage?.pagination?.pages || 0;
-    const allListings = [...(firstPage?.listings || [])];
-
-    for (let page = 2; page <= totalPages; page += 1) {
-      const payload = await discogs.getInventory(page, 100);
-      if (run.stopped) return;
-      allListings.push(...(payload?.listings || []));
-    }
 
     const clearListings = db.prepare('UPDATE releases SET listing_status = NULL, listing_price = NULL, listing_currency = NULL, listing_price_eur = NULL WHERE user_id = ?');
     if (!allListings.length) {

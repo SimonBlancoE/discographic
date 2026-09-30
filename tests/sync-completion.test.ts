@@ -30,12 +30,12 @@ function deferred<T>() {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
-const collection = (covers = 1) => ({ pagination: { pages: 1, items: covers }, releases: Array.from({ length: covers }, (_, i) => ({
+const collection = (covers = 1) => ({ pagination: { page: 1, per_page: 100, pages: 1, items: covers }, releases: Array.from({ length: covers }, (_, i) => ({
   instance_id: 1001 + i, date_added: `2026-01-0${i + 1}`, basic_information: {
     id: 101 + i, title: 'Fixture', artists: [{ name: 'Fixture' }], cover_image: 'https://i.discogs.com/fixture.jpg',
   },
 })) });
-const emptyInventory = { pagination: { pages: 1, items: 0 }, listings: [] };
+const emptyInventory = { pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, listings: [] };
 const image = () => new Response(new Uint8Array(source), { headers: { 'content-type': 'image/png' } });
 async function api(method = 'POST') {
   return fetch(`${baseUrl}${method === 'GET' ? '/status' : ''}`, { method });
@@ -169,6 +169,6 @@ it.each([['inventory', 'resolve'], ['inventory', 'reject'], ['warmup', 'resolve'
   expect(db.prepare('SELECT * FROM terminal_updates').all()).toEqual([]);
   expect(db.prepare('SELECT * FROM releases WHERE user_id = ?').all(userId)).toEqual([]);
   expect(existsSync(join(dataDir, 'covers', String(userId), `${oldRow.id}-wall.jpg`))).toBe(false);
-  replacement.resolve({ pagination: { pages: 1, items: 0 }, releases: [] }); await terminal();
+  replacement.resolve({ pagination: { page: 1, per_page: 100, pages: 1, items: 0 }, releases: [] }); await terminal();
   expect((await state()).status).toBe('completed');
 });
