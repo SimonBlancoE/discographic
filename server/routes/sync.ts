@@ -14,6 +14,7 @@ import { MARKETPLACE_STATUS } from '../../shared/contracts/marketplace.js';
 import { normalizeSyncStatus } from '../../shared/contracts/syncStatus.js';
 import { fetchMarketplaceValue } from '../services/marketplaceValue.js';
 import { fetchCompleteInventory } from '../discogsInventory.js';
+import { fetchCompleteCollection } from '../discogsCollection.js';
 
 const router = express.Router();
 const PER_PAGE = 100;
@@ -199,65 +200,38 @@ async function syncCollectionMetadata({ userId, discogs, run }) {
 }
 
 async function runSync({ userId, logId, discogs, locale, run }) {
-  const firstPage = await discogs.getCollection(1, PER_PAGE);
-  if (run.stopped) return;
-  if (!firstPage?.pagination) {
-    throw new Error(syncT(locale, 'backend.sync.invalidPayload'));
-  }
-
-  const totalPages = firstPage?.pagination?.pages || 0;
-  const totalItems = firstPage?.pagination?.items || 0;
-
-  setSyncState(userId, {
-    locale,
-    phase: 'downloading',
-    total: totalItems,
-    current: 0,
-    message: syncT(locale, 'backend.sync.downloading', { items: totalItems, pages: totalPages })
-  });
-
-  let totalSynced = 0;
-
-  for (let page = 1; page <= totalPages; page += 1) {
-    const payload = page === 1 ? firstPage : await discogs.getCollection(page, PER_PAGE);
-    if (run.stopped) {
-      return;
-    }
-
-    if (!Array.isArray(payload?.releases)) {
-      throw new Error(syncT(locale, 'backend.sync.invalidPayload'));
-    }
-
-    const releases = payload.releases;
-
-    if (releases.length > 0) {
-      upsertBatch(userId, logId, releases);
-      totalSynced += releases.length;
-    }
-
+  const releases = await fetchCompleteCollection(async (page, perPage) => {
+    run.assertCurrent();
+    const payload = await discogs.getCollection(page, perPage);
+    run.assertCurrent();
+    return payload;
+  }, PER_PAGE, ({ page, pages, items, current }) => {
+    run.assertCurrent();
     setSyncState(userId, {
-      current: totalSynced,
-      message: syncT(locale, 'backend.sync.page', { page, pages: totalPages, count: totalSynced })
+      locale,
+      phase: 'downloading',
+      total: items,
+      current,
+      message: syncT(locale, 'backend.sync.page', { page, pages, count: current })
     });
-  }
+  });
+  if (run.stopped || syncRuns.get(userId) !== run) return;
+
+  // Apply only after the complete snapshot has coherent metadata and unique instance coverage.
+  // Download progress counts observed rows; recordsSynced counts committed Local collection rows.
+  const totalItems = releases.length;
+  upsertBatch(userId, logId, releases);
+  const totalSynced = releases.length;
+  setSyncState(userId, { recordsSynced: totalSynced });
 
   await syncCollectionMetadata({ userId, discogs, run });
   if (run.stopped) {
     return;
   }
 
-  // Reconciliation assumes this is a successful full collection sync. Items that shift across
-  // page boundaries while the collection changes on Discogs can be missed, so only prune when
-  // every item Discogs reported was actually seen.
-  // Distinct instances seen, not rows fetched: a removal plus an addition during the sync can shift
-  // pages so one item is fetched twice and another never, while the row count still matches.
-  const seenInstances = db.prepare('SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND last_seen_sync_id = ?')
-    .get(userId, logId).count;
-  const completeCoverage = seenInstances >= totalItems;
-  const removedReleaseIds = completeCoverage ? pruneUnseenReleases(db, userId, logId) : [];
-  if (!completeCoverage) {
-    console.log(`[sync] incomplete coverage (${seenInstances}/${totalItems}); skipping prune`);
-  }
+  // Snapshot validation proves observable page/identity coverage, not remote atomicity while
+  // the user's collection changes on Discogs. Only a validated snapshot reaches reconciliation.
+  const removedReleaseIds = pruneUnseenReleases(db, userId, logId);
   if (removedReleaseIds.length) {
     await removeCachedCovers({ userId, releaseIds: removedReleaseIds }).catch((error) => {
       console.log('[sync] cache cleanup failed:', error.message);
@@ -684,12 +658,12 @@ router.post('/', async (req, res) => {
             status = 'failed',
             records_synced = ?
         WHERE id = ? AND user_id = ?
-      `).run(getSyncState(userId).current, logId, userId);
+      `).run(getSyncState(userId).recordsSynced, logId, userId);
 
       setSyncState(userId, {
         status: 'failed',
         phase: 'error',
-        recordsSynced: getSyncState(userId).current,
+        recordsSynced: getSyncState(userId).recordsSynced,
         message: error.message,
         finishedAt: new Date().toISOString()
       });
