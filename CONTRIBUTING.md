@@ -2,6 +2,12 @@
 
 Discographic uses GitHub as its public repository. Direct contributions are not accepted as a standing policy, but feedback, issues, and pull requests are welcome and appreciated.
 
+## Repository history maintenance
+
+The repository history and existing release tags were rewritten on 2026-09-30 to remove retired development tooling and internal work documents. Release version numbers and application behavior are unchanged, but commit and tag identifiers differ.
+
+For a clone created before this cleanup, start from a fresh clone of the public repository. Preserve any uncommitted work separately, then reapply only the changes you still need. Do not merge or push branches from the old history into the cleaned repository: that would restore the removed content.
+
 ## TypeScript-only policy
 
 - TypeScript-only is the target direction for all project-owned source, tests, and config.
