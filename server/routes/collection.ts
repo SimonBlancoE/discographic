@@ -1,5 +1,7 @@
-// @ts-nocheck
-import express from 'express';
+import type { ReleaseRow } from '../db.js';
+import { errorMessage } from '../services/errors.js';
+import express, { type Request } from 'express';
+import { record } from '../discogsPagination.js';
 import { withCollectionWriter } from '../services/collectionWriters.js';
 import { acceptIndividualEdit, pendingRevision } from '../services/pendingImportEdits.js';
 import { createUserJobScope } from '../services/userJobs.js';
@@ -22,6 +24,7 @@ import { buildReleaseFilterWhere, getCollectionFilterOptions } from '../services
 
 const router = express.Router();
 
+// All handlers below run after requireAuth verifies userId and the current auth epoch.
 router.use(requireAuth);
 
 const BASE_FIELDS = `
@@ -59,18 +62,18 @@ const BASE_FIELDS = `
   synced_at
 `;
 
-function parsePositiveInt(value, fallback) {
+function parsePositiveInt(value: unknown, fallback: number) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function getFilterOptions(userId) {
+function getFilterOptions(userId: number) {
   const fieldMap = getCollectionFieldMap(userId);
   const options = getCollectionFilterOptions(db, userId, {
     folders: getCollectionFolders(userId),
     mediaFieldId: fieldMap.mediaFieldId
   });
-  const gradeOrder = (value) => {
+  const gradeOrder = (value: string) => {
     const index = fieldMap.mediaOptions.indexOf(value);
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
   };
@@ -78,17 +81,17 @@ function getFilterOptions(userId) {
   return options;
 }
 
-function getDisplayCurrency(req) {
-  return normalizeCurrency(req.query.currency || getSettingForUser(req.session.userId, 'currency', DEFAULT_CURRENCY));
+function getDisplayCurrency(req: Request) {
+  return normalizeCurrency(req.query.currency || getSettingForUser(req.session.userId!, 'currency', DEFAULT_CURRENCY));
 }
 
-async function convertHydratedRelease(req, release, normalizeRelease = normalizeCollectionRelease) {
+async function convertHydratedRelease(req: Request, release: ReleaseRow, normalizeRelease: (value: unknown) => unknown = normalizeCollectionRelease) {
   const converted = await convertReleasePrices(hydrateRelease(release), getDisplayCurrency(req));
   return normalizeRelease(converted);
 }
 
-async function enrichReleaseIfNeeded(req, release) {
-  const scope = createUserJobScope(req.session.userId);
+async function enrichReleaseIfNeeded(req: Request, release: ReleaseRow) {
+  const scope = createUserJobScope(req.session.userId!);
   if (!release) {
     return null;
   }
@@ -108,7 +111,8 @@ async function enrichReleaseIfNeeded(req, release) {
   }
 
   try {
-    const detail = await discogs.getRelease(release.release_id);
+    const detail = record(await discogs.getRelease(release.release_id));
+    if (!detail) throw new Error('Invalid Discogs release response');
     scope.assertCurrent();
     // Releases that already have a price only needed the community stats backfill.
     const marketplace = neverEnriched || release.marketplace_status !== MARKETPLACE_STATUS.PRICED
@@ -153,26 +157,26 @@ async function enrichReleaseIfNeeded(req, release) {
       community.community_rating_count,
       community.num_for_sale,
       release.id,
-      req.session.userId
+      req.session.userId!
     );
 
-    const fresh = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(release.id, req.session.userId);
+    const fresh = db.prepare<unknown[], ReleaseRow>(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(release.id, req.session.userId!)!;
     return convertHydratedRelease(req, fresh, normalizeReleaseDetail);
   } catch (error) {
     scope.assertCurrent();
-    console.error(`[enrich] Failed to fetch release details for release ${release.release_id} from Discogs:`, error.message);
+    console.error(`[enrich] Failed to fetch release details for release ${release.release_id} from Discogs:`, errorMessage(error));
     return convertHydratedRelease(req, release, normalizeReleaseDetail);
   }
 }
 
 router.get('/', async (req, res) => {
   try {
-    const userId = req.session.userId;
+    const userId = req.session.userId!;
     const page = parsePositiveInt(req.query.page, 1);
     const limit = Math.min(100, parsePositiveInt(req.query.limit, 25));
     const offset = (page - 1) * limit;
     const validSort = new Set(['artist', 'title', 'year', 'rating', 'date_added', 'estimated_value', 'listing_price_eur', 'community_want', 'community_have']);
-    const sortBy = validSort.has(req.query.sortBy) ? req.query.sortBy : 'artist';
+    const sortBy = typeof req.query.sortBy === 'string' && validSort.has(req.query.sortBy) ? req.query.sortBy : 'artist';
     const sortOrder = String(req.query.sortOrder || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     const { clause, params } = buildReleaseFilterWhere({
       userId,
@@ -180,8 +184,8 @@ router.get('/', async (req, res) => {
       mediaFieldId: getCollectionFieldMap(userId).mediaFieldId
     });
 
-    const total = db.prepare(`SELECT COUNT(*) AS count FROM releases ${clause}`).get(...params).count;
-    const rawReleases = db.prepare(`
+    const total = db.prepare<unknown[], { count: number }>(`SELECT COUNT(*) AS count FROM releases ${clause}`).get(...params)!.count;
+    const rawReleases = db.prepare<unknown[], ReleaseRow>(`
       SELECT ${BASE_FIELDS}
       FROM releases
       ${clause}
@@ -202,19 +206,19 @@ router.get('/', async (req, res) => {
       filters: getFilterOptions(userId)
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: errorMessage(error) });
   }
 });
 
 router.get('/random', async (req, res) => {
   try {
-    const release = db.prepare(`
+    const release = db.prepare<unknown[], ReleaseRow>(`
       SELECT ${BASE_FIELDS}
       FROM releases
       WHERE user_id = ?
       ORDER BY RANDOM()
       LIMIT 1
-    `).get(req.session.userId);
+    `).get(req.session.userId!);
 
     if (!release) {
       return res.status(404).json({ error: req.t('backend.collection.empty') });
@@ -224,30 +228,30 @@ router.get('/random', async (req, res) => {
 
     return res.json(converted);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: errorMessage(error) });
   }
 });
 
 router.get('/covers', (req, res) => {
   try {
-    const releases = db.prepare(`
+    const releases = db.prepare<unknown[], Pick<ReleaseRow, 'id' | 'release_id' | 'title' | 'artist' | 'year' | 'genres' | 'styles' | 'formats' | 'labels' | 'cover_url'>>(`
       SELECT id, release_id, title, artist, year, genres, styles, formats, labels, cover_url
       FROM releases
       WHERE user_id = ?
       ORDER BY date_added DESC, artist ASC, title ASC
-    `).all(req.session.userId).map((release) => normalizeWallRelease(hydrateRelease(release)));
+    `).all(req.session.userId!).map((release) => normalizeWallRelease(hydrateRelease(release)));
 
-    return res.json({ releases, filters: getFilterOptions(req.session.userId) });
+    return res.json({ releases, filters: getFilterOptions(req.session.userId!) });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: errorMessage(error) });
   }
 });
 
 // Field definitions are normally stored by the Discogs sync run. Right after upgrading there is no
 // stored map yet, and accounts with renamed/recreated fields would otherwise edit the wrong field ids.
-async function ensureCollectionMetadata(req) {
-  const scope = createUserJobScope(req.session.userId);
-  const userId = req.session.userId;
+async function ensureCollectionMetadata(req: Request) {
+  const scope = createUserJobScope(req.session.userId!);
+  const userId = req.session.userId!;
   if (hasStoredCollectionFieldMap(userId)) {
     return;
   }
@@ -259,15 +263,15 @@ async function ensureCollectionMetadata(req) {
     if (fields) setCollectionFieldMap(userId, fields);
     if (folders) setCollectionFolders(userId, folders);
   } catch (error) {
-    console.log('[collection] could not load Discogs field definitions:', error.message);
+    console.log('[collection] could not load Discogs field definitions:', errorMessage(error));
   }
 }
 
 router.get('/meta', async (req, res) => {
   await ensureCollectionMetadata(req);
-  const fieldMap = getCollectionFieldMap(req.session.userId);
+  const fieldMap = getCollectionFieldMap(req.session.userId!);
   res.json({
-    folders: getCollectionFolders(req.session.userId),
+    folders: getCollectionFolders(req.session.userId!),
     mediaConditions: fieldMap.mediaFieldId ? fieldMap.mediaOptions : [],
     sleeveConditions: fieldMap.sleeveFieldId ? fieldMap.sleeveOptions : []
   });
@@ -275,8 +279,8 @@ router.get('/meta', async (req, res) => {
 
 router.get('/:id/versions', async (req, res) => {
   try {
-    const release = db.prepare('SELECT id, release_id, master_id FROM releases WHERE id = ? AND user_id = ?')
-      .get(req.params.id, req.session.userId);
+    const release = db.prepare<unknown[], Pick<ReleaseRow, 'id' | 'release_id' | 'master_id'>>('SELECT id, release_id, master_id FROM releases WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.session.userId!);
 
     if (!release) {
       return res.status(404).json({ error: req.t('backend.collection.notFound') });
@@ -287,16 +291,16 @@ router.get('/:id/versions', async (req, res) => {
     }
 
     const discogs = getDiscogsClientForUser(req);
-    return res.json(await getMasterVersionsForRelease({ db, discogs, userId: req.session.userId, release }));
+    return res.json(await getMasterVersionsForRelease({ db, discogs, userId: req.session.userId!, release: { ...release, master_id: release.master_id } }));
   } catch (error) {
-    return res.status(502).json({ error: error.message });
+    return res.status(502).json({ error: errorMessage(error) });
   }
 });
 
 router.get('/:id/price-suggestions', async (req, res) => {
   try {
-    const release = db.prepare('SELECT id, release_id FROM releases WHERE id = ? AND user_id = ?')
-      .get(req.params.id, req.session.userId);
+    const release = db.prepare<unknown[], Pick<ReleaseRow, 'id' | 'release_id'>>('SELECT id, release_id FROM releases WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.session.userId!);
 
     if (!release) {
       return res.status(404).json({ error: req.t('backend.collection.notFound') });
@@ -306,25 +310,26 @@ router.get('/:id/price-suggestions', async (req, res) => {
     const discogs = getDiscogsClientForUser(req);
     return res.json(await getPriceSuggestions({
       discogs,
-      userId: req.session.userId,
+      userId: req.session.userId!,
       releaseId: release.release_id,
       convert: async (amount, fromCurrency) => {
         try {
           const { rates } = await getExchangeSnapshot([fromCurrency, displayCurrency]);
-          return { amount: convertAmountWithRates(amount, fromCurrency, displayCurrency, rates), currency: displayCurrency };
+          // Price suggestions supply finite positive amounts; missing rates throw above.
+          return { amount: convertAmountWithRates(amount, fromCurrency, displayCurrency, rates)!, currency: displayCurrency };
         } catch {
           return { amount, currency: fromCurrency };
         }
       }
     }));
   } catch (error) {
-    return res.status(502).json({ error: error.message });
+    return res.status(502).json({ error: errorMessage(error) });
   }
 });
 
 router.get('/:id', async (req, res) => {
   try {
-    const release = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(req.params.id, req.session.userId);
+    const release = db.prepare<unknown[], ReleaseRow>(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(req.params.id, req.session.userId!);
 
     if (!release) {
       return res.status(404).json({ error: req.t('backend.collection.notFound') });
@@ -333,62 +338,63 @@ router.get('/:id', async (req, res) => {
     const hydrated = await enrichReleaseIfNeeded(req, release);
     return res.json(hydrated);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: errorMessage(error) });
   }
 });
 
 router.put('/:id', async (req, res) => {
-  const scope = createUserJobScope(req.session.userId);
+  const body = record(req.body) ?? {};
+  const scope = createUserJobScope(req.session.userId!);
   try {
-    let release = db.prepare(`
+    const initialRelease = db.prepare<unknown[], Pick<ReleaseRow, 'id' | 'user_id' | 'release_id' | 'instance_id' | 'folder_id' | 'notes' | 'rating'>>(`
       SELECT id, user_id, release_id, instance_id, folder_id, notes, rating
       FROM releases
       WHERE id = ? AND user_id = ?
-    `).get(req.params.id, req.session.userId);
+    `).get(req.params.id, req.session.userId!);
 
-    if (!release) {
+    if (!initialRelease) {
       return res.status(404).json({ error: req.t('backend.collection.notFound') });
     }
 
-    return await withCollectionWriter(req.session.userId, release.instance_id, scope, async () => {
+    return await withCollectionWriter(req.session.userId!, initialRelease.instance_id, scope, async () => {
       // Another writer may have moved or edited the instance while this request waited.
-      release = db.prepare('SELECT * FROM releases WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+      const release = db.prepare<unknown[], ReleaseRow>('SELECT * FROM releases WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId!);
       if (!release) return res.status(404).json({ error: req.t('backend.collection.notFound') });
-      const revisions = new Map(db.prepare('SELECT field_id, revision FROM pending_import_edits WHERE user_id = ? AND instance_id = ?')
-        .all(req.session.userId, release.instance_id).map(row => [row.field_id, row.revision]));
-      const revisionFor = fieldId => revisions.get(fieldId) ?? null;
-      const stillCurrent = fieldId => pendingRevision(db, req.session.userId, release.instance_id, fieldId) === revisionFor(fieldId);
-      const nextRating = req.body.rating !== undefined ? Number(req.body.rating) : release.rating;
-      if (req.body.rating !== undefined && !(Number.isInteger(nextRating) && nextRating >= 0 && nextRating <= 5)) {
+      const revisions = new Map(db.prepare<unknown[], { field_id: number; revision: string }>('SELECT field_id, revision FROM pending_import_edits WHERE user_id = ? AND instance_id = ?')
+        .all(req.session.userId!, release.instance_id).map(row => [row.field_id, row.revision]));
+      const revisionFor = (fieldId: number) => revisions.get(fieldId) ?? null;
+      const stillCurrent = (fieldId: number) => pendingRevision(db, req.session.userId!, release.instance_id, fieldId) === revisionFor(fieldId);
+      const nextRating = body.rating !== undefined ? Number(body.rating) : release.rating;
+      if (body.rating !== undefined && !(nextRating != null && Number.isInteger(nextRating) && nextRating >= 0 && nextRating <= 5)) {
         return res.status(400).json({ error: req.t('backend.collection.invalidRating') });
       }
 
       await ensureCollectionMetadata(req);
       scope.assertCurrent();
-      const fieldMap = getCollectionFieldMap(req.session.userId);
-      const conditionEdits = [
+      const fieldMap = getCollectionFieldMap(req.session.userId!);
+      const conditionEdits = ([
         ['media_condition', fieldMap.mediaFieldId, fieldMap.mediaOptions],
         ['sleeve_condition', fieldMap.sleeveFieldId, fieldMap.sleeveOptions]
-      ].filter(([key]) => req.body[key] !== undefined);
+      ] satisfies [string, number | null, string[]][]).filter(([key]) => body[key] !== undefined);
 
       for (const [key, fieldId, options] of conditionEdits) {
-        const value = String(req.body[key] ?? '').trim();
+        const value = String(body[key] ?? '').trim();
         if (!fieldId || (value && !options.includes(value))) {
           return res.status(400).json({ error: req.t('backend.collection.invalidCondition') });
         }
       }
 
-      let targetFolderId = null;
-      if (req.body.folder_id !== undefined) {
-        targetFolderId = Number(req.body.folder_id);
-        const knownFolder = getCollectionFolders(req.session.userId).some((folder) => folder.id === targetFolderId);
+      let targetFolderId: number | null = null;
+      if (body.folder_id !== undefined) {
+        targetFolderId = Number(body.folder_id);
+        const knownFolder = getCollectionFolders(req.session.userId!).some((folder) => folder.id === targetFolderId);
         if (!knownFolder) {
           return res.status(400).json({ error: req.t('backend.collection.invalidFolder') });
         }
       }
 
       const discogs = getDiscogsClientForUser(req);
-      const userId = req.session.userId;
+      const userId = req.session.userId!;
       const base = {
         folderId: release.folder_id || 0,
         releaseId: release.release_id,
@@ -398,15 +404,15 @@ router.put('/:id', async (req, res) => {
       // Preserve partial success, but an import confirmed during an upstream await wins
       // over this older individual operation. Every accepted field settles atomically.
       const readNotes = () => parseStoredNotes(
-        db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(release.id, userId)?.notes
+        db.prepare<unknown[], Pick<ReleaseRow, 'notes'>>('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(release.id, userId)?.notes
       );
-      const fieldEdits = [
-        ...(req.body.notes !== undefined ? [[fieldMap.notesFieldId, String(req.body.notes || '').trim()]] : []),
-        ...conditionEdits.map(([key, fieldId]) => [fieldId, String(req.body[key] ?? '').trim()])
+      const fieldEdits: [number, string][] = [
+        ...(body.notes !== undefined ? [[fieldMap.notesFieldId, String(body.notes || '').trim()] as [number, string]] : []),
+        ...conditionEdits.map(([key, fieldId]): [number, string] => [fieldId!, String(body[key] ?? '').trim()])
       ];
 
       try {
-        if (req.body.rating !== undefined && nextRating !== release.rating && stillCurrent(0)) {
+        if (body.rating !== undefined && nextRating != null && nextRating !== release.rating && stillCurrent(0)) {
           await discogs.updateRating({ ...base, rating: nextRating }, { signal: scope.signal });
           scope.assertCurrent();
           acceptIndividualEdit(db, userId, release.instance_id, 0, revisionFor(0), nextRating);
@@ -431,15 +437,15 @@ router.put('/:id', async (req, res) => {
         }
       } catch (error) {
         // 502: Discogs rejected a write. The client reloads the release to show what was actually saved.
-        return res.status(502).json({ error: error.message });
+        return res.status(502).json({ error: errorMessage(error) });
       }
 
-      const updated = db.prepare(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(req.params.id, req.session.userId);
+      const updated = db.prepare<unknown[], ReleaseRow>(`SELECT ${BASE_FIELDS} FROM releases WHERE id = ? AND user_id = ?`).get(req.params.id, req.session.userId!)!;
       const converted = await convertHydratedRelease(req, updated, normalizeReleaseDetail);
       return res.json(converted);
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: errorMessage(error) });
   }
 });
 

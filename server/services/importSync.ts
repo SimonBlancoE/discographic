@@ -1,5 +1,17 @@
-// @ts-nocheck
-export function buildImportFailure(change, reason) {
+import { errorMessage } from './errors.js';
+import type { ImportFailure, ImportSyncState } from '../../shared/contracts/syncStatus.js';
+import type { TranslationVars } from '../../shared/i18n.js';
+
+type Translator = (key: string, vars?: TranslationVars) => string;
+type ImportChange = {
+  dbId: number | null;
+  releaseId: number | null;
+  instanceId: number | null;
+  artist: string;
+  title: string;
+};
+
+export function buildImportFailure(change: ImportChange, reason: string): ImportFailure {
   return {
     dbId: change.dbId,
     releaseId: change.releaseId,
@@ -10,7 +22,8 @@ export function buildImportFailure(change, reason) {
   };
 }
 
-function buildState({ locale, status, current, total, synced = 0, failures = [], message }) {
+export type ImportSyncProgress = Omit<ImportSyncState, 'pending' | 'pendingFailed' | 'progressPercent' | 'isTerminal'>;
+function buildState({ locale, status, current, total, synced = 0, failures = [], message }: Omit<ImportSyncProgress, 'applied' | 'failed' | 'synced' | 'failures'> & { synced?: number; failures?: ImportFailure[] }): ImportSyncProgress {
   return {
     locale,
     status,
@@ -24,7 +37,7 @@ function buildState({ locale, status, current, total, synced = 0, failures = [],
   };
 }
 
-export function createIdleImportSyncState({ locale, t }) {
+export function createIdleImportSyncState({ locale, t }: { locale: string; t: Translator }) {
   return buildState({
     locale,
     status: 'idle',
@@ -36,7 +49,14 @@ export function createIdleImportSyncState({ locale, t }) {
   });
 }
 
-export function createRunningImportSyncState({ locale, current = 0, total, synced = 0, failures = [], t }) {
+export function createRunningImportSyncState({ locale, current = 0, total, synced = 0, failures = [], t }: {
+  locale: string;
+  current?: number;
+  total: number;
+  synced?: number;
+  failures?: ImportFailure[];
+  t: Translator;
+}) {
   return buildState({
     locale,
     status: 'running',
@@ -48,7 +68,11 @@ export function createRunningImportSyncState({ locale, current = 0, total, synce
   });
 }
 
-export function createLocalOnlyImportSyncState({ locale, total, t }) {
+export function createLocalOnlyImportSyncState({ locale, total, t }: {
+  locale: string;
+  total: number;
+  t: Translator;
+}) {
   return buildState({
     locale,
     status: 'local_only',
@@ -60,7 +84,13 @@ export function createLocalOnlyImportSyncState({ locale, total, t }) {
   });
 }
 
-export function summarizeImportSyncResult({ locale, total, synced, failures = [], t }) {
+export function summarizeImportSyncResult({ locale, total, synced, failures = [], t }: {
+  locale: string;
+  total: number;
+  synced: number;
+  failures?: ImportFailure[];
+  t: Translator;
+}) {
   if (!failures.length) {
     return buildState({
       locale,
@@ -96,7 +126,15 @@ export function summarizeImportSyncResult({ locale, total, synced, failures = []
   });
 }
 
-export function summarizeInterruptedImportSync({ locale, total, processed, synced, failures = [], error, t }) {
+export function summarizeInterruptedImportSync({ locale, total, processed, synced, failures = [], error, t }: {
+  locale: string;
+  total: number;
+  processed: number;
+  synced: number;
+  failures?: ImportFailure[];
+  error: unknown;
+  t: Translator;
+}) {
   const remaining = Math.max(0, total - processed);
   const status = processed > 0 ? 'partial' : 'failed';
 
@@ -113,7 +151,7 @@ export function summarizeInterruptedImportSync({ locale, total, processed, synce
       synced,
       failed: failures.length,
       remaining,
-      error: error?.message || t('backend.import.unknownSyncError')
+      error: errorMessage(error) || t('backend.import.unknownSyncError')
     })
   });
 }

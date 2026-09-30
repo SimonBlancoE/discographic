@@ -1,4 +1,14 @@
-// @ts-nocheck
+import { record } from '../discogsPagination.js';
+import type { Request } from 'express';
+import type { TranslationVars } from '../../shared/i18n.js';
+import type { ImportFailure } from '../../shared/contracts/syncStatus.js';
+import type { ImportSyncProgress } from '../services/importSync.js';
+import type { UserJobScope } from '../services/userJobs.js';
+import type { DiscogsClient } from '../discogs.js';
+import type { PendingInstance } from '../services/pendingImportEdits.js';
+
+import type { ReleaseRow } from '../db.js';
+import { errorMessage } from '../services/errors.js';
 import crypto from 'crypto';
 import { createUserJobScope, registerUserJobCanceller } from '../services/userJobs.js';
 import express from 'express';
@@ -20,18 +30,24 @@ import { normalizeImportSyncState } from '../../shared/contracts/syncStatus.js';
 import { pendingImportCounts, pendingImportInstances, queueImportEdit, sendPendingImportEdits } from '../services/pendingImportEdits.js';
 import { resolveImportIdentity } from '../services/importIdentity.js';
 
+type ImportRow = Record<string, unknown>;
+type ColumnMap = Parameters<typeof resolveImportIdentity>[3];
+type ImportChange = NonNullable<ReturnType<typeof extractChanges>>['changes'][number];
+type Preview = { userId: number; changes: ImportChange[]; expiresAt: number };
+
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
+// All handlers below run after requireAuth verifies userId and the current auth epoch.
 router.use(requireAuth);
 
 // In-memory preview cache (userId -> { id, data, expiresAt })
-const previewCache = new Map();
+const previewCache = new Map<string, Preview>();
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 // In-memory import sync state per user
-const importSyncStates = new Map();
-const importRuns = new Map();
+const importSyncStates = new Map<number, ImportSyncProgress>();
+const importRuns = new Map<number, UserJobScope>();
 registerUserJobCanceller(userId => {
   importRuns.get(userId)?.cancel();
   importRuns.delete(userId);
@@ -42,7 +58,7 @@ registerUserJobCanceller(userId => {
 });
 // Capture before multer's asynchronous upload boundary.
 router.use((req, _res, next) => {
-  req.accountScope = createUserJobScope(req.session.userId);
+  req.accountScope = createUserJobScope(req.session.userId!);
   next();
 });
 
@@ -54,11 +70,11 @@ function cleanPreviewCache() {
   }
 }
 
-function importT(locale, key, vars) {
+function importT(locale: string, key: string, vars?: TranslationVars) {
   return translate(locale || 'es', key, vars);
 }
 
-function normalizeHeader(header) {
+function normalizeHeader(header: unknown) {
   return String(header || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
@@ -73,7 +89,7 @@ const ID_COLUMNS = new Map([
   ['instanceid', 'instance_id'],
 ]);
 
-function parseFile(buffer, filename, t) {
+function parseFile(buffer: Buffer, filename: string, t: Request['t']) {
   const ext = (filename || '').toLowerCase().split('.').pop();
   if (ext !== 'xlsx' && ext !== 'csv') {
     throw new Error(t('backend.import.fileType'));
@@ -87,8 +103,8 @@ function parseFile(buffer, filename, t) {
   const sheet = workbook.Sheets[sheetName];
   const headerRange = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
   headerRange.e.r = headerRange.s.r;
-  const [headers = []] = XLSX.utils.sheet_to_json(sheet, { header: 1, range: headerRange });
-  const identityHeaders = new Set();
+  const [headers = []] = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, range: headerRange });
+  const identityHeaders = new Set<string>();
   // Check original headers before SheetJS renames repeats (e.g. Instance ID_1).
   for (const header of headers) {
     const normalized = normalizeHeader(header);
@@ -99,15 +115,15 @@ function parseFile(buffer, filename, t) {
     identityHeaders.add(normalized);
   }
 
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  const rows = XLSX.utils.sheet_to_json<ImportRow>(sheet, { defval: '' });
   if (!rows.length) throw new Error(t('backend.import.noRows'));
 
   return rows;
 }
 
-function mapColumns(rows, t) {
+function mapColumns(rows: ImportRow[], t: Request['t']) {
   const headers = Object.keys(rows[0]);
-  const columnMap = {};
+  const columnMap: ColumnMap = {};
   let hasId = false;
   let hasEditable = false;
 
@@ -115,7 +131,7 @@ function mapColumns(rows, t) {
     const normalized = normalizeHeader(header);
 
     if (ID_COLUMNS.has(normalized)) {
-      columnMap[header] = { type: 'id', dbField: ID_COLUMNS.get(normalized) };
+      columnMap[header] = { type: 'id', dbField: ID_COLUMNS.get(normalized)! };
       hasId = true;
     } else if (normalized === 'rating' || normalized === 'valoracion' || normalized === 'valoracin') {
       columnMap[header] = { type: 'editable', dbField: 'rating' };
@@ -137,7 +153,7 @@ function mapColumns(rows, t) {
   return columnMap;
 }
 
-function extractChanges(userId, rows, columnMap, t) {
+function extractChanges(userId: number, rows: ImportRow[], columnMap: ColumnMap, t: Request['t']) {
   const changes = [];
   const unmatchedRows = [];
   const errors = [];
@@ -220,25 +236,25 @@ function extractChanges(userId, rows, columnMap, t) {
 }
 
 
-function getImportSyncState(userId, locale = 'es') {
+function getImportSyncState(userId: number, locale = 'es') {
   if (!importSyncStates.has(userId)) {
     importSyncStates.set(userId, createIdleImportSyncState({
       locale,
       t: (key, vars) => importT(locale, key, vars)
     }));
   }
-  return importSyncStates.get(userId);
+  return importSyncStates.get(userId)!;
 }
 
-function setImportSyncState(userId, patch) {
+function setImportSyncState(userId: number, patch: ImportSyncProgress) {
   importSyncStates.set(userId, { ...getImportSyncState(userId, patch.locale), ...patch });
 }
 
-async function syncChangesWithDiscogs({ userId, changes, discogs, locale, run }) {
-  const t = (key, vars) => importT(locale, key, vars);
+async function syncChangesWithDiscogs({ userId, changes, discogs, locale, run }: { userId: number; changes: PendingInstance[]; discogs: DiscogsClient; locale: string; run: UserJobScope }) {
+  const t: Request['t'] = (key, vars) => importT(locale, key, vars);
   let processed = 0;
   let synced = 0;
-  const failures = [];
+  const failures: ImportFailure[] = [];
 
   try {
     for (const change of changes) {
@@ -311,14 +327,14 @@ router.get('/template', (req, res) => {
 
 router.post('/preview', upload.single('file'), (req, res) => {
   try {
-    req.accountScope.assertCurrent();
+    req.accountScope!.assertCurrent();
     if (!req.file) {
       return res.status(400).json({ error: req.t('backend.import.fileRequired') });
     }
 
     const rows = parseFile(req.file.buffer, req.file.originalname, req.t);
     const columnMap = mapColumns(rows, req.t);
-    const { changes, unmatchedRows, errors } = extractChanges(req.session.userId, rows, columnMap, req.t);
+    const { changes, unmatchedRows, errors } = extractChanges(req.session.userId!, rows, columnMap, req.t);
 
     if (!changes.length && !errors.length) {
       return res.json({
@@ -337,7 +353,7 @@ router.post('/preview', upload.single('file'), (req, res) => {
     cleanPreviewCache();
     const previewId = crypto.randomBytes(16).toString('hex');
     previewCache.set(previewId, {
-      userId: req.session.userId,
+      userId: req.session.userId!,
       changes,
       expiresAt: Date.now() + PREVIEW_TTL_MS
     });
@@ -353,30 +369,31 @@ router.post('/preview', upload.single('file'), (req, res) => {
       errors
     });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: errorMessage(error) });
   }
 });
 
 router.post('/apply', async (req, res) => {
+  const body = record(req.body) ?? {};
   try {
-    const { previewId } = req.body;
+    const { previewId } = body;
     if (!previewId) {
       return res.status(400).json({ error: req.t('backend.import.previewIdRequired') });
     }
 
-    const cached = previewCache.get(previewId);
-    if (!cached || cached.userId !== req.session.userId || cached.expiresAt < Date.now()) {
+    const cached = typeof previewId === 'string' ? previewCache.get(previewId) : undefined;
+    if (!cached || cached.userId !== req.session.userId! || cached.expiresAt < Date.now()) {
       return res.status(410).json({ error: req.t('backend.import.previewExpired') });
     }
 
     const { changes } = cached;
-    previewCache.delete(previewId);
-    const userId = req.session.userId;
+    previewCache.delete(String(previewId));
+    const userId = req.session.userId!;
 
     // Apply to local DB immediately
     const applyTx = db.transaction(() => {
       for (const change of changes) {
-        const release = db.prepare('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId);
+        const release = db.prepare<unknown[], Pick<ReleaseRow, 'notes'>>('SELECT notes FROM releases WHERE id = ? AND user_id = ?').get(change.dbId, userId);
         if (!release) continue;
 
         if (change.ratingChanged) {
@@ -430,13 +447,13 @@ router.post('/apply', async (req, res) => {
     // Background sync with Discogs
     void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale, run });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: errorMessage(error) });
   }
 });
 
 // Explicit set-value retry, independent of preview diffs; nothing is dispatched on startup.
 router.post('/retry', (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
   if (importRuns.has(userId)) return res.status(409).json({ error: 'Import sync is already running' });
   try {
     const discogs = getDiscogsClientForUser(req);
@@ -448,12 +465,12 @@ router.post('/retry', (req, res) => {
     res.json({ ok: true, syncState: normalizeImportSyncState({ ...syncState, ...pendingImportCounts(db, userId) }) });
     void syncChangesWithDiscogs({ userId, changes, discogs, locale: req.locale, run });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: errorMessage(error) });
   }
 });
 
 router.get('/status', (req, res) => {
-  res.json(normalizeImportSyncState({ ...getImportSyncState(req.session.userId, req.locale), ...pendingImportCounts(db, req.session.userId) }));
+  res.json(normalizeImportSyncState({ ...getImportSyncState(req.session.userId!, req.locale), ...pendingImportCounts(db, req.session.userId!) }));
 });
 
 export default router;

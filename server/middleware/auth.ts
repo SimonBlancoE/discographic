@@ -34,7 +34,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 function requireDiscogsAccount(req: Request) {
-  const account = getDiscogsAccount(req.session.userId);
+  const account = getDiscogsAccount(req.session.userId!);
   if (!account) {
     throw new Error(req.t('backend.auth.configureDiscogs'));
   }

@@ -33,7 +33,7 @@ async function readBody(response: Response, signal: AbortSignal): Promise<string
   return text + decoder.decode();
 }
 
-class DiscogsClient {
+export class DiscogsClient {
   private readonly token: string;
   readonly username: string;
   private readonly signal?: AbortSignal;

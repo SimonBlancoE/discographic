@@ -1,4 +1,11 @@
-// @ts-nocheck
+import type { DiscogsClient } from '../discogs.js';
+import type { UserJobScope } from '../services/userJobs.js';
+import type { TranslationVars } from '../../shared/i18n.js';
+import type { SyncStatusState, ProgressWorkflow, EnrichmentWorkflow } from '../../shared/contracts/syncStatus.js';
+import { record } from '../discogsPagination.js';
+
+import type { ReleaseRow } from '../db.js';
+import { errorMessage } from '../services/errors.js';
 import express from 'express';
 import db, { normalizeNotes, setCollectionFieldMap, setCollectionFolders, stringifyJson } from '../db.js';
 import { createUserJobScope, registerUserJobCanceller } from '../services/userJobs.js';
@@ -17,23 +24,32 @@ import { fetchCompleteInventory } from '../discogsInventory.js';
 import { overlayPendingImportEdits, markMissingPendingInstances } from '../services/pendingImportEdits.js';
 import { fetchCompleteCollection } from '../discogsCollection.js';
 
+type SyncProgress = Omit<SyncStatusState, 'progressPercent' | 'isRunning' | 'isTerminal' | 'enrichment' | 'thumbnails' | 'inventory'> & {
+  enrichment: Partial<EnrichmentWorkflow> | null;
+  thumbnails: Partial<ProgressWorkflow> | null;
+  inventory?: Partial<ProgressWorkflow> | null;
+  community?: Partial<ProgressWorkflow>;
+};
+type RunRegistry = Map<number, UserJobScope>;
+type RunInput = { userId: number; discogs: DiscogsClient; run: UserJobScope };
+
 const router = express.Router();
 const PER_PAGE = 100;
 const ENRICH_BATCH_SIZE = 30;
-const syncStates = new Map();
+const syncStates = new Map<number, SyncProgress>();
 // One token per running job so a stop + restart cannot leave two loops alive for the same user.
-const syncRuns = new Map();
-const enrichRuns = new Map();
-const communityRuns = new Map();
+const syncRuns: RunRegistry = new Map();
+const enrichRuns: RunRegistry = new Map();
+const communityRuns: RunRegistry = new Map();
 
-function startRun(registry, userId) {
+function startRun(registry: RunRegistry, userId: number) {
   registry.get(userId)?.cancel();
   const run = createUserJobScope(userId);
   registry.set(userId, run);
   return run;
 }
 
-function stopRun(registry, userId) {
+function stopRun(registry: RunRegistry, userId: number) {
   const run = registry.get(userId);
   if (run) {
     run.cancel();
@@ -41,7 +57,7 @@ function stopRun(registry, userId) {
   registry.delete(userId);
 }
 
-function finishRun(registry, userId, run) {
+function finishRun(registry: RunRegistry, userId: number, run: UserJobScope) {
   if (registry.get(userId) === run) {
     registry.delete(userId);
   }
@@ -54,13 +70,14 @@ registerUserJobCanceller((userId) => {
   syncStates.delete(userId);
 });
 
+// All handlers below run after requireAuth verifies userId and the current auth epoch.
 router.use(requireAuth);
 
-function syncT(locale, key, vars) {
+function syncT(locale: string, key: string, vars?: TranslationVars) {
   return translate(locale || 'es', key, vars);
 }
 
-function getSyncState(userId, locale = 'es') {
+function getSyncState(userId: number, locale = 'es') {
   if (!syncStates.has(userId)) {
     syncStates.set(userId, {
       locale,
@@ -77,18 +94,18 @@ function getSyncState(userId, locale = 'es') {
     });
   }
 
-  return syncStates.get(userId);
+  return syncStates.get(userId)!;
 }
 
-function setSyncState(userId, patch) {
+function setSyncState(userId: number, patch: Partial<SyncProgress>) {
   syncStates.set(userId, {
     ...getSyncState(userId),
     ...patch
   });
 }
 
-function mapCollectionItem(item) {
-  const info = item.basic_information || {};
+function mapCollectionItem(item: Awaited<ReturnType<typeof fetchCompleteCollection>>[number]) {
+  const info = item.basic_information;
   return {
     release_id: info.id,
     instance_id: item.instance_id,
@@ -137,7 +154,7 @@ const upsertStmt = db.prepare(`
     synced_at = CURRENT_TIMESTAMP
 `);
 
-const upsertBatch = db.transaction((userId, syncId, items) => {
+const upsertBatch = db.transaction((userId: number, syncId: number, items: Awaited<ReturnType<typeof fetchCompleteCollection>>) => {
   for (const item of items) {
     const mapped = mapCollectionItem(item);
     Object.assign(mapped, overlayPendingImportEdits(db, userId, mapped.instance_id, mapped));
@@ -168,7 +185,7 @@ const upsertBatch = db.transaction((userId, syncId, items) => {
   }
 });
 
-async function syncCollectionMetadata({ userId, discogs, run }) {
+async function syncCollectionMetadata({ userId, discogs, run }: RunInput) {
   // Field definitions (condition grading, notes) and folders: one request each per sync.
   const [fields, folders] = await Promise.allSettled([
     discogs.getCustomFields({ signal: run.signal }),
@@ -189,7 +206,7 @@ async function syncCollectionMetadata({ userId, discogs, run }) {
     if (run.stopped) return;
     recordCollectionValue(db, userId, value);
   } catch (error) {
-    console.log('[sync] collection value unavailable:', error.message);
+    console.log('[sync] collection value unavailable:', errorMessage(error));
   }
 
   if (run.stopped) return;
@@ -201,7 +218,7 @@ async function syncCollectionMetadata({ userId, discogs, run }) {
   }
 }
 
-async function runSync({ userId, logId, discogs, locale, run }) {
+async function runSync({ userId, logId, discogs, locale, run }: RunInput & { logId: number; locale: string }) {
   const releases = await fetchCompleteCollection(async (page, perPage) => {
     run.assertCurrent();
     const payload = await discogs.getCollection(page, perPage, { signal: run.signal });
@@ -237,7 +254,7 @@ async function runSync({ userId, logId, discogs, locale, run }) {
   markMissingPendingInstances(db, userId);
   if (removedReleaseIds.length) {
     await removeCachedCovers({ userId, releaseIds: removedReleaseIds }).catch((error) => {
-      console.log('[sync] cache cleanup failed:', error.message);
+      console.log('[sync] cache cleanup failed:', errorMessage(error));
     });
   }
 
@@ -249,9 +266,9 @@ async function runSync({ userId, logId, discogs, locale, run }) {
   db.prepare('UPDATE sync_log SET records_synced = ? WHERE id = ? AND user_id = ?')
     .run(totalSynced, logId, userId);
 
-  const pending = db.prepare(
+  const pending = db.prepare<unknown[], { count: number }>(
     `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
-  ).get(userId).count;
+  ).get(userId)!.count;
 
   setSyncState(userId, {
     phase: 'inventory',
@@ -272,7 +289,7 @@ async function runSync({ userId, logId, discogs, locale, run }) {
     await syncInventory({ userId, discogs, run });
   } catch (error) {
     if (run.stopped) return;
-    const message = syncT(locale, 'backend.sync.inventoryFail', { error: error.message });
+    const message = syncT(locale, 'backend.sync.inventoryFail', { error: errorMessage(error) });
     setSyncState(userId, { inventory: { status: 'failed', message } });
     throw new Error(message);
   }
@@ -302,7 +319,7 @@ async function runSync({ userId, logId, discogs, locale, run }) {
   });
 }
 
-async function syncInventory({ userId, discogs, run }) {
+async function syncInventory({ userId, discogs, run }: RunInput) {
   try {
     const allListings = await fetchCompleteInventory(async (page, perPage) => {
       if (run.stopped) throw new Error('Inventory sync cancelled');
@@ -324,14 +341,14 @@ async function syncInventory({ userId, discogs, run }) {
 
     if (run.stopped) return;
 
-    // Build a map of release_id -> best listing (prefer "For Sale" over "Draft", lowest price)
-    const listingMap = new Map();
+    // Build a map of release_id -> best listing (prefer "For Sale" over 'Draft', lowest price)
+    const listingMap = new Map<number, { status: string; price: number | null; currency: string | null; priceEur: number | null }>();
     for (const listing of allListings) {
       const releaseId = listing.release?.id;
       if (!releaseId) continue;
 
       const originalCurrency = (listing.price?.currency || DEFAULT_CURRENCY).toUpperCase();
-      const originalPrice = listing.price?.value != null ? Number(listing.price.value) : null;
+      const originalPrice = listing.price?.value ?? null;
       const priceEur = originalPrice == null || !exchangeSnapshot.rates?.[originalCurrency]
         ? null
         : convertAmountWithRates(originalPrice, originalCurrency, DEFAULT_CURRENCY, exchangeSnapshot.rates);
@@ -347,8 +364,8 @@ async function syncInventory({ userId, discogs, run }) {
       if (!existing) {
         listingMap.set(releaseId, entry);
       } else {
-        // Prefer "For Sale" over "Draft"; among same status, prefer lower price
-        const statusRank = (s) => (s === 'For Sale' ? 0 : 1);
+        // Prefer "For Sale" over 'Draft'; among same status, prefer lower price
+        const statusRank = (s: string) => (s === 'For Sale' ? 0 : 1);
         if (statusRank(entry.status) < statusRank(existing.status) ||
             (entry.status === existing.status && entry.priceEur != null && (existing.priceEur == null || entry.priceEur < existing.priceEur))) {
           listingMap.set(releaseId, entry);
@@ -367,14 +384,14 @@ async function syncInventory({ userId, discogs, run }) {
     });
     updateTx();
   } catch (error) {
-    console.log('[inventory-sync] error:', error.message);
+    console.log('[inventory-sync] error:', errorMessage(error));
     throw error;
   }
 }
 
-async function warmupThumbnails(userId, run) {
+async function warmupThumbnails(userId: number, run: UserJobScope) {
   const { locale = 'es' } = getSyncState(userId);
-  const rows = db.prepare(`
+  const rows = db.prepare<unknown[], Pick<ReleaseRow, 'id' | 'cover_url'>>(`
     SELECT id, cover_url
     FROM releases
     WHERE user_id = ? AND cover_url IS NOT NULL AND cover_url != ''
@@ -461,7 +478,7 @@ const updateEnrichedRelease = db.prepare(`
   WHERE id = ? AND user_id = ?
 `);
 
-async function runEnrichAll({ userId, discogs, run }) {
+async function runEnrichAll({ userId, discogs, run }: RunInput) {
   const { locale = 'es' } = getSyncState(userId);
 
   try {
@@ -486,7 +503,7 @@ async function runEnrichAll({ userId, discogs, run }) {
         if (run.stopped) break;
 
         try {
-          const detail = await discogs.getRelease(row.release_id, { signal: run.signal });
+          const detail = record(await discogs.getRelease(row.release_id, { signal: run.signal }));
           if (run.stopped) return;
           const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY, { signal: run.signal });
           if (run.stopped) return;
@@ -511,7 +528,7 @@ async function runEnrichAll({ userId, discogs, run }) {
             userId
           );
         } catch (error) {
-          console.log('[enrich] error:', row.release_id, error.message);
+          console.log('[enrich] error:', row.release_id, errorMessage(error));
         }
 
         if (run.stopped) return;
@@ -549,9 +566,9 @@ async function runEnrichAll({ userId, discogs, run }) {
     });
   } catch (error) {
     if (run.stopped) return;
-    console.log('[enrich] error fatal:', error.message);
+    console.log('[enrich] error fatal:', errorMessage(error));
     setSyncState(userId, {
-      enrichment: { status: 'failed', pending: 0, current: 0, total: 0, message: error.message }
+      enrichment: { status: 'failed', pending: 0, current: 0, total: 0, message: errorMessage(error) }
     });
   } finally {
     finishRun(enrichRuns, userId, run);
@@ -570,11 +587,11 @@ const updateCommunity = db.prepare(`
   WHERE id = ? AND user_id = ?
 `);
 
-function getCommunityState(userId) {
+function getCommunityState(userId: number) {
   return getSyncState(userId).community || { status: 'idle', current: 0, total: 0 };
 }
 
-async function runCommunityRefresh({ userId, discogs, run }) {
+async function runCommunityRefresh({ userId, discogs, run }: RunInput) {
   const rows = getCommunityBackfillRows(db, userId);
   let processed = 0;
   setSyncState(userId, { community: { status: 'running', current: 0, total: rows.length } });
@@ -584,7 +601,7 @@ async function runCommunityRefresh({ userId, discogs, run }) {
       if (run.stopped) break;
 
       try {
-        const detail = await discogs.getRelease(row.release_id, { signal: run.signal });
+        const detail = record(await discogs.getRelease(row.release_id, { signal: run.signal }));
         if (run.stopped) return;
         const community = buildCommunityUpdate(detail);
         updateCommunity.run(
@@ -600,7 +617,7 @@ async function runCommunityRefresh({ userId, discogs, run }) {
           userId
         );
       } catch (error) {
-        console.log('[community] error:', row.release_id, error.message);
+        console.log('[community] error:', row.release_id, errorMessage(error));
       }
 
       if (run.stopped) return;
@@ -615,7 +632,7 @@ async function runCommunityRefresh({ userId, discogs, run }) {
     setSyncState(userId, { community: { status: 'completed', current: processed, total: rows.length } });
   } catch (error) {
     if (run.stopped) return;
-    setSyncState(userId, { community: { status: 'failed', current: processed, total: rows.length, message: error.message } });
+    setSyncState(userId, { community: { status: 'failed', current: processed, total: rows.length, message: errorMessage(error) } });
   } finally {
     finishRun(communityRuns, userId, run);
   }
@@ -623,17 +640,17 @@ async function runCommunityRefresh({ userId, discogs, run }) {
 
 
 router.post('/', async (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
   if (syncRuns.has(userId)) {
     return res.status(409).json({ error: req.t('backend.sync.active') });
   }
 
   try {
     const discogs = getDiscogsClientForUser(req);
-    const logId = db.prepare(`
+    const logId = Number(db.prepare(`
       INSERT INTO sync_log (user_id, started_at, status, records_synced)
       VALUES (?, CURRENT_TIMESTAMP, 'running', 0)
-    `).run(userId).lastInsertRowid;
+    `).run(userId).lastInsertRowid);
 
     setSyncState(userId, {
       locale: req.locale,
@@ -667,19 +684,19 @@ router.post('/', async (req, res) => {
         status: 'failed',
         phase: 'error',
         recordsSynced: getSyncState(userId).recordsSynced,
-        message: error.message,
+        message: errorMessage(error),
         finishedAt: new Date().toISOString()
       });
     }).finally(() => {
       finishRun(syncRuns, userId, run);
     });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: errorMessage(error) });
   }
 });
 
 router.post('/enrich', async (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
 
   if (enrichRuns.has(userId)) {
     return res.status(409).json({ error: req.t('backend.sync.activeEnrich') });
@@ -691,15 +708,15 @@ router.post('/enrich', async (req, res) => {
     res.json({ ok: true });
 
     runEnrichAll({ userId, discogs, run }).catch((error) => {
-      console.log('[enrich] background error:', error.message);
+      console.log('[enrich] background error:', errorMessage(error));
     });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: errorMessage(error) });
   }
 });
 
 router.post('/enrich/stop', (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
   stopRun(enrichRuns, userId);
   const state = getSyncState(userId);
   const enrichment = state.enrichment;
@@ -714,7 +731,7 @@ router.post('/enrich/stop', (req, res) => {
 });
 
 router.get('/community', (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
   res.json({
     ...getCommunityState(userId),
     running: communityRuns.has(userId),
@@ -723,7 +740,7 @@ router.get('/community', (req, res) => {
 });
 
 router.post('/community', (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
   if (communityRuns.has(userId)) {
     return res.status(409).json({ error: req.t('backend.sync.activeCommunity') });
   }
@@ -734,15 +751,15 @@ router.post('/community', (req, res) => {
     res.json({ ok: true });
 
     runCommunityRefresh({ userId, discogs, run }).catch((error) => {
-      console.log('[community] background error:', error.message);
+      console.log('[community] background error:', errorMessage(error));
     });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: errorMessage(error) });
   }
 });
 
 router.post('/community/stop', (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
   stopRun(communityRuns, userId);
   const community = getCommunityState(userId);
   if (community.status === 'running') {
@@ -752,10 +769,10 @@ router.post('/community/stop', (req, res) => {
 });
 
 router.get('/status', (req, res) => {
-  const state = getSyncState(req.session.userId, req.locale);
-  const pending = db.prepare(
+  const state = getSyncState(req.session.userId!, req.locale);
+  const pending = db.prepare<unknown[], { count: number }>(
     `SELECT COUNT(*) AS count FROM releases WHERE user_id = ? AND (${ENRICH_CONDITION})`
-  ).get(req.session.userId).count;
+  ).get(req.session.userId!)!.count;
 
   res.json(normalizeSyncStatus({
     ...state,

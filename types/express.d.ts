@@ -1,26 +1,8 @@
+import type { NormalizedUser } from '../shared/contracts/account.js';
 import type { Session, SessionData } from 'express-session';
-
-type DiscogsClient = {
-  getCollection: (page?: number, perPage?: number) => Promise<unknown>;
-  getRelease: (releaseId: number) => Promise<unknown>;
-  getCollectionValue: () => Promise<unknown>;
-  updateRating: (input: {
-    folderId?: number;
-    releaseId: number;
-    instanceId: number;
-    rating: number;
-  }) => Promise<unknown>;
-  updateField: (input: {
-    folderId?: number;
-    releaseId: number;
-    instanceId: number;
-    fieldId: number;
-    value: string;
-  }) => Promise<unknown>;
-  getMarketplaceStats: (releaseId: number, currency?: string) => Promise<unknown>;
-  getInventory: (page?: number, perPage?: number) => Promise<unknown>;
-  getCustomFields: () => Promise<unknown>;
-};
+import type { DiscogsClient } from '../server/discogs.js';
+import type { TranslationVars } from '../shared/i18n.js';
+import type { UserJobScope } from '../server/services/userJobs.js';
 
 declare module 'express-session' {
   interface SessionData {
@@ -34,14 +16,10 @@ declare global {
     interface Request {
       locale: string;
       session: Session & Partial<SessionData>;
-      t: (key: string, vars?: Record<string, unknown>) => string;
+      t: (key: string, vars?: TranslationVars) => string;
       discogsClient?: DiscogsClient;
-      user?: {
-        id: number;
-        username: string;
-        role: string;
-        created_at: string | null;
-      } | null;
+      accountScope?: UserJobScope;
+      user?: NormalizedUser | null;
     }
   }
 }

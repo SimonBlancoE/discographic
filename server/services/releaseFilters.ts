@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import { createCollectionFilters, UNGRADED_CONDITION } from '../../shared/collectionFilters.js';
 import type { CollectionFilterKey } from '../../shared/collectionFilters.js';
 import type { CollectionFolder } from '../../shared/contracts/collectionFields.js';
-import { parseJson } from './jsonStorage.js';
+import { parseJsonArray } from './jsonStorage.js';
 import { getCollectionFacetRevision } from './collectionFacetRevision.js';
 
 const LIKE_ESCAPE = "ESCAPE '\\'";
@@ -118,11 +118,6 @@ const facetCache = new WeakMap<Database.Database, Map<string, FacetCacheEntry>>(
 const FACET_CACHE_MAX_ENTRIES = 128;
 const FACET_CACHE_TTL_MS = 5 * 60 * 1_000;
 
-function storedArray(value: unknown): unknown[] {
-  const parsed = parseJson<unknown>(value, []);
-  return Array.isArray(parsed) ? parsed : [];
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -142,24 +137,24 @@ function deriveCollectionFacets(db: Database.Database, userId: number, mediaFiel
   const conditions = new Set<string>();
 
   for (const release of releases) {
-    for (const genre of storedArray(release.genres)) {
+    for (const genre of parseJsonArray(release.genres)) {
       if (typeof genre === 'string' && genre) genres.add(genre);
     }
-    for (const style of storedArray(release.styles)) {
+    for (const style of parseJsonArray(release.styles)) {
       if (typeof style === 'string' && style) styles.add(style);
     }
-    for (const format of storedArray(release.formats)) {
+    for (const format of parseJsonArray(release.formats)) {
       const name = facetName(format);
       if (name) formats.add(name);
     }
-    for (const label of storedArray(release.labels)) {
+    for (const label of parseJsonArray(release.labels)) {
       const name = facetName(label);
       if (name) labels.add(name);
     }
     if (release.year && Number.isFinite(release.year)) {
       decades.add(Math.floor(release.year / 10) * 10);
     }
-    for (const note of storedArray(release.notes)) {
+    for (const note of parseJsonArray(release.notes)) {
       if (isRecord(note) && Number(note.field_id) === Number(mediaFieldId) && note.value) {
         conditions.add(String(note.value));
       }

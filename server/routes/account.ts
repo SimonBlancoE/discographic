@@ -1,4 +1,4 @@
-// @ts-nocheck
+import { record } from '../discogsPagination.js';
 import express from 'express';
 import { normalizeAccountResponse } from '../../shared/contracts/account.js';
 import { clearUserCollectionData, getDiscogsAccount, getSettingForUser, setSettingForUser, upsertDiscogsAccount } from '../db.js';
@@ -8,9 +8,10 @@ import { normalizeCurrency } from '../../shared/currency.js';
 
 const router = express.Router();
 
+// All handlers below run after requireAuth verifies userId and the current auth epoch.
 router.use(requireAuth);
 
-function maskToken(token) {
+function maskToken(token: string) {
   if (!token || token.length <= 8) {
     return null;
   }
@@ -18,7 +19,7 @@ function maskToken(token) {
   return `${token.slice(0, 4)}...${token.slice(-4)}`;
 }
 
-function serializeAccount(account, userId) {
+function serializeAccount(account: ReturnType<typeof getDiscogsAccount>, userId: number) {
   return normalizeAccountResponse({
     discogsUsername: account?.discogs_username || '',
     tokenConfigured: Boolean(account?.discogs_token),
@@ -28,14 +29,15 @@ function serializeAccount(account, userId) {
 }
 
 router.get('/', (req, res) => {
-  const account = getDiscogsAccount(req.session.userId);
-  res.json(serializeAccount(account, req.session.userId));
+  const account = getDiscogsAccount(req.session.userId!);
+  res.json(serializeAccount(account, req.session.userId!));
 });
 
 router.put('/', (req, res) => {
-  const discogsUsername = String(req.body.discogsUsername || '').trim();
-  const discogsToken = String(req.body.discogsToken || '').trim();
-  const currentAccount = getDiscogsAccount(req.session.userId);
+  const body = record(req.body) ?? {};
+  const discogsUsername = String(body.discogsUsername || '').trim();
+  const discogsToken = String(body.discogsToken || '').trim();
+  const currentAccount = getDiscogsAccount(req.session.userId!);
 
   if (!discogsUsername) {
     return res.status(400).json({ error: req.t('backend.account.userRequired') });
@@ -44,16 +46,16 @@ router.put('/', (req, res) => {
   const tokenChanged = Boolean(discogsToken) && discogsToken !== currentAccount?.discogs_token;
   const shouldClearLocalData = !currentAccount || currentAccount.discogs_username !== discogsUsername || tokenChanged;
   if (shouldClearLocalData) {
-    clearUserCollectionData(req.session.userId);
+    clearUserCollectionData(req.session.userId!);
   }
 
-  if (req.body.currency) {
-    setSettingForUser(req.session.userId, 'currency', normalizeCurrency(req.body.currency));
+  if (body.currency) {
+    setSettingForUser(req.session.userId!, 'currency', normalizeCurrency(body.currency));
   }
 
-  const account = upsertDiscogsAccount(req.session.userId, discogsUsername, discogsToken || undefined);
+  const account = upsertDiscogsAccount(req.session.userId!, discogsUsername, discogsToken || undefined);
   return res.json({
-    ...serializeAccount(account, req.session.userId),
+    ...serializeAccount(account, req.session.userId!),
     cacheReset: shouldClearLocalData,
     message: shouldClearLocalData
       ? req.t('backend.account.updatedReset')
@@ -62,7 +64,7 @@ router.put('/', (req, res) => {
 });
 
 router.post('/reset', (req, res) => {
-  clearUserCollectionData(req.session.userId);
+  clearUserCollectionData(req.session.userId!);
   return res.json({ ok: true, message: req.t('backend.account.reset') });
 });
 
@@ -74,22 +76,23 @@ router.get('/preferences/:key', (req, res) => {
   if (!ALLOWED_PREFERENCE_KEYS.has(req.params.key)) {
     return res.status(400).json({ error: 'Unknown preference key' });
   }
-  const value = getSettingForUser(req.session.userId, req.params.key);
+  const value = getSettingForUser(req.session.userId!, req.params.key);
   res.json({ value });
 });
 
 router.put('/preferences/:key', (req, res) => {
+  const body = record(req.body) ?? {};
   if (!ALLOWED_PREFERENCE_KEYS.has(req.params.key)) {
     return res.status(400).json({ error: 'Unknown preference key' });
   }
-  const { value } = req.body;
+  const { value } = body;
   if (value === undefined) {
     return res.status(400).json({ error: 'value is required' });
   }
   const nextValue = req.params.key === 'currency'
     ? normalizeCurrency(value)
     : typeof value === 'string' ? value : JSON.stringify(value);
-  setSettingForUser(req.session.userId, req.params.key, nextValue);
+  setSettingForUser(req.session.userId!, req.params.key, nextValue);
   res.json({ ok: true });
 });
 

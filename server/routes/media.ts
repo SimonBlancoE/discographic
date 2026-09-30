@@ -1,4 +1,5 @@
-// @ts-nocheck
+import type { ReleaseRow } from '../db.js';
+import { errorMessage } from '../services/errors.js';
 import express from 'express';
 import db, { getCollectionFieldMap } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -14,6 +15,7 @@ import { buildReleaseFilterWhere } from '../services/releaseFilters.js';
 
 const router = express.Router();
 
+// All handlers below run after requireAuth verifies userId and the current auth epoch.
 router.use(requireAuth);
 
 router.get('/proxy-image', async (req, res) => {
@@ -23,7 +25,7 @@ router.get('/proxy-image', async (req, res) => {
     return res.status(400).json({ error: req.t('backend.media.urlNotAllowed') });
   }
 
-  const scope = createUserJobScope(req.session.userId);
+  const scope = createUserJobScope(req.session.userId!);
   try {
     const { contentType, buffer } = await fetchRemoteImage(target, { signal: scope.signal });
     scope.assertCurrent();
@@ -41,11 +43,11 @@ router.get('/cover/:id', async (req, res) => {
     return res.status(400).json({ error: 'Invalid cover variant' });
   }
 
-  const release = db.prepare(`
+  const release = db.prepare<unknown[], Pick<ReleaseRow, 'id' | 'cover_url'>>(`
     SELECT id, cover_url
     FROM releases
     WHERE id = ? AND user_id = ?
-  `).get(req.params.id, req.session.userId);
+  `).get(req.params.id, req.session.userId!);
 
   if (!release) {
     return res.status(404).json({ error: req.t('backend.media.releaseNotFound') });
@@ -54,7 +56,7 @@ router.get('/cover/:id', async (req, res) => {
   try {
     const cachePath = await ensureCachedCover({
       release,
-      userId: req.session.userId,
+      userId: req.session.userId!,
       variant,
       t: req.t
     });
@@ -62,12 +64,12 @@ router.get('/cover/:id', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=604800');
     return res.sendFile(cachePath);
   } catch (error) {
-    return res.status(404).json({ error: error.message });
+    return res.status(404).json({ error: errorMessage(error) });
   }
 });
 
 router.get('/tapete', async (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId!;
   const requestedMaxSize = Number.parseInt(String(req.query.maxSize ?? ''), 10);
   const maxSize = Math.min(10000, Math.max(1000, Number.isFinite(requestedMaxSize) ? requestedMaxSize : 7200));
   const { clause, params } = buildReleaseFilterWhere({
@@ -77,7 +79,7 @@ router.get('/tapete', async (req, res) => {
     mediaFieldId: getCollectionFieldMap(userId).mediaFieldId
   });
 
-  const releases = db.prepare(`
+  const releases = db.prepare<unknown[], Pick<ReleaseRow, 'id' | 'cover_url'>>(`
     SELECT id, cover_url
     FROM releases
     ${clause}
@@ -96,8 +98,8 @@ router.get('/tapete', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     return res.send(result);
   } catch (error) {
-    console.log('[tapete] error:', error.message);
-    return res.status(500).json({ error: req.t('backend.media.tapeteFailed', { error: error.message }) });
+    console.log('[tapete] error:', errorMessage(error));
+    return res.status(500).json({ error: req.t('backend.media.tapeteFailed', { error: errorMessage(error) }) });
   }
 });
 
