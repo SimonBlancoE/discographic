@@ -169,8 +169,8 @@ const upsertBatch = db.transaction((userId, syncId, items) => {
 async function syncCollectionMetadata({ userId, discogs, run }) {
   // Field definitions (condition grading, notes) and folders: one request each per sync.
   const [fields, folders] = await Promise.allSettled([
-    discogs.getCustomFields(),
-    discogs.getCollectionFolders()
+    discogs.getCustomFields({ signal: run.signal }),
+    discogs.getCollectionFolders({ signal: run.signal })
   ]);
 
   if (run.stopped) return;
@@ -183,7 +183,7 @@ async function syncCollectionMetadata({ userId, discogs, run }) {
 
   // One valuation snapshot per sync builds the value history chart over time.
   try {
-    const value = await discogs.getCollectionValue();
+    const value = await discogs.getCollectionValue({ signal: run.signal });
     if (run.stopped) return;
     recordCollectionValue(db, userId, value);
   } catch (error) {
@@ -202,7 +202,7 @@ async function syncCollectionMetadata({ userId, discogs, run }) {
 async function runSync({ userId, logId, discogs, locale, run }) {
   const releases = await fetchCompleteCollection(async (page, perPage) => {
     run.assertCurrent();
-    const payload = await discogs.getCollection(page, perPage);
+    const payload = await discogs.getCollection(page, perPage, { signal: run.signal });
     run.assertCurrent();
     return payload;
   }, PER_PAGE, ({ page, pages, items, current }) => {
@@ -303,7 +303,7 @@ async function syncInventory({ userId, discogs, run }) {
   try {
     const allListings = await fetchCompleteInventory(async (page, perPage) => {
       if (run.stopped) throw new Error('Inventory sync cancelled');
-      const payload = await discogs.getInventory(page, perPage);
+      const payload = await discogs.getInventory(page, perPage, { signal: run.signal });
       if (run.stopped) throw new Error('Inventory sync cancelled');
       return payload;
     }, PER_PAGE);
@@ -483,9 +483,9 @@ async function runEnrichAll({ userId, discogs, run }) {
         if (run.stopped) break;
 
         try {
-          const detail = await discogs.getRelease(row.release_id);
+          const detail = await discogs.getRelease(row.release_id, { signal: run.signal });
           if (run.stopped) return;
-          const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
+          const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY, { signal: run.signal });
           if (run.stopped) return;
 
           const estimatedValue = marketplace.marketplaceStatus === MARKETPLACE_STATUS.PRICED
@@ -581,7 +581,7 @@ async function runCommunityRefresh({ userId, discogs, run }) {
       if (run.stopped) break;
 
       try {
-        const detail = await discogs.getRelease(row.release_id);
+        const detail = await discogs.getRelease(row.release_id, { signal: run.signal });
         if (run.stopped) return;
         const community = buildCommunityUpdate(detail);
         updateCommunity.run(

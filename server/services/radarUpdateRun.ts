@@ -1,3 +1,4 @@
+import type { DiscogsRequestOptions } from '../discogs.js';
 import type { UserJobScope } from './userJobs.js';
 import type Database from 'better-sqlite3';
 import {
@@ -17,7 +18,7 @@ import {
 import { syncRadarWantlist } from './radarWantlist.js';
 
 type DiscogsClient = {
-  getAllWantlist: () => Promise<unknown[]>;
+  getAllWantlist: (perPage?: number, options?: DiscogsRequestOptions) => Promise<unknown[]>;
 };
 
 type RadarUpdateRunInput = {
@@ -103,7 +104,7 @@ async function runClaimedRadarUpdateRun({
       wantlist,
     });
 
-    const wantlistRows = await discogs.getAllWantlist();
+    const wantlistRows = await discogs.getAllWantlist(undefined, { signal: run.signal });
     if (run.stopped) return;
     wantlist = syncRadarWantlist(db, userId, wantlistRows);
     const processed = wantlist.totalFetched;

@@ -192,7 +192,7 @@ async function runClaimedRadarEnrichment({
           break;
         }
 
-        const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY);
+        const marketplace = await fetchMarketplaceValue(discogs, row.release_id, DEFAULT_CURRENCY, { signal: run.signal });
         if (run.stopped) return;
         updateRadarMarketplaceValue(db, userId, row, marketplace);
 
