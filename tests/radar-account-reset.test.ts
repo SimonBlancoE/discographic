@@ -12,8 +12,6 @@ const clearUserCollectionData = vi.hoisted(() => vi.fn());
 const setSettingForUser = vi.hoisted(() => vi.fn());
 const getDiscogsClientForUser = vi.hoisted(() => vi.fn());
 const getExchangeSnapshot = vi.hoisted(() => vi.fn());
-const getPendingRadarEnrichmentCount = vi.hoisted(() => vi.fn());
-const getPendingRadarEnrichmentRows = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({}));
 
 vi.mock('../server/db.js', () => ({
@@ -34,11 +32,6 @@ vi.mock('../server/services/exchangeRates.js', async () => {
     getExchangeSnapshot,
   };
 });
-
-vi.mock('../server/services/radarEnrichmentQueue.js', () => ({
-  getPendingRadarEnrichmentCount,
-  getPendingRadarEnrichmentRows,
-}));
 
 vi.mock('../server/middleware/auth.js', () => ({
   requireAuth: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
@@ -67,8 +60,6 @@ describe('Radar account reset workflow', () => {
     setSettingForUser.mockReset();
     getDiscogsClientForUser.mockReset();
     getExchangeSnapshot.mockReset();
-    getPendingRadarEnrichmentCount.mockReset();
-    getPendingRadarEnrichmentRows.mockReset();
 
     clearUserCollectionData.mockImplementation((userId: number) => {
       resetRadarRuntimeState(userId);
@@ -89,8 +80,6 @@ describe('Radar account reset workflow', () => {
       date: '2026-05-10',
       rates: { EUR: 1 },
     });
-    getPendingRadarEnrichmentCount.mockReturnValue(0);
-    getPendingRadarEnrichmentRows.mockReturnValue([]);
     resetRadarRuntimeState(1);
 
     const app = express();

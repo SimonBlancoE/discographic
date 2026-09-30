@@ -50,16 +50,6 @@ export type RadarCollectionMatch = {
   copy_count: number;
 };
 
-export const RADAR_ENRICH_STATUS = Object.freeze({
-  IDLE: 'idle',
-  RUNNING: 'running',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  STOPPED: 'stopped',
-} as const);
-export type RadarEnrichmentWorkflowStatus =
-  (typeof RADAR_ENRICH_STATUS)[keyof typeof RADAR_ENRICH_STATUS];
-
 export const RADAR_UPDATE_RUN_PHASE = Object.freeze({
   IDLE: 'idle',
   SYNCING: 'syncing',
@@ -230,19 +220,6 @@ export type RadarLocalDecisionUpdate = {
   resolved: boolean;
 };
 
-export type RadarEnrichmentStatus = {
-  status: RadarEnrichmentWorkflowStatus;
-  current: number;
-  total: number;
-  pending: number;
-  progressPercent: number;
-  message: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  isRunning: boolean;
-  isTerminal: boolean;
-};
-
 export type RadarUpdateRunStatus = {
   phase: RadarUpdateRunPhase;
   current: number;
@@ -274,14 +251,8 @@ const RADAR_WANTLIST_COLUMN_KEYS = new Set<RadarWantlistColumnKey>([
 const RADAR_SOURCE_ORIGINS = new Set<RadarSourceOrigin>(Object.values(RADAR_SOURCE_ORIGIN));
 const RADAR_SOURCE_STATUSES = new Set<RadarSourceStatus>(Object.values(RADAR_SOURCE_STATUS));
 const RADAR_OPPORTUNITY_REASONS = new Set<RadarOpportunityReason>(Object.values(RADAR_OPPORTUNITY_REASON));
-const RADAR_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>(Object.values(RADAR_ENRICH_STATUS));
 const RADAR_UPDATE_RUN_PHASES = new Set<RadarUpdateRunPhase>(Object.values(RADAR_UPDATE_RUN_PHASE));
 const MARKETPLACE_STATUSES = new Set<MarketplaceStatus>(Object.values(MARKETPLACE_STATUS));
-const RADAR_TERMINAL_ENRICH_STATUSES = new Set<RadarEnrichmentWorkflowStatus>([
-  RADAR_ENRICH_STATUS.COMPLETED,
-  RADAR_ENRICH_STATUS.FAILED,
-  RADAR_ENRICH_STATUS.STOPPED,
-]);
 const RADAR_TERMINAL_UPDATE_RUN_PHASES = new Set<RadarUpdateRunPhase>([
   RADAR_UPDATE_RUN_PHASE.COMPLETED,
   RADAR_UPDATE_RUN_PHASE.COMPLETED_WITH_ISSUES,
@@ -360,10 +331,6 @@ function asRadarOpportunityReason(value: unknown): RadarOpportunityReason | null
   return RADAR_OPPORTUNITY_REASONS.has(value as RadarOpportunityReason)
     ? (value as RadarOpportunityReason)
     : null;
-}
-
-function asRadarEnrichmentWorkflowStatus(value: unknown): RadarEnrichmentWorkflowStatus {
-  return valueFromSet(value, RADAR_ENRICH_STATUSES, RADAR_ENRICH_STATUS.IDLE);
 }
 
 function asRadarUpdateRunPhase(value: unknown): RadarUpdateRunPhase {
@@ -502,26 +469,6 @@ export function normalizeRadarSyncResponse(payload: unknown = {}): RadarSyncResp
   return {
     radar: normalizeRadarResponse(source.radar),
     result: normalizeRadarSyncResult(source.result),
-  };
-}
-
-export function normalizeRadarEnrichmentStatus(payload: unknown = {}): RadarEnrichmentStatus {
-  const source = asRecord(payload) ?? {};
-  const status = asRadarEnrichmentWorkflowStatus(source.status);
-  const current = asCount(source.current);
-  const total = asCount(source.total);
-
-  return {
-    status,
-    current,
-    total,
-    pending: asCount(source.pending),
-    progressPercent: progressPercent(current, total),
-    message: asText(source.message),
-    startedAt: asNullableText(source.startedAt),
-    finishedAt: asNullableText(source.finishedAt),
-    isRunning: status === RADAR_ENRICH_STATUS.RUNNING,
-    isTerminal: RADAR_TERMINAL_ENRICH_STATUSES.has(status),
   };
 }
 

@@ -25,11 +25,9 @@ import {
   type CollectionResponse,
 } from '../shared/contracts/release.js';
 import {
-  normalizeRadarEnrichmentStatus,
   normalizeRadarResponse,
   normalizeRadarUpdateRunStatus,
   normalizeRadarWantlistApplyResponse,
-  type RadarEnrichmentStatus,
   type RadarResponse,
   type RadarUpdateRunStatus,
   type RadarWantlistApplyResponse,
@@ -97,7 +95,6 @@ describe('shared contract types', () => {
         updated: 0,
       },
     });
-    const radarEnrichment: RadarEnrichmentStatus = normalizeRadarEnrichmentStatus({});
     const radarUpdateRun: RadarUpdateRunStatus = normalizeRadarUpdateRunStatus({});
     const syncStatus: SyncStatusState = normalizeSyncStatus({});
     const importSyncState: ImportSyncState = normalizeImportSyncState({});
@@ -117,7 +114,6 @@ describe('shared contract types', () => {
     expect(radarWantlistPreview.previewId).toBe('preview-1');
     expect(radarWantlistPreview.summary.validRows).toBe(1);
     expect(radarWantlistApply.result.imported).toBe(1);
-    expect(radarEnrichment.status).toBe('idle');
     expect(radarUpdateRun.phase).toBe('idle');
     expect(syncStatus.locale).toBe('es');
     expect(importSyncState.status).toBe('idle');
@@ -131,7 +127,6 @@ describe('shared contract types', () => {
     expectTypeOf(radar).toMatchTypeOf<RadarResponse>();
     expectTypeOf(radarWantlistPreview).toMatchTypeOf<RadarWantlistPreviewResponse>();
     expectTypeOf(radarWantlistApply).toMatchTypeOf<RadarWantlistApplyResponse>();
-    expectTypeOf(radarEnrichment).toMatchTypeOf<RadarEnrichmentStatus>();
     expectTypeOf(radarUpdateRun).toMatchTypeOf<RadarUpdateRunStatus>();
     expectTypeOf(syncStatus).toMatchTypeOf<SyncStatusState>();
     expectTypeOf(importSyncState).toMatchTypeOf<ImportSyncState>();

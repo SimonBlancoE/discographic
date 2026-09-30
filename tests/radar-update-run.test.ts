@@ -2,24 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MARKETPLACE_STATUS, type RadarSyncResult } from '../shared/contracts/radar.js';
 import { resetRadarRuntimeState } from '../server/services/radarRuntimeState.js';
 
-const fetchMarketplaceValue = vi.hoisted(() => vi.fn());
-const getPendingRadarEnrichmentCount = vi.hoisted(() => vi.fn());
-const getPendingRadarEnrichmentRows = vi.hoisted(() => vi.fn());
-const getRadarAvailabilityTransition = vi.hoisted(() => vi.fn());
 const syncRadarWantlist = vi.hoisted(() => vi.fn());
-
-vi.mock('../server/services/marketplaceValue.js', () => ({
-  fetchMarketplaceValue,
-}));
-
-vi.mock('../server/services/radarEnrichmentQueue.js', () => ({
-  getPendingRadarEnrichmentCount,
-  getPendingRadarEnrichmentRows,
-}));
-
-vi.mock('../server/services/radarStorage.js', () => ({
-  getRadarAvailabilityTransition,
-}));
 
 vi.mock('../server/services/radarWantlist.js', () => ({
   syncRadarWantlist,
@@ -77,7 +60,7 @@ function createWantlistResult(overrides: Partial<RadarSyncResult> = {}): RadarSy
 function createDiscogsClient(wantlistRows: unknown[] = []): FakeDiscogsClient {
   return {
     getAllWantlist: async () => wantlistRows,
-    getMarketplaceStats: async () => null,
+    getMarketplaceStats: vi.fn(async () => null),
   };
 }
 
@@ -112,53 +95,9 @@ describe('Radar update run', () => {
   beforeEach(() => {
     rows = [];
 
-    fetchMarketplaceValue.mockReset();
-    getPendingRadarEnrichmentCount.mockReset();
-    getPendingRadarEnrichmentRows.mockReset();
-    getRadarAvailabilityTransition.mockReset();
     syncRadarWantlist.mockReset();
 
-    getRadarAvailabilityTransition.mockReturnValue({
-      markUnavailableNow: false,
-      markAvailableAgainNow: false,
-      clearAvailableAgain: false,
-    });
-
-    getPendingRadarEnrichmentRows.mockImplementation(() => (
-      rows.filter((row) => (
-        row.marketplace_status === MARKETPLACE_STATUS.PENDING
-        || row.marketplace_status === MARKETPLACE_STATUS.FAILED
-      ))
-    ));
-
-    getPendingRadarEnrichmentCount.mockImplementation(() => (
-      rows.filter((row) => (
-        row.marketplace_status === MARKETPLACE_STATUS.PENDING
-        || row.marketplace_status === MARKETPLACE_STATUS.FAILED
-      )).length
-    ));
-
-    db = {
-      prepare: vi.fn(() => ({
-        run: (
-          estimatedPrice: number | null,
-          marketplaceStatus: string,
-          _markUnavailableNow: number,
-          _markAvailableAgainNow: number,
-          _clearAvailableAgain: number,
-          radarRowId: number,
-        ) => {
-          const row = rows.find((candidate) => candidate.id === radarRowId);
-
-          if (row) {
-            row.estimated_price = estimatedPrice;
-            row.marketplace_status = marketplaceStatus;
-          }
-
-          return { changes: row ? 1 : 0 };
-        },
-      })),
-    };
+    db = { prepare: vi.fn() };
   });
 
   afterEach(() => {
@@ -187,8 +126,7 @@ describe('Radar update run', () => {
 
     await waitFor(() => getStatus().isTerminal);
 
-    expect(fetchMarketplaceValue).not.toHaveBeenCalled();
-    expect(getPendingRadarEnrichmentRows).not.toHaveBeenCalled();
+    expect(discogs.getMarketplaceStats).not.toHaveBeenCalled();
     expect(getStatus()).toMatchObject({
       phase: 'completed',
       current: 1,
@@ -230,7 +168,7 @@ describe('Radar update run', () => {
 
     await waitFor(() => getStatus().isTerminal);
 
-    expect(fetchMarketplaceValue).not.toHaveBeenCalled();
+    expect(discogs.getMarketplaceStats).not.toHaveBeenCalled();
     expect(getStatus()).toMatchObject({
       phase: 'completed',
       current: 2,
@@ -389,7 +327,7 @@ describe('Radar update run', () => {
       isRunning: false,
       canStop: false,
     });
-    expect(fetchMarketplaceValue).not.toHaveBeenCalled();
+    expect(discogs.getMarketplaceStats).not.toHaveBeenCalled();
   });
 
   it('shows a user-facing failure message instead of leaking raw Discogs errors', async () => {

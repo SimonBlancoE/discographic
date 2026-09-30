@@ -240,11 +240,6 @@ const WANTLIST_MANAGER_COPY = [
     en: 'Saved as a personal buying preference. It does not create automatic classifications.'
   },
   {
-    key: 'backend.radar.ready',
-    es: 'Wantlist lista para actualizarse.',
-    en: 'Wantlist is ready to update.'
-  },
-  {
     key: 'backend.radar.updateReady',
     es: 'Wantlist lista para actualizarse desde Discogs.',
     en: 'Wantlist is ready to update from Discogs.'

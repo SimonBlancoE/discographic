@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed the discontinued agent runner and its exclusive development dependencies.
 - Removed internal audit reports and execution plans from the public source tree; Git and Docker exclusions now cover local automation artifacts and worktrees.
+- Removed completed implementation plans and the redundant README alias; updated the contribution guide for the current TypeScript codebase.
+- Limited the Docker build context to required inputs and the final application's files to compiled code. Excluded local runtime data, caches and development backups from Git.
+- Removed the unreachable legacy Radar enrichment implementation, along with its exclusive state, contracts and tests. The active Wantlist update workflow is preserved.
 
 ## [0.4.1] - 2026-09-30
 
