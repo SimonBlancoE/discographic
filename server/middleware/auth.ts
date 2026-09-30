@@ -1,37 +1,38 @@
-// @ts-nocheck
+import type { NextFunction, Request, Response } from 'express';
 import { createDiscogsClient } from '../discogs.js';
 import { getDiscogsAccount, getUserById } from '../db.js';
 
-export function requireAuth(req, res, next) {
-  if (!req.session?.userId) {
+export function getCurrentUser(req: Request) {
+  if (!req.session?.userId || !Number.isSafeInteger(req.session.authEpoch)) {
+    return null;
+  }
+
+  const user = getUserById(req.session.userId);
+  return user && user.auth_epoch === req.session.authEpoch ? user : null;
+}
+
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!getCurrentUser(req)) {
     return res.status(401).json({ error: req.t('backend.auth.required') });
   }
 
   return next();
 }
 
-export function requireAdmin(req, res, next) {
-  if (!req.session?.userId) {
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const user = getCurrentUser(req);
+  if (!user) {
     return res.status(401).json({ error: req.t('backend.auth.required') });
   }
 
-  const user = getUserById(req.session.userId);
-  if (!user || user.role !== 'admin') {
+  if (user.role !== 'admin') {
     return res.status(403).json({ error: req.t('backend.auth.adminRequired') });
   }
 
   return next();
 }
 
-export function getCurrentUser(req) {
-  if (!req.session?.userId) {
-    return null;
-  }
-
-  return getUserById(req.session.userId);
-}
-
-function requireDiscogsAccount(req) {
+function requireDiscogsAccount(req: Request) {
   const account = getDiscogsAccount(req.session.userId);
   if (!account) {
     throw new Error(req.t('backend.auth.configureDiscogs'));
@@ -39,7 +40,7 @@ function requireDiscogsAccount(req) {
   return account;
 }
 
-export function getDiscogsClientForUser(req) {
+export function getDiscogsClientForUser(req: Request) {
   const account = requireDiscogsAccount(req);
   return createDiscogsClient({
     token: account.discogs_token,

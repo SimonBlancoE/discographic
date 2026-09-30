@@ -47,6 +47,7 @@ function createBaseTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      auth_epoch INTEGER NOT NULL DEFAULT 0,
       role TEXT NOT NULL DEFAULT 'user',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
@@ -237,6 +238,12 @@ function migrateUsersRole() {
   }
 }
 
+function migrateUserAuthEpoch() {
+  if (!hasColumn('users', 'auth_epoch')) {
+    db.exec('ALTER TABLE users ADD COLUMN auth_epoch INTEGER NOT NULL DEFAULT 0');
+  }
+}
+
 function migrateListingColumns() {
   if (!hasColumn('releases', 'listing_status')) {
     db.exec('ALTER TABLE releases ADD COLUMN listing_status TEXT DEFAULT NULL');
@@ -263,6 +270,7 @@ migrateReleases();
 migrateSyncLog();
 migrateSettings();
 migrateUsersRole();
+migrateUserAuthEpoch();
 migrateListingColumns();
 migrateLastSeenSyncId();
 migrateMarketplaceStatus(db);
@@ -345,8 +353,24 @@ export function setSettingForUser(userId, key, value) {
 }
 
 
+type UserRow = {
+  id: number;
+  username: string;
+  role: string;
+  created_at: string | null;
+  auth_epoch: number;
+};
+type UserAuthRow = UserRow & { password_hash: string };
+type DiscogsAccountRow = {
+  user_id: number;
+  discogs_username: string;
+  discogs_token: string;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export function getUserById(id) {
-  return db.prepare('SELECT id, username, role, created_at FROM users WHERE id = ?').get(id);
+  return db.prepare<[number], UserRow>('SELECT id, username, role, created_at, auth_epoch FROM users WHERE id = ?').get(id);
 }
 
 export function getUserCount() {
@@ -355,7 +379,7 @@ export function getUserCount() {
 
 export function createUser(username, passwordHash, role = 'user') {
   const info = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(username, passwordHash, role);
-  return getUserById(info.lastInsertRowid);
+  return getUserById(Number(info.lastInsertRowid))!;
 }
 
 export function listUsers() {
@@ -376,20 +400,22 @@ export function deleteUser(id) {
 }
 
 export function getUserAuthByUsername(username) {
-  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  return db.prepare<[string], UserAuthRow>('SELECT * FROM users WHERE username = ?').get(username);
 }
 
 export function getUserAuthById(id) {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  return db.prepare<[number], UserAuthRow>('SELECT * FROM users WHERE id = ?').get(id);
 }
 
-export function updateUserPasswordHash(id, passwordHash) {
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
-  return getUserById(id);
+export function updateUserPasswordHash(id: number, passwordHash: string, expectedAuthEpoch: number | undefined = undefined) {
+  const result = expectedAuthEpoch === undefined
+    ? db.prepare('UPDATE users SET password_hash = ?, auth_epoch = auth_epoch + 1 WHERE id = ?').run(passwordHash, id)
+    : db.prepare('UPDATE users SET password_hash = ?, auth_epoch = auth_epoch + 1 WHERE id = ? AND auth_epoch = ?').run(passwordHash, id, expectedAuthEpoch);
+  return result.changes ? getUserById(id) : null;
 }
 
 export function getDiscogsAccount(userId) {
-  return db.prepare(`
+  return db.prepare<[number], DiscogsAccountRow>(`
     SELECT user_id, discogs_username, discogs_token, created_at, updated_at
     FROM discogs_accounts
     WHERE user_id = ?
