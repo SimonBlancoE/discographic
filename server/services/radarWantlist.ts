@@ -18,7 +18,6 @@ type ExistingRadarRelease = {
 
 type MappedWantlistRows = {
   rowsByReleaseId: Map<number, DiscogsWantlistRow>;
-  ignored: number;
 };
 
 type InsertReleaseParams = [
@@ -75,13 +74,13 @@ function artistNamesFromBasicInformation(basicInformation: UnknownRecord): strin
     .join(', ');
 }
 
-function toWantlistRow(row: unknown): DiscogsWantlistRow | null {
+function toWantlistRow(row: unknown): DiscogsWantlistRow {
   const source = asRecord(row) ?? {};
   const basicInformation = asRecord(source.basic_information) ?? {};
-  const releaseId = asNumber(source.id) ?? asNumber(basicInformation.id);
+  const releaseId = source.id;
 
-  if (!releaseId) {
-    return null;
+  if (typeof releaseId !== 'number' || !Number.isSafeInteger(releaseId) || releaseId <= 0) {
+    throw new Error('Invalid Discogs Wantlist snapshot: invalid release identity');
   }
 
   const artist = artistNamesFromBasicInformation(basicInformation);
@@ -98,18 +97,12 @@ function toWantlistRow(row: unknown): DiscogsWantlistRow | null {
 
 function mapWantlistRows(rows: unknown[]): MappedWantlistRows {
   const rowsByReleaseId = new Map<number, DiscogsWantlistRow>();
-  let ignored = 0;
 
   for (const row of rows) {
     const mapped = toWantlistRow(row);
 
-    if (!mapped) {
-      ignored += 1;
-      continue;
-    }
-
     if (rowsByReleaseId.has(mapped.releaseId)) {
-      ignored += 1;
+      throw new Error('Invalid Discogs Wantlist snapshot: duplicate release identity');
     }
 
     rowsByReleaseId.set(mapped.releaseId, mapped);
@@ -117,7 +110,6 @@ function mapWantlistRows(rows: unknown[]): MappedWantlistRows {
 
   return {
     rowsByReleaseId,
-    ignored,
   };
 }
 
@@ -265,7 +257,7 @@ export function syncRadarWantlist(
     rows: unknown[],
     targetSyncedAt: string,
   ): RadarSyncResult => {
-    const { rowsByReleaseId, ignored } = mapWantlistRows(rows);
+    const { rowsByReleaseId } = mapWantlistRows(rows);
     const statements = prepareSyncStatements(db);
     const { added, updated, reactivated } = upsertWantlistRows(
       statements,
@@ -282,7 +274,7 @@ export function syncRadarWantlist(
       updated,
       reactivated,
       markedMissing,
-      ignored,
+      ignored: 0,
     };
   });
 

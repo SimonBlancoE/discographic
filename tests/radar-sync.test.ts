@@ -145,6 +145,7 @@ describe('Radar wantlist sync', () => {
         date_added: '2026-05-10T10:00:00Z',
       },
       {
+        id: 333,
         basic_information: {
           id: 333,
           title: 'Now On Discogs Too',
@@ -165,11 +166,6 @@ describe('Radar wantlist sync', () => {
         },
         date_added: '2026-05-10T10:02:00Z',
       },
-      {
-        basic_information: {
-          title: 'Ignored Missing Release Id',
-        },
-      },
     ], '2026-05-10T12:00:00Z');
 
     expect(result).toEqual({
@@ -178,7 +174,7 @@ describe('Radar wantlist sync', () => {
       updated: 1,
       reactivated: 1,
       markedMissing: 1,
-      ignored: 1,
+      ignored: 0,
     });
 
     const snapshot = getRadarSnapshot(db, 7);
