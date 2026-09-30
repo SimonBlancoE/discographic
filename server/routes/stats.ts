@@ -251,13 +251,13 @@ router.get('/', async (req, res) => {
 
     const folderNames = new Map(getCollectionFolders(userId).map((folder) => [folder.id, folder.name]));
     const folders = folderNames.size
-      ? db.prepare<unknown[], CountRow & { id: number }>(`
+      ? db.prepare<unknown[], CountRow & { id: number | null }>(`
           SELECT folder_id AS id, COUNT(*) AS count
           FROM releases
           WHERE user_id = ?
           GROUP BY folder_id
           ORDER BY count DESC
-        `).all(userId).map((row) => ({ ...row, name: folderNames.get(row.id) || `#${row.id}` }))
+        `).all(userId).map((row) => ({ ...row, name: (row.id == null ? undefined : folderNames.get(row.id)) || `#${row.id}` }))
       : [];
 
     const lastSync = db.prepare(`
